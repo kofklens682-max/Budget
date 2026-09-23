@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#F2F2F7">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Budget</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="topbar" id="topbar"><span id="topbar-title"></span></div>
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-act="tab" data-tab="home" aria-label="Overview">
+      <svg viewBox="0 0 24 24"><path d="M3.5 10.2 12 3.5l8.5 6.7V19.5a1.5 1.5 0 0 1-1.5 1.5h-4.2v-6.2H9.2V21H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+      <span>Overview</span>
+    </button>
+    <button data-act="tab" data-tab="history" aria-label="History">
+      <svg viewBox="0 0 24 24"><path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4.2" cy="6.5" r="1.1" class="fill"/><circle cx="4.2" cy="12" r="1.1" class="fill"/><circle cx="4.2" cy="17.5" r="1.1" class="fill"/></svg>
+      <span>History</span>
+    </button>
+    <button data-act="add" class="tab-add" aria-label="Add entry">
+      <span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+    </button>
+    <button data-act="tab" data-tab="stats" aria-label="Stats">
+      <svg viewBox="0 0 24 24"><path d="M5.5 20v-6.5M12 20V5M18.5 20v-10"/></svg>
+      <span>Stats</span>
+    </button>
+    <button data-act="tab" data-tab="goals" aria-label="Goals">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" class="fill"/></svg>
+      <span>Goals</span>
+    </button>
+  </nav>
+
+  <div id="sheet-root"></div>
+  <div id="dialog-root"></div>
+  <div id="lock-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+
+  <script src="app.js"></script>
+</body>
+</html>
