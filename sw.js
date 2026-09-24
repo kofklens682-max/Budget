@@ -1,17 +1,25 @@
-// Offline support. Bump VERSION whenever the app files change so phones pick up the update.
-const VERSION = 'budget-v1';
+// Offline support. Bump VERSION whenever the app files change so phones pick up the update:
+// the new worker installs, takes over, and the open app reloads into the new version.
+const VERSION = 'budget-v2';
 const SHELL = [
   './',
   './index.html',
   './style.css',
+  './icons.js',
   './app.js',
   './manifest.webmanifest',
+  './icons/icon-96.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the browser's HTTP cache so a new version never installs stale files
+  e.waitUntil(
+    caches.open(VERSION)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -37,10 +45,10 @@ self.addEventListener('fetch', (e) => {
       const cached = await cache.match(key, { ignoreSearch: true });
       const network = fetch(req)
         .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) cache.put(key, res.clone());
+          if (res && res.ok) cache.put(key, res.clone());
           return res;
         })
-        .catch(() => cached);
+        .catch(() => cached || Response.error());
       return cached || network;
     })
   );

@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Budget",
   "short_name": "Budget",
-  "description": "Personal budget — money in, money out, savings goals. Data stays on this phone.",
+  "description": "Personal budget — money in, money out, accounts and savings goals. Data stays on this phone.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -13,5 +13,9 @@
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add money in", "short_name": "Money in", "url": "./?add=in", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Add money out", "short_name": "Money out", "url": "./?add=out", "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96", "type": "image/png" }] }
   ]
 }
