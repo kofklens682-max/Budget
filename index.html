@@ -22,24 +22,31 @@
   <main id="view" class="view"></main>
 
   <nav class="tabbar" id="tabbar">
-    <button data-act="tab" data-tab="home" aria-label="Overview">
-      <svg viewBox="0 0 24 24"><path d="M3.5 10.2 12 3.5l8.5 6.7V19.5a1.5 1.5 0 0 1-1.5 1.5h-4.2v-6.2H9.2V21H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
-      <span>Overview</span>
-    </button>
-    <button data-act="tab" data-tab="history" aria-label="History">
-      <svg viewBox="0 0 24 24"><path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4.2" cy="6.5" r="1.1" class="fill"/><circle cx="4.2" cy="12" r="1.1" class="fill"/><circle cx="4.2" cy="17.5" r="1.1" class="fill"/></svg>
-      <span>History</span>
-    </button>
-    <button data-act="add" class="tab-add" aria-label="Add entry">
-      <span class="plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
-    </button>
-    <button data-act="tab" data-tab="stats" aria-label="Stats">
-      <svg viewBox="0 0 24 24"><path d="M5.5 20v-6.5M12 20V5M18.5 20v-10"/></svg>
-      <span>Stats</span>
-    </button>
-    <button data-act="tab" data-tab="goals" aria-label="Goals">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" class="fill"/></svg>
-      <span>Goals</span>
+    <div class="tabs" id="tabs">
+      <span class="tab-ind" aria-hidden="true"></span>
+      <button data-act="tab" data-tab="home" aria-label="Overview">
+        <svg viewBox="0 0 24 24"><path d="M3.5 10.2 12 3.5l8.5 6.7V19.5a1.5 1.5 0 0 1-1.5 1.5h-4.2v-6.2H9.2V21H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span>Home</span>
+      </button>
+      <button data-act="tab" data-tab="history" aria-label="History">
+        <svg viewBox="0 0 24 24"><path d="M8.5 6.5h12M8.5 12h12M8.5 17.5h12"/><circle cx="4.2" cy="6.5" r="1.1" class="fill"/><circle cx="4.2" cy="12" r="1.1" class="fill"/><circle cx="4.2" cy="17.5" r="1.1" class="fill"/></svg>
+        <span>History</span>
+      </button>
+      <button data-act="tab" data-tab="stats" aria-label="Stats">
+        <svg viewBox="0 0 24 24"><path d="M5.5 20v-6.5M12 20V5M18.5 20v-10"/></svg>
+        <span>Stats</span>
+      </button>
+      <button data-act="tab" data-tab="goals" aria-label="Goals">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" class="fill"/></svg>
+        <span>Goals</span>
+      </button>
+      <button data-act="tab" data-tab="schedule" aria-label="Schedule">
+        <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8.5" cy="14.5" r="1" class="fill"/><circle cx="12" cy="14.5" r="1" class="fill"/></svg>
+        <span>Schedule</span>
+      </button>
+    </div>
+    <button class="fab" id="fab" data-act="fab" aria-label="Add">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
     </button>
   </nav>
 
@@ -47,9 +54,13 @@
   <div id="dialog-root"></div>
   <div id="lock-root"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <input type="file" id="import-file" accept="application/json,.json,text/plain,.txt" hidden>
 
   <script src="icons.js"></script>
-  <script src="app.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/money.js"></script>
+  <script src="js/groups.js"></script>
+  <script src="js/schedule.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
