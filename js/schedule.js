@@ -52,17 +52,6 @@ function freeSlotFor(di, dur) {
   }
   return { id: null, from: t };
 }
-function placeBlock(di, act, dur) {
-  const blocks = S.schedule.days[di].blocks;
-  const slot = freeSlotFor(di, dur);
-  const nb = { id: uid(), act, dur };
-  if (slot.id) {
-    const i = blocks.findIndex((b) => b.id === slot.id);
-    if (blocks[i].dur === dur) blocks.splice(i, 1, nb);
-    else { blocks[i].dur -= dur; blocks.splice(i, 0, nb); }
-  } else blocks.push(nb);
-  mergeFree(di);
-}
 
 // ================= Page =================
 function renderSchedule() {
@@ -268,61 +257,136 @@ function showDay(i, dir) {
 PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule, resize: () => { if (UI.sView === 'table') render(); } };
 
 // ================= Block sheet =================
+// A block can be given an exact day, start and end. It is "painted" onto the day: free time it
+// covers is used up, and anything else it overlaps is shortened or replaced (the sheet says which
+// before saving). Days grow earlier or later automatically if the block sits outside them.
 let bdraft = null;
 function openBlock(di, id) {
-  const b = id ? S.schedule.days[di].blocks.find((x) => x.id === id) : null;
-  if (b) bdraft = { id: b.id, day: di, act: b.act, dur: b.dur };
+  const p = id ? dayPlan(di).find((x) => x.id === id) : null;
+  if (p) bdraft = { id: p.id, day: di, origDay: di, act: p.act, from: p.from, to: p.to, wasFree: p.act === 'free' };
   else {
     const first = S.schedule.acts.find((a) => a.kind === 'lesson') || S.schedule.acts.find((a) => a.id !== 'free') || S.schedule.acts[0];
-    bdraft = { id: null, day: di, act: first.id, dur: 60 };
+    const slot = freeSlotFor(di, 60);
+    bdraft = { id: null, day: di, origDay: di, act: first.id, from: slot.from, to: Math.min(slot.from + 60, 1440) };
   }
-  openSheet(blockHtml(), null);
+  openSheet(blockHtml(), mountBlock);
+}
+function blockConflicts(d) {
+  return dayPlan(d.day).filter((b) => b.id !== d.id && b.a.kind !== 'free' && b.from < d.to && b.to > d.from)
+    .map((b) => ({ b, whole: b.from >= d.from && b.to <= d.to }));
+}
+function blockPreview() {
+  const d = bdraft, a = actView(d.act), dur = d.to - d.from;
+  return `<div class="bp-time num">${hhmm(d.from)} – ${hhmm(d.to)}</div><div class="bp-title">${esc(a.name)}</div><div class="bp-sub">${WEEK[d.day]} · ${dur > 0 ? durText(dur) : 'check the times'}</div>`;
 }
 function blockHtml() {
-  const d = bdraft, a = actView(d.act), editing = !!d.id;
-  let from;
-  if (editing) { const p = dayPlan(d.day).find((x) => x.id === d.id); from = p ? p.from : S.schedule.days[d.day].start; }
-  else from = freeSlotFor(d.day, d.dur).from;
+  const d = bdraft, a = actView(d.act), editing = !!d.id, dur = d.to - d.from;
   const g = a.group;
   let gq = '';
   if (g) {
     const m = groupMonth(g, ymNow());
     gq = `<div class="card gq">${grpBadge(g, 'sm')}<div class="row-main"><b>${esc(g.name)}</b><span>${m.n ? `${m.paidCount} of ${m.n} paid for ${MONTHS[new Date().getMonth()]}` : 'No students yet'}</span></div><button class="pill-btn" data-act="group" data-id="${g.id}">Open</button></div>`;
   }
-  return sheetHead(editing ? 'Edit block' : 'New block', '<button data-act="close-sheet">Cancel</button>', `<button data-act="blk-save">${editing ? 'Save' : 'Add'}</button>`) + `
+  const hint = !editing
+    ? 'Pick the day and the exact time. If it overlaps something, you will see what changes before saving.'
+    : d.wasFree
+      ? 'Choose what goes into this free time — a new group, for example. Make it shorter and the rest stays free.'
+      : 'Change the day or the times to move it. Anything it would overlap is shown above.';
+  return sheetHead(editing ? 'Edit block' : 'New block', '<button data-act="close-sheet">Cancel</button>', `<button data-act="blk-save" ${dur >= 5 ? '' : 'disabled'}>${editing ? 'Save' : 'Add'}</button>`) + `
   <div class="sheet-body">
-    <div class="blk-preview ${a.kind}" style="--c:${a.color}">
-      <div class="bp-time num">${hhmm(from)} – ${hhmm(from + d.dur)}</div>
-      <div class="bp-title">${esc(a.name)}</div>
-      <div class="bp-sub">${WEEK[d.day]} · ${durText(d.dur)}</div>
-    </div>
+    <div class="blk-preview ${a.kind}" id="blk-preview" style="--c:${a.color}">${blockPreview()}</div>
     ${gq}
     <div class="form-label">What</div>
     <div class="act-pick">${S.schedule.acts.map((x) => { const v = actView(x.id); return `<button class="${d.act === x.id ? 'on' : ''} ${v.kind}" style="--c:${v.color}" data-act="blk-act" data-v="${x.id}"><i></i>${esc(v.name)}</button>`; }).join('')}<button class="add" data-act="act-new">${glyph('plus')}New</button></div>
-    <div class="form-label">How long</div>
-    <div class="dur-pick">${[30, 45, 60, 90, 120, 180, 240].map((m) => `<button class="${d.dur === m ? 'on' : ''}" data-act="blk-dur" data-v="${m}">${durText(m)}</button>`).join('')}</div>
-    <div class="group plain" style="margin-top:10px"><div class="row field"><span style="flex:1">Exact length</span><div class="stepper"><button data-act="blk-step" data-v="-15" aria-label="Shorter">${glyph('minus')}</button><b class="num">${durText(d.dur)}</b><button data-act="blk-step" data-v="15" aria-label="Longer">${glyph('plus')}</button></div></div></div>
-    <p class="hint">${!editing ? 'It goes into the first free gap that fits. You can move it later: Edit → drag ⠿.' : S.schedule.days[d.day].blocks.find((x) => x.id === d.id)?.act === 'free' ? 'Pick what goes into this free time — a new group, for example. If it takes less time, the rest stays free.' : 'The free time after this block adjusts when you change its length, so the rest of the day stays in place.'}</p>
+    <div class="form-label">When</div>
+    <div class="blk-days">${WK.map((n, i) => `<button class="${d.day === i ? 'on' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="blk-day" data-v="${i}">${n}</button>`).join('')}</div>
+    <div class="group plain" style="margin-top:10px">
+      <label class="row field"><span>Starts</span><input type="time" id="blk-from" step="300" value="${hhmm(d.from)}"></label>
+      <label class="row field"><span>Ends</span><input type="time" id="blk-to" step="300" value="${hhmm(d.to)}"></label>
+    </div>
+    <div class="dur-pick" id="blk-durs" style="margin-top:10px">${[30, 45, 60, 90, 120, 180, 240].map((m) => `<button class="${dur === m ? 'on' : ''}" data-act="blk-dur" data-v="${m}">${durText(m)}</button>`).join('')}</div>
+    <div id="blk-conflict"></div>
+    <p class="hint">${hint}</p>
     <div class="actions">
-      <button class="btn" data-act="blk-save">${editing ? 'Save' : 'Add block'}</button>
+      <button class="btn" data-act="blk-save" ${dur >= 5 ? '' : 'disabled'}>${editing ? 'Save' : 'Add block'}</button>
       ${a.id !== 'free' ? `<button class="btn grey" data-act="act-edit" data-id="${a.id}">${glyph('pencil')} Change “${esc(a.name)}” — name, colour</button>` : ''}
-      ${editing ? `<button class="btn danger" data-act="blk-del">${a.kind === 'free' ? 'Remove this free time' : `Remove from ${WEEK[d.day]}`}</button>` : ''}
+      ${editing ? `<button class="btn danger" data-act="blk-del">${d.wasFree ? 'Remove this free time' : `Remove from ${WEEK[d.origDay]}`}</button>` : ''}
     </div>
   </div>`;
 }
+const parseTime = (v) => { const [h, m] = String(v).split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+function mountBlock(sh) {
+  const f = $('#blk-from', sh), t = $('#blk-to', sh);
+  const onFrom = () => {
+    if (!f.value) return;
+    const len = Math.max(15, bdraft.to - bdraft.from);
+    bdraft.from = parseTime(f.value);
+    bdraft.to = Math.min(bdraft.from + len, 1440); // moving the start keeps the length
+    t.value = hhmm(bdraft.to);
+    syncBlock(sh);
+  };
+  const onTo = () => { if (!t.value) return; bdraft.to = parseTime(t.value) || 1440; syncBlock(sh); };
+  f.addEventListener('change', onFrom);
+  f.addEventListener('input', onFrom);
+  t.addEventListener('change', onTo);
+  t.addEventListener('input', onTo);
+  syncBlock(sh);
+}
+function syncBlock(sh) {
+  const d = bdraft, dur = d.to - d.from;
+  $('#blk-preview', sh).innerHTML = blockPreview();
+  sh.querySelectorAll('#blk-durs button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === dur));
+  const box = $('#blk-conflict', sh);
+  if (dur < 5) {
+    box.innerHTML = `<div class="blk-warn bad">${glyph('clock')}<div><b>The end is before the start</b><span>Pick an end time after ${hhmm(d.from)}.</span></div></div>`;
+  } else {
+    const c = blockConflicts(d);
+    box.innerHTML = c.length
+      ? `<div class="blk-warn">${glyph('clock')}<div><b>Overlaps ${c.map((x) => esc(x.b.a.name)).join(' and ')}</b><span>${c.map((x) => `${esc(x.b.a.name)} ${hhmm(x.b.from)}–${hhmm(x.b.to)} will be ${x.whole ? 'replaced' : 'shortened'}`).join(' · ')}</span></div></div>`
+      : '';
+  }
+  sh.querySelectorAll('[data-act="blk-save"]').forEach((b) => { b.disabled = dur < 5; });
+}
+// Puts [from, to) on day di for activity act, rebuilding the day around it.
+function paintBlock(di, from, to, act, keepId) {
+  const d = S.schedule.days[di];
+  const segs = [];
+  for (const b of dayPlan(di)) {
+    if (b.id === keepId || b.act === 'free') continue; // free time is rebuilt from the gaps
+    if (b.to <= from || b.from >= to) { segs.push({ id: b.id, act: b.act, from: b.from, to: b.to }); continue; }
+    if (b.from < from) segs.push({ id: b.id, act: b.act, from: b.from, to: from });
+    if (b.to > to) segs.push({ id: b.from < from ? uid() : b.id, act: b.act, from: to, to: b.to });
+  }
+  segs.push({ id: keepId || uid(), act, from, to });
+  segs.sort((x, y) => x.from - y.from);
+  const start = d.blocks.length ? Math.min(d.start, from) : from;
+  const end = Math.max(d.blocks.length ? dayEnd(di) : to, to);
+  const blocks = [];
+  let t = start;
+  for (const sg of segs) {
+    if (sg.from > t) blocks.push({ id: uid(), act: 'free', dur: sg.from - t });
+    blocks.push({ id: sg.id, act: sg.act, dur: sg.to - sg.from });
+    t = sg.to;
+  }
+  if (end > t) blocks.push({ id: uid(), act: 'free', dur: end - t });
+  d.start = start;
+  d.blocks = blocks;
+  mergeFree(di);
+}
 function saveBlock() {
   const d = bdraft;
-  const day = S.schedule.days[d.day];
-  if (d.id) {
-    const b = day.blocks.find((x) => x.id === d.id);
-    if (!b) return;
-    b.act = d.act;
-    setDur(d.day, d.id, d.dur);
-    mergeFree(d.day);
-  } else placeBlock(d.day, d.act, d.dur);
+  if (d.to - d.from < 5) return;
+  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+  if (d.id && d.origDay !== d.day) {
+    // Moving to another day: its old place becomes free time.
+    const old = S.schedule.days[d.origDay].blocks;
+    const i = old.findIndex((x) => x.id === d.id);
+    if (i >= 0) { old[i] = { id: uid(), act: 'free', dur: old[i].dur }; mergeFree(d.origDay); }
+    paintBlock(d.day, d.from, d.to, d.act, null);
+  } else paintBlock(d.day, d.from, d.to, d.act, d.id);
   UI.sDay = d.day;
   save(); buzz(); closeSheet(); render();
-  toast(d.id ? 'Schedule updated' : `${actView(d.act).name} added to ${WEEK[d.day]}`);
+  undoToast(`${actView(d.act).name} · ${WK[d.day]} ${hhmm(d.from)}–${hhmm(d.to)}`, () => { S.schedule.days = snapshot; });
 }
 function removeBlock(di, id) {
   const blocks = S.schedule.days[di].blocks;
@@ -399,7 +463,7 @@ async function deleteAct() {
   save(); closeSheet(); render();
   toast('Deleted');
 }
-const backToBlock = () => { const keep = { ...bdraft }; return (newAct) => { bdraft = keep; if (newAct) bdraft.act = newAct; openSheet(blockHtml(), null); }; };
+const backToBlock = () => { const keep = { ...bdraft }; return (newAct) => { bdraft = keep; if (newAct) bdraft.act = newAct; openSheet(blockHtml(), mountBlock); }; };
 
 // ================= Copy a day =================
 let copyTargets = new Set();
@@ -462,11 +526,11 @@ Object.assign(ACTIONS, {
     save(); closeSheet(); render();
     undoToast(`Copied to ${plural(n, 'day')}`, () => { S.schedule.days = snapshot; });
   },
-  'blk-act': (a, v) => { bdraft.act = v; refreshSheet(blockHtml(), null); },
-  'blk-dur': (a, v) => { bdraft.dur = Number(v); refreshSheet(blockHtml(), null); },
-  'blk-step': (a, v) => { bdraft.dur = clamp(bdraft.dur + Number(v), 15, 16 * 60); refreshSheet(blockHtml(), null); },
+  'blk-act': (a, v) => { bdraft.act = v; refreshSheet(blockHtml(), mountBlock); },
+  'blk-dur': (a, v) => { bdraft.to = Math.min(bdraft.from + Number(v), 1440); refreshSheet(blockHtml(), mountBlock); },
+  'blk-day': (a, v) => { bdraft.day = Number(v); refreshSheet(blockHtml(), mountBlock); },
   'blk-save': () => saveBlock(),
-  'blk-del': () => { const d = bdraft; closeSheet(); removeBlock(d.day, d.id); },
+  'blk-del': () => { const d = bdraft; closeSheet(); removeBlock(d.origDay, d.id); },
   'act-new': () => openActForm(null, backToBlock()),
   'act-edit': (a, v, id) => openActForm(id, backToBlock()),
   'act-cancel': () => { if (actDraft.back) actDraft.back(); else closeSheet(); },

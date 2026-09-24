@@ -5,7 +5,7 @@
 
 // ================= Constants =================
 const KEY = 'budget-app-v1';
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 const G = window.GLYPHS || {};
 const CUR = { UZS: { seg: "so'm" }, USD: { seg: '$' } };
 const OTHER = { UZS: 'USD', USD: 'UZS' };
@@ -321,6 +321,7 @@ function totals(cur, from, to) {
 }
 const goalSaved = (g) => g.contribs.reduce((a, c) => a + c.amount, 0);
 const savedInGoals = (cur) => S.goals.filter((g) => g.currency === cur).reduce((a, g) => a + goalSaved(g), 0);
+const freeMoney = (cur) => balance(cur) - savedInGoals(cur); // not set aside for any goal
 const hasDemo = () => S.tx.some((t) => t.demo) || S.goals.some((g) => g.demo);
 const hasAnything = () => S.tx.length > 0 || S.accounts.some((a) => a.opening.UZS || a.opening.USD);
 function personColor(name) {
@@ -385,7 +386,6 @@ function openSheet(html, mount) {
     sheet.sh.classList.remove('swap');
     void sheet.sh.offsetWidth;
     sheet.sh.classList.add('swap');
-    enableDrag(sheet.sh);
     mount && mount(sheet.sh);
     const b = $('.sheet-body', sheet.sh);
     if (b) b.scrollTop = 0;
@@ -401,25 +401,24 @@ function openSheet(html, mount) {
   sh.setAttribute('aria-modal', 'true');
   sh.innerHTML = html;
   root.append(ov, sh);
-  sheet = { ov, sh };
+  sheet = { ov, sh, hid: uid() };
   requestAnimationFrame(() => requestAnimationFrame(() => { ov.classList.add('show'); sh.classList.add('show'); }));
-  history.pushState({ tab: UI.tab, sheet: true }, '');
+  history.pushState({ tab: UI.tab, sheet: sheet.hid }, '');
   document.body.style.overflow = 'hidden';
-  enableDrag(sh);
+  bindSheetGestures(sh, ov);
   mount && mount(sh);
 }
 function refreshSheet(html, mount) {
   if (!sheet) return;
   const b = $('.sheet-body', sheet.sh), top = b ? b.scrollTop : 0;
   sheet.sh.innerHTML = html;
-  enableDrag(sheet.sh);
   mount && mount(sheet.sh);
   const nb = $('.sheet-body', sheet.sh);
   if (nb) nb.scrollTop = top;
 }
 function closeSheet() {
   if (!sheet) return;
-  if (history.state && history.state.sheet) history.back();
+  if (history.state && history.state.sheet === sheet.hid) history.back();
   else closeSheetNow();
 }
 function closeSheetNow() {
@@ -429,31 +428,59 @@ function closeSheetNow() {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   sh.classList.remove('dragging');
   sh.style.transform = '';
+  ov.style.opacity = '';
   ov.classList.remove('show');
   sh.classList.remove('show');
   document.body.style.overflow = '';
   setTimeout(() => { ov.remove(); sh.remove(); if (pendingReload) location.reload(); }, 450);
 }
-function enableDrag(sh) {
-  let startY = null, dy = 0;
-  const down = (e) => {
-    if (e.target.closest('button, input')) return;
-    startY = e.clientY; dy = 0;
-    sh.classList.add('dragging');
-    e.currentTarget.setPointerCapture(e.pointerId);
+// Pull a sheet down to close it — from anywhere inside it, as long as its content is scrolled to
+// the top (like iOS). A quick flick closes it too. Mouse users can drag the top bar.
+function bindSheetGestures(sh, ov) {
+  let x0 = 0, y0 = null, t0 = 0, dy = 0, mode = null;
+  const skip = (el) => el.closest('input, textarea, select, .drag, .switch');
+  const begin = (x, y, target) => {
+    if (skip(target)) return;
+    const body = $('.sheet-body', sh);
+    const inBody = body && body.contains(target);
+    if (inBody && body.scrollTop > 2) return; // content is scrolled: let it scroll back up first
+    x0 = x; y0 = y; t0 = performance.now(); dy = 0; mode = null;
   };
-  const move = (e) => { if (startY === null) return; dy = Math.max(0, e.clientY - startY); sh.style.transform = `translateY(${dy}px)`; };
-  const up = () => {
-    if (startY === null) return;
-    startY = null;
+  const follow = (x, y, e) => {
+    if (y0 === null) return;
+    const ddx = x - x0, ddy = y - y0;
+    if (!mode) {
+      if (Math.abs(ddx) < 8 && Math.abs(ddy) < 8) return;
+      mode = ddy > 0 && Math.abs(ddy) > Math.abs(ddx) * 1.2 ? 'drag' : 'none';
+      if (mode === 'drag') sh.classList.add('dragging');
+    }
+    if (mode !== 'drag') return;
+    if (e.cancelable) e.preventDefault();
+    dy = Math.max(0, ddy);
+    sh.style.transform = `translateY(${dy}px)`;
+    ov.style.opacity = String(Math.max(0.15, 1 - dy / (sh.offsetHeight || 600)));
+  };
+  const release = () => {
+    if (y0 === null) return;
+    const wasDrag = mode === 'drag';
+    const speed = dy / Math.max(1, performance.now() - t0);
+    y0 = null; mode = null;
+    if (!wasDrag) return;
     sh.classList.remove('dragging');
-    if (dy > 110) closeSheet(); else sh.style.transform = '';
+    if (dy > Math.min(140, sh.offsetHeight * 0.25) || (speed > 0.55 && dy > 30)) closeSheet();
+    else { sh.style.transform = ''; ov.style.opacity = ''; }
   };
-  sh.querySelectorAll('.sheet-grab, .sheet-head').forEach((h) => {
-    h.addEventListener('pointerdown', down);
-    h.addEventListener('pointermove', move);
-    h.addEventListener('pointerup', up);
-    h.addEventListener('pointercancel', up);
+  sh.addEventListener('touchstart', (e) => begin(e.touches[0].clientX, e.touches[0].clientY, e.target), { passive: true });
+  sh.addEventListener('touchmove', (e) => follow(e.touches[0].clientX, e.touches[0].clientY, e), { passive: false });
+  sh.addEventListener('touchend', release);
+  sh.addEventListener('touchcancel', release);
+  sh.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || !e.target.closest('.sheet-grab, .sheet-head') || e.target.closest('button')) return;
+    begin(e.clientX, e.clientY, e.target);
+    const mv = (ev) => follow(ev.clientX, ev.clientY, ev);
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); release(); };
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
   });
 }
 const blurOnEnter = (sh) => sh.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter' && i.tagName === 'INPUT') i.blur(); }));
@@ -671,7 +698,7 @@ function goTab(tab) {
 }
 window.addEventListener('popstate', (e) => {
   const st = e.state || {};
-  if (sheet && !st.sheet) closeSheetNow();
+  if (sheet && st.sheet !== sheet.hid) closeSheetNow();
   const tab = st.tab || 'home';
   if (tab === 'home') pushedTab = false;
   if (tab !== UI.tab) { UI.tab = tab; window.scrollTo(0, 0); render(true); }
