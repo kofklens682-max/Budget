@@ -68,8 +68,93 @@ function placeBlock(di, act, dur) {
 function renderSchedule() {
   const now = new Date();
   return `<header class="lt"><div><div class="eyebrow">${DOW_LONG[now.getDay()]} · ${hhmm(nowMin())}</div><h1>Schedule</h1></div>
-    <div class="lt-right"><div class="seg sm" style="width:128px">${segButtons('sched-view', [['day', 'Day'], ['week', 'Week']], UI.sView)}</div></div></header>`
-    + (UI.sView === 'week' ? weekHtml() : dayHtml());
+    <div class="lt-right"><div class="seg sm" style="width:176px">${segButtons('sched-view', [['day', 'Day'], ['week', 'Week'], ['table', 'Table']], UI.sView)}</div></div></header>`
+    + (UI.sView === 'week' ? weekHtml() : UI.sView === 'table' ? tableHtml() : dayHtml());
+}
+
+// ================= Table: the whole week on one screen =================
+// Long single words are shortened in narrow columns ("University" → "Univ."); the full name shows
+// when the column is wide enough (phone turned sideways) — see the container query in style.css.
+const shortName = (name) => (/\s/.test(name.trim()) || name.length <= 7 ? name : name.slice(0, 4) + '.');
+function weekStats(plans) {
+  const acts = new Map();
+  const days = plans.map((p, di) => {
+    let free = 0, busy = 0, lessons = 0, teach = 0;
+    for (const b of p) {
+      const e = acts.get(b.act) || { a: b.a, min: 0, n: 0, days: new Set() };
+      e.min += b.dur; e.n++; e.days.add(di);
+      acts.set(b.act, e);
+      if (b.a.kind === 'free') free += b.dur; else busy += b.dur;
+      if (b.a.kind === 'lesson') { lessons++; teach += b.dur; }
+    }
+    return { free, busy, lessons, teach, empty: !p.length };
+  });
+  const list = [...acts.values()].sort((x, y) => y.min - x.min);
+  const sum = (k) => days.reduce((a, d) => a + d[k], 0);
+  return { days, list, total: list.reduce((a, e) => a + e.min, 0), free: sum('free'), busy: sum('busy'), lessons: sum('lessons'), teach: sum('teach') };
+}
+function tableHtml() {
+  const plans = WEEK.map((_, i) => dayPlan(i));
+  if (!plans.some((p) => p.length)) return scheduleEmpty();
+  const st = weekStats(plans);
+  const starts = plans.map((p, i) => (p.length ? S.schedule.days[i].start : Infinity));
+  const ends = plans.map((p, i) => (p.length ? dayEnd(i) : -Infinity));
+  const lo = Math.floor(Math.min(...starts) / 60) * 60, hi = Math.ceil(Math.max(...ends) / 60) * 60;
+  // Scale so the whole week fits the screen height where possible.
+  const PX = clamp(Math.max(340, window.innerHeight - 400) / (hi - lo), 0.75, 1.6);
+  const H = Math.round((hi - lo) * PX);
+  const today = todayIdx(), now = nowMin(), lit = UI.sHi;
+  const litE = lit ? st.list.find((e) => e.a.id === lit) : null;
+
+  const chips = `<div class="fchips tb-chips">${st.list.map((e) => `<button class="fchip ${lit === e.a.id ? 'on' : ''}" data-act="tb-hi" data-v="${e.a.id}"><i class="${e.a.kind}" style="--c:${e.a.color}"></i>${esc(e.a.name)}</button>`).join('')}</div>`;
+  const note = litE
+    ? `<p class="tb-note"><b>${esc(litE.a.name)}</b> · ${durText(litE.min)} a week · ${plural(litE.n, 'time')} · ${litE.days.size === 7 ? 'every day' : [...litE.days].sort().map((i) => WK[i]).join(', ')}</p>`
+    : '<p class="tb-note muted">Tap a name to highlight it across the week. Tap any block to change it.</p>';
+  let labels = '';
+  for (let m = lo; m <= hi; m += 60) labels += `<span style="top:${((m - lo) * PX).toFixed(1)}px">${hhmm(m)}</span>`;
+  const heads = WK.map((n, i) => `<button class="tb-head ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="sched-open-day" data-v="${i}">${n}</button>`).join('');
+  const cols = plans.map((p, i) => `<div class="tb-col ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]};height:${H}px">${p.map((b) => {
+    const h = b.dur * PX;
+    const state = lit ? (b.act === lit ? ' lit' : ' dim') : '';
+    return `<button class="tb-b ${b.a.kind}${state}" style="--c:${b.a.color};top:${((b.from - lo) * PX + 1).toFixed(1)}px;height:${(h - 2).toFixed(1)}px" data-act="sched-block" data-id="${b.id}" data-day="${i}"><b><span class="s">${esc(shortName(b.a.name))}</span><span class="f">${esc(b.a.name)}</span></b>${h >= 30 ? `<i>${durText(b.dur)}</i>` : ''}${h >= 48 ? `<em class="num">${hhmm(b.from)}–${hhmm(b.to)}</em>` : ''}</button>`;
+  }).join('')}${i === today && now >= lo && now <= hi ? `<div class="tb-now" style="top:${((now - lo) * PX).toFixed(1)}px"></div>` : ''}</div>`).join('');
+  const freeRow = st.days.map((d) => `<div class="tb-f fr">${d.free ? durText(d.free) : '—'}</div>`).join('');
+  const lesRow = st.days.map((d) => `<div class="tb-f">${d.lessons ? `${d.lessons}<small>${durText(d.teach)}</small>` : '—'}</div>`).join('');
+  return `${chips}${note}
+    <div class="tb-wrap"><div class="tb" style="--px:${PX.toFixed(3)}">
+      <div class="tb-corner"></div>${heads}
+      <div class="tb-times" style="height:${H}px">${labels}</div>${cols}
+      <div class="tb-fl free">Free</div>${freeRow}
+      <div class="tb-fl">Les&shy;sons</div>${lesRow}
+    </div></div>
+    ${weekSummary(st, plans)}`;
+}
+function weekSummary(st, plans) {
+  const pickDay = (key, better) => st.days.reduce((b, d, i) => (!d.empty && (b < 0 || better(d[key], st.days[b][key])) ? i : b), -1);
+  const busiest = pickDay('busy', (x, y) => x > y), freest = pickDay('free', (x, y) => x > y);
+  const tile = (label, big, small) => `<div class="card tb-stat"><span>${label}</span><b class="num">${big}</b><small>${small}</small></div>`;
+  const bar = st.list.map((e) => `<i class="${e.a.kind}" style="--c:${e.a.color};width:${Math.max(1.2, (e.min / st.total) * 100).toFixed(2)}%"></i>`).join('');
+  const rows = st.list.map((e) => `<button class="lg-row ${UI.sHi === e.a.id ? 'on' : ''}" data-act="tb-hi" data-v="${e.a.id}"><i class="${e.a.kind}" style="--c:${e.a.color}"></i><span class="n">${esc(e.a.name)}</span><span class="h num">${durText(e.min)}</span><span class="p num">${Math.round((e.min / st.total) * 100)}%</span></button>`).join('');
+  // Free gaps of an hour or more — handy for fitting in a new group.
+  const gaps = [];
+  plans.forEach((p, di) => p.forEach((b) => { if (b.a.kind === 'free' && b.dur >= 60) gaps.push({ di, b }); }));
+  return `<div class="tb-stats">
+      ${tile('Free time', durText(st.free), 'in the week')}
+      ${tile('Teaching', durText(st.teach), plural(st.lessons, 'lesson'))}
+      ${tile('Busiest day', busiest >= 0 ? WEEK[busiest] : '—', busiest >= 0 ? `${durText(st.days[busiest].busy)} busy` : '')}
+      ${tile('Most free', freest >= 0 && st.days[freest].free ? WEEK[freest] : '—', freest >= 0 && st.days[freest].free ? `${durText(st.days[freest].free)} free` : 'no free time')}
+    </div>
+    <section class="card" style="margin-top:12px">
+      <div class="card-title">Where your week goes</div>
+      <div class="card-sub">${durText(st.total)} planned · tap a line to highlight it</div>
+      <div class="wk-bar">${bar}</div>
+      <div class="lg-list">${rows}</div>
+    </section>
+    <section class="card" style="margin-top:12px">
+      <div class="card-title">Free windows</div>
+      <div class="card-sub">An hour or more — tap one to fill it</div>
+      ${gaps.length ? `<div class="gap-list">${gaps.map(({ di, b }) => `<button class="gap" style="--dc:${DAY_COLORS[di]}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><b>${WK[di]}</b><span class="num">${hhmm(b.from)}–${hhmm(b.to)}</span><i class="num">${durText(b.dur)}</i></button>`).join('')}</div>` : '<p class="card-sub" style="margin-top:8px">No free hour anywhere this week.</p>'}
+    </section>`;
 }
 function scheduleEmpty() {
   return `<section class="card empty">
@@ -180,7 +265,7 @@ function showDay(i, dir) {
   buzz();
   render();
 }
-PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule };
+PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule, resize: () => { if (UI.sView === 'table') render(); } };
 
 // ================= Block sheet =================
 let bdraft = null;
@@ -217,7 +302,7 @@ function blockHtml() {
     <div class="form-label">How long</div>
     <div class="dur-pick">${[30, 45, 60, 90, 120, 180, 240].map((m) => `<button class="${d.dur === m ? 'on' : ''}" data-act="blk-dur" data-v="${m}">${durText(m)}</button>`).join('')}</div>
     <div class="group plain" style="margin-top:10px"><div class="row field"><span style="flex:1">Exact length</span><div class="stepper"><button data-act="blk-step" data-v="-15" aria-label="Shorter">${glyph('minus')}</button><b class="num">${durText(d.dur)}</b><button data-act="blk-step" data-v="15" aria-label="Longer">${glyph('plus')}</button></div></div></div>
-    <p class="hint">${editing ? 'The free time after this block adjusts when you change its length, so the rest of the day stays in place.' : 'It goes into the first free gap that fits. You can move it later: Edit → drag ⠿.'}</p>
+    <p class="hint">${!editing ? 'It goes into the first free gap that fits. You can move it later: Edit → drag ⠿.' : S.schedule.days[d.day].blocks.find((x) => x.id === d.id)?.act === 'free' ? 'Pick what goes into this free time — a new group, for example. If it takes less time, the rest stays free.' : 'The free time after this block adjusts when you change its length, so the rest of the day stays in place.'}</p>
     <div class="actions">
       <button class="btn" data-act="blk-save">${editing ? 'Save' : 'Add block'}</button>
       ${a.id !== 'free' ? `<button class="btn grey" data-act="act-edit" data-id="${a.id}">${glyph('pencil')} Change “${esc(a.name)}” — name, colour</button>` : ''}
@@ -348,7 +433,7 @@ async function importScheduleCode(code) {
   sch.acts.forEach((a) => { const g = S.groups.find((x) => x.name.toLowerCase() === a.name.toLowerCase()); if (g && a.kind === 'lesson') a.groupId = g.id; });
   S.schedule = sch;
   save();
-  UI.sView = 'day'; UI.sDay = todayIdx(); UI.sEdit = false;
+  UI.sDay = todayIdx(); UI.sEdit = false;
   if (sheet) closeSheet();
   if (UI.tab === 'schedule') render(true); else goTab('schedule');
   toast('Your schedule is in ✓');
@@ -356,7 +441,8 @@ async function importScheduleCode(code) {
 
 // ================= Actions =================
 Object.assign(ACTIONS, {
-  'sched-view': (a, v) => { UI.sView = v; UI.sEdit = false; render(true); },
+  'sched-view': (a, v) => { UI.sView = v; UI.sEdit = false; S.settings.schedView = v; save(); render(true); },
+  'tb-hi': (a, v) => { UI.sHi = UI.sHi === v ? null : v; buzz(); render(); },
   'sched-day': (a, v) => showDay(Number(v)),
   'sched-open-day': (a, v) => { UI.sView = 'day'; UI.sDay = Number(v); UI.sEdit = false; render(true); },
   'sched-edit': () => { UI.sEdit = !UI.sEdit; buzz(); render(); },

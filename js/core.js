@@ -5,7 +5,7 @@
 
 // ================= Constants =================
 const KEY = 'budget-app-v1';
-const APP_VERSION = 3;
+const APP_VERSION = 4;
 const G = window.GLYPHS || {};
 const CUR = { UZS: { seg: "so'm" }, USD: { seg: '$' } };
 const OTHER = { UZS: 'USD', USD: 'UZS' };
@@ -183,7 +183,7 @@ const defaultAccounts = () => [
 ];
 const FREE_ACT = () => ({ id: 'free', name: 'Free', color: '#8E8E93', kind: 'free', groupId: null });
 const emptySchedule = () => ({ acts: [FREE_ACT()], days: Array.from({ length: 7 }, () => ({ start: 660, blocks: [] })) });
-const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null });
+const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null, schedView: 'table' });
 const blank = () => ({ v: APP_VERSION, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], goals: [], settings: defaultSettings() });
 
 const validTx = (t) => t && t.id && typeof t.amount === 'number' && t.amount > 0 && CUR[t.currency] && /^\d{4}-\d{2}-\d{2}$/.test(t.date)
@@ -335,7 +335,7 @@ const UI = {
   tab: 'home', cur: S.settings.currency, range: '3M',
   hView: 'entries', hType: 'all', hCur: 'all', hAcc: 'all', hGroup: 'all', q: '', hLimit: 150,
   period: 'month', offset: 0, gMonth: ymNow(),
-  sView: 'day', sDay: todayIdx(), sEdit: false, sDir: 0,
+  sView: ['day', 'week', 'table'].includes(S.settings.schedView) ? S.settings.schedView : 'table', sDay: todayIdx(), sEdit: false, sDir: 0, sHi: null,
   lastType: 'in', lastAcc: { in: null, out: null },
   flashId: null, heroShown: {},
 };
