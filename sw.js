@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v5';
+const VERSION = 'budget-v6';
 const SHELL = [
   './',
   './index.html',
@@ -26,10 +26,11 @@ self.addEventListener('install', (e) => {
   );
 });
 
+// The Notes app lives on the same site and has its own caches ("notes-…"): only clear ours.
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('budget-') && k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
