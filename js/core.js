@@ -184,7 +184,7 @@ const defaultAccounts = () => [
 const FREE_ACT = () => ({ id: 'free', name: 'Free', color: '#8E8E93', kind: 'free', groupId: null });
 const emptySchedule = () => ({ acts: [FREE_ACT()], days: Array.from({ length: 7 }, () => ({ start: 660, blocks: [] })) });
 const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null, schedView: 'table' });
-const blank = () => ({ v: APP_VERSION, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], goals: [], settings: defaultSettings() });
+const blank = () => ({ v: APP_VERSION, rev: 0, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], goals: [], settings: defaultSettings() });
 
 const validTx = (t) => t && t.id && typeof t.amount === 'number' && t.amount > 0 && CUR[t.currency] && /^\d{4}-\d{2}-\d{2}$/.test(t.date)
   && (t.type === 'in' || t.type === 'out' || (t.type === 'transfer' && CUR[t.toCurrency] && typeof t.toAmount === 'number'));
@@ -265,16 +265,26 @@ function normalize(d) {
   }));
   const schedule = normSchedule(d.schedule);
   schedule.acts.forEach((a) => { if (a.groupId && !gids.has(a.groupId)) a.groupId = null; });
-  return { v: APP_VERSION, accounts, cats: normCats(d.cats), groups, schedule, tx, goals, settings: Object.assign(defaultSettings(), d.settings || {}) };
+  return { v: APP_VERSION, rev: Math.max(0, Math.round(Number(d.rev)) || 0), accounts, cats: normCats(d.cats), groups, schedule, tx, goals, settings: Object.assign(defaultSettings(), d.settings || {}) };
 }
+// Opens from the quick copy (localStorage); main.js then checks the second copy (keep.js).
+let hadQuick = false;
 function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return normalize(JSON.parse(raw)); } catch (e) { /* fall through */ }
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const d = normalize(JSON.parse(raw)); hadQuick = true; return d; }
+  } catch (e) { /* damaged: the second copy takes over */ }
   return blank();
 }
 let S = load();
+let topRev = S.rev; // highest save number so far: a fresh start (Erase, a restored backup) still counts as newest
 let persistAsked = false;
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('⚠️ Could not save on this device'); }
+  S.rev = Math.max(S.rev || 0, topRev) + 1;
+  topRev = S.rev;
+  const json = JSON.stringify(S);
+  try { localStorage.setItem(KEY, json); quickFailed = false; } catch (e) { quickFailed = true; }
+  keepSoon(S.rev, json, quickFailed);
   if (!persistAsked && navigator.storage && navigator.storage.persist) { persistAsked = true; navigator.storage.persist().catch(() => {}); }
 }
 
@@ -641,6 +651,8 @@ function lockNow() {
     onForgot: async (c) => {
       const ok = await ask({ title: 'Forgot your passcode?', msg: 'The only way back in is to erase everything on this phone and start again. If you saved a backup file, you can restore it afterwards.', ok: 'Erase everything', destructive: true });
       if (!ok) return;
+      // The automatic copies go too — otherwise they'd open the data without the passcode.
+      dropAllCopies();
       S = blank(); save(); applyTheme(); UI.cur = 'UZS';
       locked = false; c.close(); render();
       toast('All data erased');
@@ -668,15 +680,27 @@ const PAGES = {};   // tab -> { title, render(): html, after(animate), resize() 
 const ACTIONS = {}; // data-act -> (el, value, id, event)
 const TAB_ORDER = ['home', 'history', 'stats', 'goals', 'schedule'];
 
-function render(animate) {
+// A page that fails to draw shows this instead of a blank screen (the data is never touched).
+const pageError = (err) => `<header class="lt"><h1>${esc(PAGES[UI.tab].title)}</h1></header><section class="card empty"><div class="big">${ic('bolt', '#FF9500', 'xl')}</div><h3>This page couldn't be shown</h3><p>Your data is safe. Try another tab, or close the app and open it again.</p><p class="hint">${esc((err && err.message) || err)}</p></section>`;
+// animate: the page's blocks rise in one after another (first start).
+// dir (1 / -1): the page slides in from the right / left — another tab. With `keep`, only the
+// blocks after the first `keep` ones slide (a new choice in a segmented control: the title and
+// the control stay where they are).
+function render(animate, dir = 0, keep = 0) {
   const v = $('#view');
   const page = PAGES[UI.tab];
-  v.innerHTML = page.render();
-  v.classList.remove('enter');
+  let html;
+  try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
+  v.innerHTML = html;
+  v.classList.remove('enter', 'slide');
   if (animate && !reduceMotion()) {
-    [...v.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9)));
-    void v.offsetWidth;
-    v.classList.add('enter');
+    if (dir) v.style.setProperty('--dir', dir);
+    if (dir && keep) [...v.children].forEach((c, i) => { if (i >= keep) { c.classList.add('sub-in'); c.style.setProperty('--i', Math.min(i - keep, 5)); } });
+    else {
+      if (!dir) [...v.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9)));
+      void v.offsetWidth;
+      v.classList.add(dir ? 'slide' : 'enter');
+    }
   }
   const idx = TAB_ORDER.indexOf(UI.tab);
   $('#tabs').style.setProperty('--i', idx);
@@ -686,8 +710,21 @@ function render(animate) {
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   $('#topbar-title').textContent = page.title;
-  if (page.after) page.after(animate);
+  if (page.after) { try { page.after(animate); } catch (err) { console.error(err); } }
   if (UI.flashId) setTimeout(() => { UI.flashId = null; }, 50);
+}
+// Re-render after a choice in a segmented control (or the ‹ › arrows next to it): what's above
+// stays put, what's below slides in from the side of the new choice.
+function renderSub(el, dir) {
+  const v = $('#view');
+  const k = [...v.children].findIndex((c) => c.contains(el));
+  if (!dir || k < 0) { render(); return; }
+  render(true, dir, k + 1);
+}
+// +1 when the tapped choice is to the right of the current one, -1 when to the left.
+function segDir(a) {
+  const bs = $$(':scope > button', a.parentElement);
+  return Math.sign(bs.indexOf(a) - bs.findIndex((b) => b.classList.contains('on')));
 }
 
 let pushedTab = false;
@@ -696,17 +733,131 @@ function goTab(tab) {
   if (UI.tab === 'home') { history.pushState({ tab }, ''); pushedTab = true; }
   else if (tab === 'home' && pushedTab) { history.back(); return; }
   else history.replaceState({ tab }, '');
+  showTab(tab);
+}
+// The old page slides out one way while the new one slides in from the other (by tab order).
+function showTab(tab) {
+  const dir = Math.sign(TAB_ORDER.indexOf(tab) - TAB_ORDER.indexOf(UI.tab)) || 1;
   UI.tab = tab;
+  const v = $('#view');
+  $$('.view.ghost').forEach((g) => g.remove());
+  if (!reduceMotion() && v.firstChild) {
+    const g = document.createElement('div');
+    g.className = 'view ghost';
+    g.setAttribute('aria-hidden', 'true');
+    g.inert = true;
+    g.style.top = `${-window.scrollY}px`;
+    g.style.setProperty('--dir', dir);
+    g.append(...v.childNodes);
+    g.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    v.after(g);
+    setTimeout(() => g.remove(), 450);
+  }
   window.scrollTo(0, 0);
-  render(true);
+  render(true, dir);
 }
 window.addEventListener('popstate', (e) => {
   const st = e.state || {};
   if (sheet && st.sheet !== sheet.hid) closeSheetNow();
   const tab = st.tab || 'home';
   if (tab === 'home') pushedTab = false;
-  if (tab !== UI.tab) { UI.tab = tab; window.scrollTo(0, 0); render(true); }
+  if (tab !== UI.tab) showTab(tab);
 });
+
+// ================= Press and slide =================
+const tick = () => { try { navigator.vibrate && navigator.vibrate(8); } catch (e) { /* no haptics */ } };
+// Tab bar: tap a tab, or press anywhere on the bar and slide — the highlight follows the finger
+// and the page under it opens when you let go (like the iPhone's tab bar).
+function bindTabSlide(tabs, go) {
+  const ind = $('.tab-ind', tabs);
+  const btns = () => $$('[data-tab]', tabs);
+  let st = null, slidAt = 0;
+  tabs.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    st = { id: e.pointerId, x0: e.clientX, on: false, over: -1 };
+  });
+  tabs.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.on) {
+      if (Math.abs(e.clientX - st.x0) < 8) return;
+      st.on = true;
+      try { tabs.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      tabs.classList.add('sliding');
+    }
+    const bs = btns(), r = tabs.getBoundingClientRect(), w = (r.width - 10) / bs.length;
+    const x = clamp(e.clientX - r.left - 5 - w / 2, 0, w * (bs.length - 1));
+    ind.style.transform = `translateX(${x.toFixed(1)}px) scale(1.06)`;
+    const over = clamp(Math.round(x / w), 0, bs.length - 1);
+    if (over !== st.over) {
+      if (st.over >= 0) tick();
+      st.over = over;
+      bs.forEach((b, i) => b.classList.toggle('over', i === over));
+    }
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const s = st;
+    st = null;
+    if (!s.on) return;
+    slidAt = Date.now();
+    const b = btns()[s.over];
+    tabs.classList.remove('sliding');
+    ind.style.transform = '';
+    btns().forEach((x) => x.classList.remove('over'));
+    if (e.type === 'pointerup' && b && !b.classList.contains('on')) go(b.dataset.tab);
+  };
+  tabs.addEventListener('pointerup', end);
+  tabs.addEventListener('pointercancel', end);
+  // the end of a slide must not also count as a tap
+  tabs.addEventListener('click', (e) => { if (e.isTrusted && Date.now() - slidAt < 350) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
+// Segmented controls work the same way: slide the highlight along and let go on a choice.
+function bindSegSlide() {
+  let st = null, slidAt = 0;
+  document.addEventListener('pointerdown', (e) => {
+    const seg = e.button > 0 ? null : e.target.closest('.seg');
+    const thumb = seg && $(':scope > .seg-thumb', seg);
+    st = thumb ? { seg, thumb, id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, over: -1, x: 0, w: 1 } : null;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.on) {
+      const dx = Math.abs(e.clientX - st.x0), dy = Math.abs(e.clientY - st.y0);
+      if (dy > 10 && dy > dx) { st = null; return; }
+      if (dx < 8) return;
+      st.on = true;
+      try { st.seg.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      st.seg.classList.add('sliding');
+    }
+    const bs = $$(':scope > button', st.seg), r = st.seg.getBoundingClientRect();
+    st.w = (r.width - 4) / bs.length;
+    st.x = clamp(e.clientX - r.left - 2 - st.w / 2, 0, st.w * (bs.length - 1));
+    st.thumb.style.animation = 'none';
+    st.thumb.style.transform = `translateX(${st.x.toFixed(1)}px)`;
+    const over = clamp(Math.round(st.x / st.w), 0, bs.length - 1);
+    if (over !== st.over) {
+      if (st.over >= 0) tick();
+      st.over = over;
+      bs.forEach((b, i) => b.classList.toggle('over', i === over));
+    }
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const s = st;
+    st = null;
+    if (!s.on) return;
+    slidAt = Date.now();
+    s.seg.classList.remove('sliding');
+    const bs = $$(':scope > button', s.seg), b = bs[s.over];
+    bs.forEach((x) => x.classList.remove('over'));
+    if (e.type !== 'pointerup' || !b || b.classList.contains('on') || !ACTIONS[b.dataset.act]) { s.thumb.style.transform = ''; return; }
+    segMem[b.dataset.act] = s.x / s.w; // the new highlight glides on from where the finger left it
+    ACTIONS[b.dataset.act](b, b.dataset.v, b.dataset.id, e);
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+  document.addEventListener('click', (e) => { if (e.isTrusted && Date.now() - slidAt < 350 && e.target.closest('.seg')) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
 
 document.addEventListener('click', (e) => {
   const a = e.target.closest('[data-act]');

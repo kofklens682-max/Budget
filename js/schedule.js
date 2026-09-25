@@ -65,6 +65,17 @@ function renderSchedule() {
 // Long single words are shortened in narrow columns ("University" → "Univ."); the full name shows
 // when the column is wide enough (phone turned sideways) — see the container query in style.css.
 const shortName = (name) => (/\s/.test(name.trim()) || name.length <= 7 ? name : name.slice(0, 4) + '.');
+// Start times in the narrow table: 9:00 rather than 09:00.
+const clock = (min) => `${Math.floor(min / 60) % 24}:${pad2(min % 60)}`;
+// When an activity happens, days with the same times together: "Mon, Wed 9:00 · Fri 14:00 & 18:00".
+function whenText(plans, id) {
+  const byTimes = new Map();
+  plans.forEach((p, di) => {
+    const ts = p.filter((b) => b.act === id).map((b) => clock(b.from)).join(' & ');
+    if (ts) byTimes.set(ts, [...(byTimes.get(ts) || []), di]);
+  });
+  return [...byTimes].map(([ts, days]) => `${days.length === 7 ? 'Every day' : days.map((i) => WK[i]).join(', ')} ${ts}`).join(' · ');
+}
 function weekStats(plans) {
   const acts = new Map();
   const days = plans.map((p, di) => {
@@ -97,15 +108,15 @@ function tableHtml() {
 
   const chips = `<div class="fchips tb-chips">${st.list.map((e) => `<button class="fchip ${lit === e.a.id ? 'on' : ''}" data-act="tb-hi" data-v="${e.a.id}"><i class="${e.a.kind}" style="--c:${e.a.color}"></i>${esc(e.a.name)}</button>`).join('')}</div>`;
   const note = litE
-    ? `<p class="tb-note"><b>${esc(litE.a.name)}</b> · ${durText(litE.min)} a week · ${plural(litE.n, 'time')} · ${litE.days.size === 7 ? 'every day' : [...litE.days].sort().map((i) => WK[i]).join(', ')}</p>`
-    : '<p class="tb-note muted">Tap a name to highlight it across the week. Tap any block to change it.</p>';
+    ? `<p class="tb-note"><b>${esc(litE.a.name)}</b> · ${durText(litE.min)} a week · ${litE.a.kind === 'free' ? (litE.days.size === 7 ? 'every day' : [...litE.days].sort().map((i) => WK[i]).join(', ')) : whenText(plans, litE.a.id)}</p>`
+    : '<p class="tb-note muted">Each block shows when it starts and how long it takes. Tap a name to highlight it across the week, or a block to change it.</p>';
   let labels = '';
   for (let m = lo; m <= hi; m += 60) labels += `<span style="top:${((m - lo) * PX).toFixed(1)}px">${hhmm(m)}</span>`;
   const heads = WK.map((n, i) => `<button class="tb-head ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="sched-open-day" data-v="${i}">${n}</button>`).join('');
   const cols = plans.map((p, i) => `<div class="tb-col ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]};height:${H}px">${p.map((b) => {
     const h = b.dur * PX;
     const state = lit ? (b.act === lit ? ' lit' : ' dim') : '';
-    return `<button class="tb-b ${b.a.kind}${state}" style="--c:${b.a.color};top:${((b.from - lo) * PX + 1).toFixed(1)}px;height:${(h - 2).toFixed(1)}px" data-act="sched-block" data-id="${b.id}" data-day="${i}"><b><span class="s">${esc(shortName(b.a.name))}</span><span class="f">${esc(b.a.name)}</span></b>${h >= 30 ? `<i>${durText(b.dur)}</i>` : ''}${h >= 48 ? `<em class="num">${hhmm(b.from)}–${hhmm(b.to)}</em>` : ''}</button>`;
+    return `<button class="tb-b ${b.a.kind}${state}" style="--c:${b.a.color};top:${((b.from - lo) * PX + 1).toFixed(1)}px;height:${(h - 2).toFixed(1)}px" data-act="sched-block" data-id="${b.id}" data-day="${i}"><b><span class="s">${esc(shortName(b.a.name))}</span><span class="f">${esc(b.a.name)}</span></b>${h >= 22 ? `<span class="t num">${clock(b.from)}</span>` : ''}${h >= 38 ? `<i>${durText(b.dur)}</i>` : ''}${h >= 48 ? `<em class="num">${hhmm(b.from)}–${hhmm(b.to)}</em>` : ''}</button>`;
   }).join('')}${i === today && now >= lo && now <= hi ? `<div class="tb-now" style="top:${((now - lo) * PX).toFixed(1)}px"></div>` : ''}</div>`).join('');
   const freeRow = st.days.map((d) => `<div class="tb-f fr">${d.free ? durText(d.free) : '—'}</div>`).join('');
   const lesRow = st.days.map((d) => `<div class="tb-f">${d.lessons ? `${d.lessons}<small>${durText(d.teach)}</small>` : '—'}</div>`).join('');
@@ -505,7 +516,7 @@ async function importScheduleCode(code) {
 
 // ================= Actions =================
 Object.assign(ACTIONS, {
-  'sched-view': (a, v) => { UI.sView = v; UI.sEdit = false; S.settings.schedView = v; save(); render(true); },
+  'sched-view': (a, v) => { const d = segDir(a); UI.sView = v; UI.sEdit = false; S.settings.schedView = v; save(); renderSub(a, d); },
   'tb-hi': (a, v) => { UI.sHi = UI.sHi === v ? null : v; buzz(); render(); },
   'sched-day': (a, v) => showDay(Number(v)),
   'sched-open-day': (a, v) => { UI.sView = 'day'; UI.sDay = Number(v); UI.sEdit = false; render(true); },

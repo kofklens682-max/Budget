@@ -197,9 +197,10 @@ function renderHome() {
   } else if (now.getDate() <= 7 && S.settings.reportSeen !== prevYm && S.tx.some((t) => t.date >= pf && t.date < pt)) {
     h += `<button class="banner" data-act="report" data-v="${prevYm}">${ic('report', '#5856D6', 'sm')}<div><b>Your ${MONTHS[parseD(pf).getMonth()]} report is ready</b><span class="s">See how the month went and share it as a picture.</span></div></button>`;
   } else {
+    // Every two weeks: one tap sends a backup file to Telegram / Drive (safe even if the phone is lost).
     const lb = S.settings.lastBackup;
-    if (S.tx.length >= 10 && (!lb || Date.now() - lb > 30 * 864e5)) {
-      h += `<button class="banner" data-act="settings">${ic('download', '#007AFF', 'sm')}<div><b>Time for a backup</b><span class="s">${lb ? 'Your last backup was over a month ago.' : "You haven't saved a backup yet."} Tap to save one.</span></div></button>`;
+    if (S.tx.length >= 10 && (!lb || Date.now() - lb > 14 * 864e5)) {
+      h += `<button class="banner" data-act="quick-backup">${ic('download', '#007AFF', 'sm')}<div><b>Time for a backup</b><span class="s">${lb ? 'Your last backup was over 2 weeks ago.' : "You haven't saved a backup yet."} Tap to send one to Telegram or Drive.</span></div></button>`;
     }
   }
 
@@ -1461,8 +1462,9 @@ function settingsHtml() {
       ${action('export', 'Save backup file')}
       ${canShareFiles ? action('share-backup', 'Send backup to… (Telegram, Drive)') : ''}
       ${action('import', 'Restore from a backup file')}
+      <button class="row field" data-act="copies"><span style="flex:1;color:var(--accent)">Automatic copies on this phone</span>${I.chev}</button>
     </div>
-    <p class="hint">Last backup: <b>${ago}</b>. If the app or the browser's data gets deleted, a backup file is the only way to get your entries back — keep one somewhere safe.</p>
+    <p class="hint">Last backup: <b>${ago}</b>. The app also keeps an automatic copy on this phone every day. But if the phone is lost or its browser data is cleared, only a backup file kept somewhere else (Telegram, Drive) brings your entries back.</p>
 
     <div class="form-label">Data</div>
     <div class="group plain">
@@ -1537,6 +1539,7 @@ async function importBackupFile(f) {
   const when = obj.exportedAt ? ` from ${medDate(iso(new Date(obj.exportedAt)))}` : '';
   const ok = await ask({ title: `Restore backup${when}?`, msg: `It has ${n.tx.length} entries, ${n.accounts.length} accounts, ${n.groups.length} groups and ${n.goals.length} goals. Everything currently in the app will be replaced.`, ok: 'Restore', destructive: true });
   if (!ok) return;
+  await keepCopy('before', 'Before a restore');
   n.settings.pin = S.settings.pin;
   if (!data.schedule) n.schedule = S.schedule; // older backups have no schedule — keep the current one
   S = n;
@@ -1545,6 +1548,39 @@ async function importBackupFile(f) {
   UI.hAcc = 'all'; UI.hGroup = 'all';
   closeSheet(); render();
   toast('Backup restored');
+}
+
+// ================= Automatic copies (keep.js) =================
+const copyWhen = (c) => { const d = new Date(c.at); return `${dayLabel(iso(d))}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const entriesText = (n) => `${n} ${n === 1 ? 'entry' : 'entries'}`;
+let copies = [];
+async function openCopies() {
+  try { await keepCopy('day'); copies = await copyList(); } catch (e) { copies = []; }
+  openSheet(copiesHtml(), null);
+}
+function copiesHtml() {
+  const rows = copies.map((c) => `<button class="row" data-act="copy-open" data-id="${esc(c.key)}">${c.why === 'day' ? ic('calendar', '#007AFF', 'sm') : ic('shield', '#FF9500', 'sm')}
+    <div class="row-main"><div class="row-title">${copyWhen(c)}</div><div class="row-sub">${[c.note, entriesText(c.n || 0), c.goals ? plural(c.goals, 'goal') : ''].filter(Boolean).join(' · ')}</div></div>${I.chev}</button>`).join('');
+  return sheetHead('Automatic copies', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>') + `
+  <div class="sheet-body">
+    <p class="hint" style="margin:2px 4px 14px">Once a day — and just before a backup is restored or data is erased — the app saves a copy of everything on this phone. Copies are kept for 2 weeks, plus one a month for a year. Tap one to go back to it.</p>
+    ${copies.length ? `<div class="group">${rows}</div>` : `<section class="card empty"><div class="big">${ic('shield', '#34C759', 'xl')}</div><h3>No copies yet</h3><p>The first one is saved as soon as there is something to keep.</p></section>`}
+  </div>`;
+}
+async function restoreCopy(key) {
+  const c = copies.find((x) => x.key === key);
+  let d = null;
+  try { d = normalize(JSON.parse(await copyJson(key))); } catch (e) { /* missing or damaged */ }
+  if (!c || !d) { toast("That copy couldn't be read"); return; }
+  const ok = await ask({ title: `Go back to ${copyWhen(c)}?`, msg: `The app will hold what it held then: ${entriesText(d.tx.length)}, ${plural(d.goals.length, 'goal')}. What's in the app now is saved as a copy first, so you can come back to it.`, ok: 'Go back' });
+  if (!ok) return;
+  await keepCopy('before', 'Before going back');
+  d.settings.pin = S.settings.pin;
+  S = d;
+  save(); applyTheme();
+  UI.cur = S.settings.currency; UI.hAcc = 'all'; UI.hGroup = 'all';
+  closeSheet(); render();
+  toast(`Back to ${copyWhen(c)}`);
 }
 
 // ================= Demo data =================
@@ -1605,14 +1641,14 @@ Object.assign(ACTIONS, {
   add: () => openTx(),
   settings: () => openSettings(),
   range: (a, v) => { UI.range = v; render(); },
-  hview: (a, v) => { UI.hView = v; render(true); },
-  htype: (a, v) => { UI.hType = v; UI.hLimit = 150; render(); },
+  hview: (a, v) => { const d = segDir(a); UI.hView = v; renderSub(a, d); },
+  htype: (a, v) => { const d = segDir(a); UI.hType = v; UI.hLimit = 150; renderSub(a, d); },
   hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = 150; render(); },
   hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = 150; render(); },
   hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = 150; render(); },
   more: () => { UI.hLimit += 150; $('#hist-list').innerHTML = histList(); },
-  period: (a, v) => { UI.period = v; UI.offset = 0; render(); },
-  shift: (a, v) => { UI.offset = Math.min(0, UI.offset + Number(v)); render(); },
+  period: (a, v) => { const d = segDir(a); UI.period = v; UI.offset = 0; renderSub(a, d); },
+  shift: (a, v) => { const o = Math.min(0, UI.offset + Number(v)); if (o === UI.offset) return; UI.offset = o; renderSub(a, Number(v)); },
 
   // entries
   'edit-tx': (a, v, id) => {
@@ -1781,8 +1817,12 @@ Object.assign(ACTIONS, {
     if (sheet) refreshSheet(settingsHtml(), mountSettings);
     toast('Demo data removed');
   },
+  copies: () => openCopies(),
+  'copy-open': (a, v, id) => restoreCopy(id),
+  'quick-backup': () => { if (canShareFiles) shareBackup(); else openSettings(); },
   erase: async () => {
-    if (!(await ask({ title: 'Erase all data?', msg: 'Every entry, account, group, goal, your schedule and settings on this phone will be deleted. This cannot be undone.', ok: 'Erase everything', destructive: true }))) return;
+    if (!(await ask({ title: 'Erase all data?', msg: 'Every entry, account, group, goal, your schedule and settings will be deleted from the app. For two weeks you can still bring them back from Settings → Automatic copies.', ok: 'Erase everything', destructive: true }))) return;
+    await keepCopy('before', 'Before erasing');
     S = blank(); save(); applyTheme(); UI.cur = 'UZS'; UI.hAcc = 'all'; UI.hGroup = 'all';
     closeSheet(); render(); toast('All data erased');
   },

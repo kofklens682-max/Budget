@@ -1,11 +1,12 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v8';
+const VERSION = 'budget-v9';
 const SHELL = [
   './',
   './index.html',
   './style.css',
   './icons.js',
+  './js/keep.js',
   './js/core.js',
   './js/money.js',
   './js/groups.js',
