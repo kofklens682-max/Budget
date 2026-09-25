@@ -22,8 +22,10 @@ document.addEventListener('visibilitychange', () => {
   else if (UI.tab === 'schedule' && !sheet) render();
 });
 window.addEventListener('pagehide', () => { keepNow(); });
-// Keep the schedule's clock, "Now" line and badges fresh.
-setInterval(() => { if (UI.tab === 'schedule' && !sheet && !UI.sEdit && !document.hidden) render(); }, 60000);
+// Keep the schedule's "Now" card fresh — but never redraw under a finger that's touching the screen.
+let touchedAt = 0;
+document.addEventListener('pointerdown', () => { touchedAt = Date.now(); }, { capture: true, passive: true });
+setInterval(() => { if (UI.tab === 'schedule' && !sheet && !document.hidden && Date.now() - touchedAt > 2000) render(); }, 60000);
 
 // Runs now, or right after the passcode is entered.
 const whenOpen = (f) => { if (locked) onUnlock.push(f); else f(); };

@@ -1,10 +1,9 @@
 'use strict';
-/* Weekly schedule. Each day is an ordered list of blocks (an activity + a length) that starts at
-   the day's start time, so every time follows from the order — drag to reorder, and changing a
-   length lets the free time after it absorb the difference. "Free" is a block like any other. */
-
-const SCHED_PX = 1.2; // day view: pixels per minute (blocks also have a minimum height)
-const WEEK_PX = 1.1;  // week view: pixels per minute
+/* Weekly schedule. Each day is an ordered list of blocks (an activity + a length) from the day's
+   start time; "Free" is a block like any other. Two views: Day — one day as a list, with what's on
+   now — and Week — every day as a short list, with the free time between sessions. One sheet adds
+   or changes a block: what, which days, when it starts and how long it takes, for one day or
+   several at once. */
 
 // ================= Data =================
 function actView(id) {
@@ -25,24 +24,6 @@ function mergeFree(di) {
     if (blocks[i].act === 'free' && blocks[i - 1].act === 'free') { blocks[i - 1].dur += blocks[i].dur; blocks.splice(i, 1); }
   }
 }
-// Change a block's length; the free time right after it grows or shrinks so later blocks keep their times.
-function setDur(di, id, dur) {
-  const blocks = S.schedule.days[di].blocks;
-  const i = blocks.findIndex((b) => b.id === id);
-  if (i < 0) return;
-  dur = clamp(Math.round(dur / 5) * 5, 5, 16 * 60);
-  const diff = dur - blocks[i].dur;
-  if (!diff) return;
-  blocks[i].dur = dur;
-  if (blocks[i].act !== 'free') {
-    const next = blocks[i + 1];
-    if (next && next.act === 'free') {
-      const nd = next.dur - diff;
-      if (nd > 0) next.dur = nd; else blocks.splice(i + 1, 1);
-    } else if (diff < 0) blocks.splice(i + 1, 0, { id: uid(), act: 'free', dur: -diff });
-  }
-  mergeFree(di);
-}
 // New blocks go into the first free gap that fits, otherwise at the end of the day.
 function freeSlotFor(di, dur) {
   let t = S.schedule.days[di].start;
@@ -52,109 +33,22 @@ function freeSlotFor(di, dur) {
   }
   return { id: null, from: t };
 }
+const clock = (min) => `${Math.floor(min / 60) % 24}:${pad2(min % 60)}`; // 9:00 rather than 09:00
+const weekDate = (i) => addDays(new Date(), i - todayIdx()); // this week's date of weekday i (0 = Monday)
+const lessonsIn = (plan) => plan.filter((b) => b.a.kind === 'lesson');
+const minutesIn = (list) => list.reduce((a, b) => a + b.dur, 0);
+const freeIn = (plan) => minutesIn(plan.filter((b) => b.a.kind === 'free'));
+function blockSub(b) {
+  const m = b.a.group ? groupMonth(b.a.group, ymNow()) : null;
+  return m && m.n ? `${m.paidCount} of ${m.n} paid` : b.a.kind === 'lesson' ? 'Lesson' : '';
+}
 
 // ================= Page =================
 function renderSchedule() {
   const now = new Date();
   return `<header class="lt"><div><div class="eyebrow">${DOW_LONG[now.getDay()]} · ${hhmm(nowMin())}</div><h1>Schedule</h1></div>
-    <div class="lt-right"><div class="seg sm" style="width:176px">${segButtons('sched-view', [['day', 'Day'], ['week', 'Week'], ['table', 'Table']], UI.sView)}</div></div></header>`
-    + (UI.sView === 'week' ? weekHtml() : UI.sView === 'table' ? tableHtml() : dayHtml());
-}
-
-// ================= Table: the whole week on one screen =================
-// Long single words are shortened in narrow columns ("University" → "Univ."); the full name shows
-// when the column is wide enough (phone turned sideways) — see the container query in style.css.
-const shortName = (name) => (/\s/.test(name.trim()) || name.length <= 7 ? name : name.slice(0, 4) + '.');
-// Start times in the narrow table: 9:00 rather than 09:00.
-const clock = (min) => `${Math.floor(min / 60) % 24}:${pad2(min % 60)}`;
-// When an activity happens, days with the same times together: "Mon, Wed 9:00 · Fri 14:00 & 18:00".
-function whenText(plans, id) {
-  const byTimes = new Map();
-  plans.forEach((p, di) => {
-    const ts = p.filter((b) => b.act === id).map((b) => clock(b.from)).join(' & ');
-    if (ts) byTimes.set(ts, [...(byTimes.get(ts) || []), di]);
-  });
-  return [...byTimes].map(([ts, days]) => `${days.length === 7 ? 'Every day' : days.map((i) => WK[i]).join(', ')} ${ts}`).join(' · ');
-}
-function weekStats(plans) {
-  const acts = new Map();
-  const days = plans.map((p, di) => {
-    let free = 0, busy = 0, lessons = 0, teach = 0;
-    for (const b of p) {
-      const e = acts.get(b.act) || { a: b.a, min: 0, n: 0, days: new Set() };
-      e.min += b.dur; e.n++; e.days.add(di);
-      acts.set(b.act, e);
-      if (b.a.kind === 'free') free += b.dur; else busy += b.dur;
-      if (b.a.kind === 'lesson') { lessons++; teach += b.dur; }
-    }
-    return { free, busy, lessons, teach, empty: !p.length };
-  });
-  const list = [...acts.values()].sort((x, y) => y.min - x.min);
-  const sum = (k) => days.reduce((a, d) => a + d[k], 0);
-  return { days, list, total: list.reduce((a, e) => a + e.min, 0), free: sum('free'), busy: sum('busy'), lessons: sum('lessons'), teach: sum('teach') };
-}
-function tableHtml() {
-  const plans = WEEK.map((_, i) => dayPlan(i));
-  if (!plans.some((p) => p.length)) return scheduleEmpty();
-  const st = weekStats(plans);
-  const starts = plans.map((p, i) => (p.length ? S.schedule.days[i].start : Infinity));
-  const ends = plans.map((p, i) => (p.length ? dayEnd(i) : -Infinity));
-  const lo = Math.floor(Math.min(...starts) / 60) * 60, hi = Math.ceil(Math.max(...ends) / 60) * 60;
-  // Scale so the whole week fits the screen height where possible.
-  const PX = clamp(Math.max(340, window.innerHeight - 400) / (hi - lo), 0.75, 1.6);
-  const H = Math.round((hi - lo) * PX);
-  const today = todayIdx(), now = nowMin(), lit = UI.sHi;
-  const litE = lit ? st.list.find((e) => e.a.id === lit) : null;
-
-  const chips = `<div class="fchips tb-chips">${st.list.map((e) => `<button class="fchip ${lit === e.a.id ? 'on' : ''}" data-act="tb-hi" data-v="${e.a.id}"><i class="${e.a.kind}" style="--c:${e.a.color}"></i>${esc(e.a.name)}</button>`).join('')}</div>`;
-  const note = litE
-    ? `<p class="tb-note"><b>${esc(litE.a.name)}</b> · ${durText(litE.min)} a week · ${litE.a.kind === 'free' ? (litE.days.size === 7 ? 'every day' : [...litE.days].sort().map((i) => WK[i]).join(', ')) : whenText(plans, litE.a.id)}</p>`
-    : '<p class="tb-note muted">Each block shows when it starts and how long it takes. Tap a name to highlight it across the week, or a block to change it.</p>';
-  let labels = '';
-  for (let m = lo; m <= hi; m += 60) labels += `<span style="top:${((m - lo) * PX).toFixed(1)}px">${hhmm(m)}</span>`;
-  const heads = WK.map((n, i) => `<button class="tb-head ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="sched-open-day" data-v="${i}">${n}</button>`).join('');
-  const cols = plans.map((p, i) => `<div class="tb-col ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]};height:${H}px">${p.map((b) => {
-    const h = b.dur * PX;
-    const state = lit ? (b.act === lit ? ' lit' : ' dim') : '';
-    return `<button class="tb-b ${b.a.kind}${state}" style="--c:${b.a.color};top:${((b.from - lo) * PX + 1).toFixed(1)}px;height:${(h - 2).toFixed(1)}px" data-act="sched-block" data-id="${b.id}" data-day="${i}"><b><span class="s">${esc(shortName(b.a.name))}</span><span class="f">${esc(b.a.name)}</span></b>${h >= 22 ? `<span class="t num">${clock(b.from)}</span>` : ''}${h >= 38 ? `<i>${durText(b.dur)}</i>` : ''}${h >= 48 ? `<em class="num">${hhmm(b.from)}–${hhmm(b.to)}</em>` : ''}</button>`;
-  }).join('')}${i === today && now >= lo && now <= hi ? `<div class="tb-now" style="top:${((now - lo) * PX).toFixed(1)}px"></div>` : ''}</div>`).join('');
-  const freeRow = st.days.map((d) => `<div class="tb-f fr">${d.free ? durText(d.free) : '—'}</div>`).join('');
-  const lesRow = st.days.map((d) => `<div class="tb-f">${d.lessons ? `${d.lessons}<small>${durText(d.teach)}</small>` : '—'}</div>`).join('');
-  return `${chips}${note}
-    <div class="tb-wrap"><div class="tb" style="--px:${PX.toFixed(3)}">
-      <div class="tb-corner"></div>${heads}
-      <div class="tb-times" style="height:${H}px">${labels}</div>${cols}
-      <div class="tb-fl free">Free</div>${freeRow}
-      <div class="tb-fl">Les&shy;sons</div>${lesRow}
-    </div></div>
-    ${weekSummary(st, plans)}`;
-}
-function weekSummary(st, plans) {
-  const pickDay = (key, better) => st.days.reduce((b, d, i) => (!d.empty && (b < 0 || better(d[key], st.days[b][key])) ? i : b), -1);
-  const busiest = pickDay('busy', (x, y) => x > y), freest = pickDay('free', (x, y) => x > y);
-  const tile = (label, big, small) => `<div class="card tb-stat"><span>${label}</span><b class="num">${big}</b><small>${small}</small></div>`;
-  const bar = st.list.map((e) => `<i class="${e.a.kind}" style="--c:${e.a.color};width:${Math.max(1.2, (e.min / st.total) * 100).toFixed(2)}%"></i>`).join('');
-  const rows = st.list.map((e) => `<button class="lg-row ${UI.sHi === e.a.id ? 'on' : ''}" data-act="tb-hi" data-v="${e.a.id}"><i class="${e.a.kind}" style="--c:${e.a.color}"></i><span class="n">${esc(e.a.name)}</span><span class="h num">${durText(e.min)}</span><span class="p num">${Math.round((e.min / st.total) * 100)}%</span></button>`).join('');
-  // Free gaps of an hour or more — handy for fitting in a new group.
-  const gaps = [];
-  plans.forEach((p, di) => p.forEach((b) => { if (b.a.kind === 'free' && b.dur >= 60) gaps.push({ di, b }); }));
-  return `<div class="tb-stats">
-      ${tile('Free time', durText(st.free), 'in the week')}
-      ${tile('Teaching', durText(st.teach), plural(st.lessons, 'lesson'))}
-      ${tile('Busiest day', busiest >= 0 ? WEEK[busiest] : '—', busiest >= 0 ? `${durText(st.days[busiest].busy)} busy` : '')}
-      ${tile('Most free', freest >= 0 && st.days[freest].free ? WEEK[freest] : '—', freest >= 0 && st.days[freest].free ? `${durText(st.days[freest].free)} free` : 'no free time')}
-    </div>
-    <section class="card" style="margin-top:12px">
-      <div class="card-title">Where your week goes</div>
-      <div class="card-sub">${durText(st.total)} planned · tap a line to highlight it</div>
-      <div class="wk-bar">${bar}</div>
-      <div class="lg-list">${rows}</div>
-    </section>
-    <section class="card" style="margin-top:12px">
-      <div class="card-title">Free windows</div>
-      <div class="card-sub">An hour or more — tap one to fill it</div>
-      ${gaps.length ? `<div class="gap-list">${gaps.map(({ di, b }) => `<button class="gap" style="--dc:${DAY_COLORS[di]}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><b>${WK[di]}</b><span class="num">${hhmm(b.from)}–${hhmm(b.to)}</span><i class="num">${durText(b.dur)}</i></button>`).join('')}</div>` : '<p class="card-sub" style="margin-top:8px">No free hour anywhere this week.</p>'}
-    </section>`;
+    <div class="lt-right"><div class="seg sm sched-seg">${segButtons('sched-view', [['day', 'Day'], ['week', 'Week']], UI.sView)}</div></div></header>`
+    + (!hasSchedule() ? scheduleEmpty() : UI.sView === 'week' ? weekHtml() : dayHtml());
 }
 function scheduleEmpty() {
   return `<section class="card empty">
@@ -164,89 +58,78 @@ function scheduleEmpty() {
     <button class="btn" data-act="sched-add">Add the first block</button>
   </section>`;
 }
+
+// ================= Day: one day as a list =================
+// This week's dates in one slim row; the dots are that day's lessons.
+function weekStrip(di) {
+  const today = todayIdx();
+  return `<div class="wstrip">${WK.map((n, i) => `<button class="${i === di ? 'sel' : ''} ${i === today ? 'today' : ''}" data-act="sched-day" data-v="${i}" aria-label="${WEEK[i]}"><small>${n}</small><b class="num">${weekDate(i).getDate()}</b><span class="wdots">${lessonsIn(dayPlan(i)).slice(0, 4).map((b) => `<i style="--c:${b.a.color}"></i>`).join('')}</span></button>`).join('')}</div>`;
+}
+// Today only: what's on now (or free time), how long is left, and what's next.
+function nowCard(plan) {
+  const now = nowMin();
+  const cur = plan.find((b) => now >= b.from && now < b.to);
+  const next = plan.find((b) => b.from >= (cur ? cur.to : now) && b.a.kind !== 'free');
+  if (cur) {
+    const free = cur.a.kind === 'free';
+    return `<section class="card nowc ${free ? 'free' : ''}" style="--c:${free ? 'var(--in)' : cur.a.color}">
+      <div class="nc-top"><span class="nc-badge">${free ? 'FREE' : 'NOW'}</span><span class="num">${clock(cur.from)} – ${clock(cur.to)}</span><span class="r num">${durText(cur.to - now)} left</span></div>
+      <div class="nc-name">${free ? 'Free time' : esc(cur.a.name)}</div>
+      <div class="nc-prog"><i style="width:${Math.round(((now - cur.from) / cur.dur) * 100)}%"></i></div>
+      <div class="nc-next">${next ? `Next · <b>${esc(next.a.name)}</b> at ${clock(next.from)}` : 'Nothing else today'}</div>
+    </section>`;
+  }
+  if (next) {
+    return `<section class="card nowc soon" style="--c:${next.a.color}">
+      <div class="nc-top"><span class="nc-badge">NEXT</span><span class="num">${clock(next.from)} – ${clock(next.to)}</span><span class="r num">in ${durText(next.from - now)}</span></div>
+      <div class="nc-name">${esc(next.a.name)}</div>
+    </section>`;
+  }
+  return '';
+}
 function dayHtml() {
-  const di = UI.sDay, today = todayIdx(), plan = dayPlan(di), d = S.schedule.days[di];
-  const pills = WK.map((n, i) => `<button class="day-pill ${i === di ? 'on' : ''} ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="sched-day" data-v="${i}"><span>${n}</span><i></i></button>`).join('');
-  const lessons = plan.filter((b) => b.a.kind === 'lesson');
-  const teach = lessons.reduce((a, b) => a + b.dur, 0);
-  const free = plan.filter((b) => b.a.kind === 'free').reduce((a, b) => a + b.dur, 0);
-  const facts = [plan.length ? `${hhmm(d.start)} – ${hhmm(dayEnd(di))}` : 'Nothing planned', lessons.length ? `${plural(lessons.length, 'lesson')} · ${durText(teach)}` : '', free ? `${durText(free)} free` : ''].filter(Boolean).join(' · ');
-  let h = `<div class="day-pills">${pills}</div>`;
-  if (!hasSchedule() && !UI.sEdit) return h + scheduleEmpty();
-  h += `<div class="day-bar">
-      <div class="row-main"><div class="db-title">${WEEK[di]}${di === today ? ' <span class="chip info">Today</span>' : ''}</div><div class="db-sub">${facts}</div></div>
-      <button class="pill-btn ${UI.sEdit ? 'on' : ''}" data-act="sched-edit">${UI.sEdit ? glyph('check') + 'Done' : glyph('pencil') + 'Edit'}</button>
-    </div>`;
-  return h + (UI.sEdit ? editDay(di, plan) : timeline(di, plan));
-}
-function timeline(di, plan) {
-  if (!plan.length) return `<section class="card empty"><div class="big">${ic('sun', DAY_COLORS[di], 'xl')}</div><h3>Nothing planned</h3><p>A free day — or add what you do.</p><button class="btn" data-act="sched-add">Add a block</button></section>`;
-  const isToday = di === todayIdx(), now = nowMin();
-  const next = isToday ? plan.find((b) => b.from > now && b.a.kind !== 'free') : null;
-  let y = 0, nowTop = null;
-  const rows = plan.map((b, i) => {
-    const hgt = Math.max(b.a.kind === 'free' ? 46 : 62, Math.round(b.dur * SCHED_PX));
-    const cur = isToday && now >= b.from && now < b.to;
-    if (cur) nowTop = y + ((now - b.from) / b.dur) * hgt;
-    y += hgt + 8;
-    const badge = cur ? '<span class="tl-badge">Now</span>' : next && next.id === b.id ? '<span class="tl-badge next">Next</span>' : '';
-    const sub = [durText(b.dur)];
-    if (b.a.group) { const m = groupMonth(b.a.group, ymNow()); if (m.n) sub.push(`${m.paidCount}/${m.n} paid`); }
-    return `<button class="tl-row ${b.a.kind} ${cur ? 'now' : ''}" style="--c:${b.a.color};--h:${hgt}px;--i:${Math.min(i, 9)}" data-act="sched-block" data-id="${b.id}">
-      <div class="tl-time num"><b>${hhmm(b.from)}</b>${b.a.kind === 'free' ? '' : `<span>${hhmm(b.to)}</span>`}</div>
-      <div class="tl-card"><div class="tl-title">${esc(b.a.name)}${badge}</div><div class="tl-sub">${sub.join(' · ')}</div></div>
-    </button>`;
-  }).join('');
+  const di = UI.sDay, plan = dayPlan(di), isToday = di === todayIdx(), now = nowMin();
   const dir = UI.sDir ? (UI.sDir > 0 ? ' from-r' : ' from-l') : '';
-  return `<div class="tl${dir}" id="tl">${rows}<div class="tl-end num"><b>${hhmm(plan[plan.length - 1].to)}</b><span>End of the day</span></div>${nowTop !== null ? `<div class="now-line" style="top:${nowTop.toFixed(1)}px"><span class="num">${hhmm(now)}</span><i></i></div>` : ''}</div>`;
-}
-function editDay(di, plan) {
-  const d = S.schedule.days[di];
-  return `<div class="group plain"><div class="row field"><span style="flex:1">Day starts at</span><div class="stepper"><button data-act="sched-start" data-v="-30" aria-label="Earlier">${glyph('minus')}</button><b class="num">${hhmm(d.start)}</b><button data-act="sched-start" data-v="30" aria-label="Later">${glyph('plus')}</button></div></div></div>
-  <div class="ed-list" id="ed-list">${plan.map((b) => `<div class="ed-row ${b.a.kind}" data-sort data-id="${b.id}" style="--c:${b.a.color}">
-      <span class="drag" aria-label="Drag to move">${glyph('grip')}</span>
-      <button class="ed-main" data-act="sched-block" data-id="${b.id}"><b>${esc(b.a.name)}</b><small class="num">${hhmm(b.from)} – ${hhmm(b.to)}</small></button>
-      <div class="stepper sm"><button data-act="sched-dur" data-id="${b.id}" data-v="-15" aria-label="Shorter">${glyph('minus')}</button><b class="num">${durText(b.dur)}</b><button data-act="sched-dur" data-id="${b.id}" data-v="15" aria-label="Longer">${glyph('plus')}</button></div>
-      <button class="ed-del" data-act="sched-del" data-id="${b.id}" aria-label="Remove">${glyph('minus')}</button>
-    </div>`).join('')}</div>
-  <p class="hint">Drag ⠿ to move a block. Make a block shorter or longer and the free time after it adjusts, so the rest of the day stays in place.</p>
-  <div class="actions"><button class="btn soft" data-act="sched-add">＋ Add a block</button><button class="btn grey" data-act="sched-copy">${glyph('copy')} Copy ${WEEK[di]} to other days</button></div>`;
-}
-function weekHtml() {
-  const plans = WEEK.map((_, i) => dayPlan(i));
-  if (!plans.some((p) => p.length)) return scheduleEmpty();
-  const starts = plans.map((p, i) => (p.length ? S.schedule.days[i].start : Infinity));
-  const ends = plans.map((p, i) => (p.length ? dayEnd(i) : -Infinity));
-  const lo = Math.floor(Math.min(...starts) / 60) * 60, hi = Math.ceil(Math.max(...ends) / 60) * 60;
-  const H = (hi - lo) * WEEK_PX;
-  const today = todayIdx(), now = nowMin();
-  let labels = '';
-  for (let m = lo; m <= hi; m += 60) labels += `<span style="top:${((m - lo) * WEEK_PX).toFixed(1)}px">${hhmm(m)}</span>`;
-  const cols = plans.map((p, i) => `<div class="wk-col ${i === today ? 'today' : ''}" style="--dc:${DAY_COLORS[i]}">
-      <button class="wk-head" data-act="sched-open-day" data-v="${i}">${WK[i]}</button>
-      <div class="wk-body" style="height:${H}px">${p.map((b) => `<button class="wk-b ${b.a.kind}" style="--c:${b.a.color};top:${((b.from - lo) * WEEK_PX + 1).toFixed(1)}px;height:${(b.dur * WEEK_PX - 3).toFixed(1)}px" data-act="sched-block" data-id="${b.id}" data-day="${i}"><b>${esc(b.a.name)}</b>${b.dur >= 45 ? `<span class="num">${hhmm(b.from)}–${hhmm(b.to)}</span>` : ''}${b.dur >= 80 ? `<span>${durText(b.dur)}</span>` : ''}</button>`).join('')}${i === today && now >= lo && now <= hi ? `<div class="wk-now" style="top:${((now - lo) * WEEK_PX).toFixed(1)}px"></div>` : ''}</div>
-    </div>`).join('');
-  return `<div class="wk-scroll" id="wk"><div class="wk"><div class="wk-times"><div class="wk-head sp"></div><div class="wk-body" style="height:${H}px">${labels}</div></div>${cols}</div></div>
-    <p class="hint">Tap a day's name to open it, or any block to change it. Swipe sideways to see the whole week.</p>`;
-}
-function afterSchedule() {
-  if (UI.sView === 'week') {
-    const wk = $('#wk');
-    if (wk) {
-      const col = $('.wk-col', wk);
-      if (col) wk.scrollLeft = Math.max(0, todayIdx() * (col.offsetWidth + 6) - 40);
+  let h = weekStrip(di) + `<div class="dday${dir}" id="dday">`;
+  if (!plan.length) {
+    return h + `<section class="card empty"><div class="big">${ic('sun', DAY_COLORS[di], 'xl')}</div><h3>Nothing planned</h3><p>${WEEK[di]} is free.</p><button class="btn" data-act="sched-add">Add a block</button></section></div>`;
+  }
+  if (isToday) h += nowCard(plan);
+  const L = lessonsIn(plan), free = freeIn(plan);
+  h += `<p class="dsum"><b class="num">${clock(plan[0].from)}–${clock(plan[plan.length - 1].to)}</b> · ${plural(L.length, 'lesson')}${L.length ? ` · ${durText(minutesIn(L))} teaching` : ''}${free ? ` · ${durText(free)} free` : ''}</p>`;
+  const rows = plan.map((b) => {
+    const cur = isToday && now >= b.from && now < b.to;
+    if (b.a.kind === 'free') {
+      return `<button class="drow free ${cur ? 'now' : ''}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b></span><i class="dbar"></i><span class="dmain">Free · ${durText(b.dur)}</span><span class="dadd" aria-label="Add something here">${glyph('plus')}</span></button>`;
     }
-  } else if (UI.sEdit) {
-    makeSortable($('#ed-list'), (from, to) => {
-      const blocks = S.schedule.days[UI.sDay].blocks;
-      const [b] = blocks.splice(from, 1);
-      blocks.splice(to, 0, b);
-      mergeFree(UI.sDay);
-      save(); render();
-    });
-  } else bindDaySwipe($('#tl'));
+    const sub = blockSub(b);
+    return `<button class="drow ${cur ? 'now' : ''}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b><span>${clock(b.to)}</span></span><i class="dbar"></i><span class="dmain"><b>${esc(b.a.name)}${cur ? '<em>NOW</em>' : ''}</b>${sub ? `<span>${sub}</span>` : ''}</span><span class="dd num">${durText(b.dur)}</span></button>`;
+  }).join('');
+  return h + `<section class="card dlist">${rows}</section>
+    <div class="dfoot"><button class="link" data-act="sched-copy">Copy ${WEEK[di]} to other days</button></div></div>`;
+}
+
+// ================= Week: every day as a short list =================
+// Free time between sessions gets its own line ("Free 11:30–12:30"), so gaps are easy to spot.
+function weekHtml() {
+  const today = todayIdx();
+  return WK.map((_, di) => {
+    const p = dayPlan(di), L = lessonsIn(p), free = freeIn(p);
+    const rows = p.map((b) => (b.a.kind === 'free'
+      ? `<button class="wli free" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="t"></span><i></i><span class="n num">Free ${clock(b.from)} – ${clock(b.to)}</span><span class="d num">${durText(b.dur)}</span></button>`
+      : `<button class="wli ${b.a.kind}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="t num">${clock(b.from)}</span><i></i><span class="n">${esc(b.a.name)}</span><span class="d num">${durText(b.dur)}</span></button>`)).join('');
+    return `<section class="card wday ${di === today ? 'today' : ''}">
+      <button class="wdh" data-act="sched-open-day" data-v="${di}"><b>${WEEK[di]}</b>${di === today ? '<span class="chip info">Today</span>' : ''}${p.length ? `<span class="r num">${clock(p[0].from)}–${clock(p[p.length - 1].to)}</span>` : ''}${I.chev}</button>
+      ${p.length ? `${rows}<div class="wdf">${L.length ? `${plural(L.length, 'lesson')} · ` : ''}${free ? `<b>${durText(free)} free</b>` : 'no free time'}</div>` : '<div class="woff">Nothing planned — a free day</div>'}
+    </section>`;
+  }).join('');
+}
+
+function afterSchedule() {
+  if (UI.sView === 'day') bindDaySwipe($('#dday'));
   UI.sDir = 0;
 }
+// Swipe the day sideways for the next / previous day.
 function bindDaySwipe(el) {
   if (!el) return;
   let x0 = null, y0 = 0, t0 = 0;
@@ -265,98 +148,140 @@ function showDay(i, dir) {
   buzz();
   render();
 }
-PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule, resize: () => { if (UI.sView === 'table') render(); } };
+PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule };
 
 // ================= Block sheet =================
-// A block can be given an exact day, start and end. It is "painted" onto the day: free time it
-// covers is used up, and anything else it overlaps is shortened or replaced (the sheet says which
-// before saving). Days grow earlier or later automatically if the block sits outside them.
+// What, which days, when it starts and how long it takes. The block is "painted" onto every ticked
+// day: free time it covers is used up, anything else it overlaps is shortened or replaced (the
+// sheet says which before saving). Untick a block's own day to move it; tick more days to add or
+// change it there too. The same lesson at the same time on other days is offered with one tap.
 let bdraft = null;
+const sameTime = (b, p) => b.act === p.act && b.from === p.from && b.to === p.to;
+function defaultAct() {
+  const ok = (id) => id && id !== 'free' && S.schedule.acts.some((a) => a.id === id);
+  if (ok(UI.lastAct)) return UI.lastAct;
+  const a = S.schedule.acts.find((x) => x.kind === 'lesson') || S.schedule.acts.find((x) => x.id !== 'free');
+  return a ? a.id : 'free';
+}
 function openBlock(di, id) {
   const p = id ? dayPlan(di).find((x) => x.id === id) : null;
-  if (p) bdraft = { id: p.id, day: di, origDay: di, act: p.act, from: p.from, to: p.to, wasFree: p.act === 'free' };
-  else {
-    const first = S.schedule.acts.find((a) => a.kind === 'lesson') || S.schedule.acts.find((a) => a.id !== 'free') || S.schedule.acts[0];
-    const slot = freeSlotFor(di, 60);
-    bdraft = { id: null, day: di, origDay: di, act: first.id, from: slot.from, to: Math.min(slot.from + 60, 1440) };
+  if (p && p.act !== 'free') {
+    const sibs = {};
+    WEEK.forEach((_, j) => { const s = j !== di && dayPlan(j).find((b) => sameTime(b, p)); if (s) sibs[j] = s.id; });
+    bdraft = { day: di, id: p.id, act: p.act, oact: p.act, ofrom: p.from, from: p.from, len: p.dur, days: new Set([di]), sibs };
+  } else {
+    // New — or filling a free gap that was tapped.
+    const from = p ? p.from : freeSlotFor(di, 60).from;
+    const len = Math.min(p ? Math.min(p.dur, 90) : 60, 1440 - from);
+    bdraft = { day: null, id: null, act: defaultAct(), from, len: Math.max(5, len), days: new Set([di]), sibs: {} };
   }
   openSheet(blockHtml(), mountBlock);
 }
-function blockConflicts(d) {
-  return dayPlan(d.day).filter((b) => b.id !== d.id && b.a.kind !== 'free' && b.from < d.to && b.to > d.from)
-    .map((b) => ({ b, whole: b.from >= d.from && b.to <= d.to }));
+const idOn = (j) => (j === bdraft.day ? bdraft.id : bdraft.sibs[j] || null);
+const dayList = (days) => [...days].sort((a, b) => a - b);
+const dayNames = (days, long) => { const n = dayList(days).map((j) => (long ? WEEK[j] : WK[j])); return n.length > 1 ? `${n.slice(0, -1).join(', ')} & ${n[n.length - 1]}` : n.join(''); };
+function blockConflicts() {
+  const d = bdraft, to = d.from + d.len, out = [];
+  for (const j of dayList(d.days)) {
+    const own = idOn(j);
+    dayPlan(j).forEach((b) => { if (b.id !== own && b.a.kind !== 'free' && b.from < to && b.to > d.from) out.push({ j, b, whole: b.from >= d.from && b.to <= to }); });
+  }
+  return out;
 }
 function blockPreview() {
-  const d = bdraft, a = actView(d.act), dur = d.to - d.from;
-  return `<div class="bp-time num">${hhmm(d.from)} – ${hhmm(d.to)}</div><div class="bp-title">${esc(a.name)}</div><div class="bp-sub">${WEEK[d.day]} · ${dur > 0 ? durText(dur) : 'check the times'}</div>`;
+  const d = bdraft, a = actView(d.act);
+  return `<div class="bp-time num">${clock(d.from)} – ${clock(d.from + d.len)} · ${durText(d.len)}</div><div class="bp-title">${esc(a.name)}</div><div class="bp-sub">${d.days.size ? dayNames(d.days, d.days.size < 3) : 'Tick a day below'}</div>`;
 }
+function daysHint() {
+  const d = bdraft;
+  if (!d.days.size) return 'Tick at least one day.';
+  const out = [];
+  if (d.id && !d.days.has(d.day)) out.push(`It moves away from ${WEEK[d.day]} — that time becomes free.`);
+  const left = Object.keys(d.sibs).map(Number).filter((j) => !d.days.has(j));
+  if (left.length) out.push(`${esc(actView(d.oact).name)} is also at ${clock(d.ofrom)} on ${dayNames(left, true)} — tick ${left.length > 1 ? 'them' : 'it'} to change ${left.length > 1 ? 'all' : 'both'} at once.`);
+  else if (d.days.size > 1) out.push(`${d.id ? 'Changes apply' : 'It is added'} to ${dayNames(d.days, true)}.`);
+  if (!out.length) out.push(d.id ? 'Tick other days to add it there too, or untick this day to move it.' : 'Tick every day it happens — it is added to all of them.');
+  return out.join(' ');
+}
+const removeDays = () => { const t = dayList(bdraft.days).filter((j) => idOn(j)); return t.length ? t : [bdraft.day]; };
 function blockHtml() {
-  const d = bdraft, a = actView(d.act), editing = !!d.id, dur = d.to - d.from;
-  const g = a.group;
+  const d = bdraft, a = actView(d.act), editing = !!d.id, g = a.group;
   let gq = '';
   if (g) {
     const m = groupMonth(g, ymNow());
     gq = `<div class="card gq">${grpBadge(g, 'sm')}<div class="row-main"><b>${esc(g.name)}</b><span>${m.n ? `${m.paidCount} of ${m.n} paid for ${MONTHS[new Date().getMonth()]}` : 'No students yet'}</span></div><button class="pill-btn" data-act="group" data-id="${g.id}">Open</button></div>`;
   }
-  const hint = !editing
-    ? 'Pick the day and the exact time. If it overlaps something, you will see what changes before saving.'
-    : d.wasFree
-      ? 'Choose what goes into this free time — a new group, for example. Make it shorter and the rest stays free.'
-      : 'Change the day or the times to move it. Anything it would overlap is shown above.';
-  return sheetHead(editing ? 'Edit block' : 'New block', '<button data-act="close-sheet">Cancel</button>', `<button data-act="blk-save" ${dur >= 5 ? '' : 'disabled'}>${editing ? 'Save' : 'Add'}</button>`) + `
+  const step = (what, v, label) => `<button class="tbtn" data-step="${what}" data-v="${v}" aria-label="${label}">${glyph(v < 0 ? 'minus' : 'plus')}</button>`;
+  return sheetHead(editing ? 'Change block' : 'New block', '<button data-act="close-sheet">Cancel</button>', `<button data-act="blk-save">${editing ? 'Save' : 'Add'}</button>`) + `
   <div class="sheet-body">
     <div class="blk-preview ${a.kind}" id="blk-preview" style="--c:${a.color}">${blockPreview()}</div>
     ${gq}
     <div class="form-label">What</div>
-    <div class="act-pick">${S.schedule.acts.map((x) => { const v = actView(x.id); return `<button class="${d.act === x.id ? 'on' : ''} ${v.kind}" style="--c:${v.color}" data-act="blk-act" data-v="${x.id}"><i></i>${esc(v.name)}</button>`; }).join('')}<button class="add" data-act="act-new">${glyph('plus')}New</button></div>
-    <div class="form-label">When</div>
-    <div class="blk-days">${WK.map((n, i) => `<button class="${d.day === i ? 'on' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="blk-day" data-v="${i}">${n}</button>`).join('')}</div>
-    <div class="group plain" style="margin-top:10px">
-      <label class="row field"><span>Starts</span><input type="time" id="blk-from" step="300" value="${hhmm(d.from)}"></label>
-      <label class="row field"><span>Ends</span><input type="time" id="blk-to" step="300" value="${hhmm(d.to)}"></label>
+    <div class="act-pick">${S.schedule.acts.filter((x) => x.id !== 'free').map((x) => { const v = actView(x.id); return `<button class="${d.act === x.id ? 'on' : ''} ${v.kind}" style="--c:${v.color}" data-act="blk-act" data-v="${x.id}"><i></i>${esc(v.name)}</button>`; }).join('')}<button class="add" data-act="act-new">${glyph('plus')}New</button></div>
+    <div class="form-label">Days</div>
+    <div class="blk-days">${WK.map((n, i) => `<button class="${d.days.has(i) ? 'on' : ''} ${d.sibs[i] ? 'sib' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="blk-day" data-v="${i}">${n}</button>`).join('')}</div>
+    <p class="hint" id="blk-days-hint">${daysHint()}</p>
+    <div class="form-label">Time</div>
+    <div class="group plain">
+      <div class="row field trow"><span>Starts</span>${step('from', -15, '15 minutes earlier')}<label class="tval"><b class="num" id="blk-from-t">${clock(d.from)}</b><input type="time" id="blk-from" step="300" value="${hhmm(d.from)}" aria-label="Start time"></label>${step('from', 15, '15 minutes later')}</div>
+      <div class="row field trow"><span>Length</span>${step('len', -15, '15 minutes shorter')}<span class="tval"><b class="num" id="blk-len-t">${durText(d.len)}</b></span>${step('len', 15, '15 minutes longer')}</div>
     </div>
-    <div class="dur-pick" id="blk-durs" style="margin-top:10px">${[30, 45, 60, 90, 120, 180, 240].map((m) => `<button class="${dur === m ? 'on' : ''}" data-act="blk-dur" data-v="${m}">${durText(m)}</button>`).join('')}</div>
+    <div class="dur-pick" id="blk-durs" style="margin-top:10px">${[45, 60, 90, 120, 180].map((m) => `<button class="${d.len === m ? 'on' : ''}" data-act="blk-dur" data-v="${m}">${durText(m)}</button>`).join('')}</div>
+    <p class="hint">Tap the time to type it, or hold − / + to move in 15-minute steps.</p>
     <div id="blk-conflict"></div>
-    <p class="hint">${hint}</p>
     <div class="actions">
-      <button class="btn" data-act="blk-save" ${dur >= 5 ? '' : 'disabled'}>${editing ? 'Save' : 'Add block'}</button>
-      ${a.id !== 'free' ? `<button class="btn grey" data-act="act-edit" data-id="${a.id}">${glyph('pencil')} Change “${esc(a.name)}” — name, colour</button>` : ''}
-      ${editing ? `<button class="btn danger" data-act="blk-del">${d.wasFree ? 'Remove this free time' : `Remove from ${WEEK[d.origDay]}`}</button>` : ''}
+      <button class="btn" data-act="blk-save">${editing ? 'Save' : 'Add'}</button>
+      ${editing ? `<button class="btn danger" data-act="blk-del" id="blk-del">Remove from ${dayNames(removeDays(), true)}</button>` : ''}
+      ${editing ? `<button class="btn grey" data-act="act-edit" data-id="${a.id}">${glyph('pencil')} Change “${esc(a.name)}” — name, colour</button>` : ''}
     </div>
   </div>`;
 }
 const parseTime = (v) => { const [h, m] = String(v).split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+// −/+ move to the next quarter hour, so odd times like 14:20 line up again.
+const snap15 = (x, v) => (v > 0 ? Math.floor(x / 15) * 15 + 15 : Math.ceil(x / 15) * 15 - 15);
+function stepBlock(what, v) {
+  const d = bdraft;
+  if (what === 'from') d.from = clamp(snap15(d.from, v), 0, 1440 - d.len);
+  else d.len = clamp(snap15(d.len, v), 15, 1440 - d.from);
+}
 function mountBlock(sh) {
-  const f = $('#blk-from', sh), t = $('#blk-to', sh);
-  const onFrom = () => {
-    if (!f.value) return;
-    const len = Math.max(15, bdraft.to - bdraft.from);
-    bdraft.from = parseTime(f.value);
-    bdraft.to = Math.min(bdraft.from + len, 1440); // moving the start keeps the length
-    t.value = hhmm(bdraft.to);
-    syncBlock(sh);
-  };
-  const onTo = () => { if (!t.value) return; bdraft.to = parseTime(t.value) || 1440; syncBlock(sh); };
+  const f = $('#blk-from', sh);
+  const onFrom = () => { if (!f.value) return; bdraft.from = clamp(parseTime(f.value), 0, 1440 - 5); bdraft.len = Math.min(bdraft.len, 1440 - bdraft.from); syncBlock(sh); };
   f.addEventListener('change', onFrom);
   f.addEventListener('input', onFrom);
-  t.addEventListener('change', onTo);
-  t.addEventListener('input', onTo);
+  f.addEventListener('click', () => { try { f.showPicker(); } catch (e) { /* the phone opens its own picker */ } });
+  // Hold − / + to keep stepping, faster after a moment.
+  $$('.tbtn', sh).forEach((b) => {
+    let t = 0, n = 0;
+    const go = () => { stepBlock(b.dataset.step, Number(b.dataset.v)); syncBlock(sh); };
+    const stop = () => { clearTimeout(t); t = 0; };
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      e.preventDefault();
+      go(); tick(); n = 0;
+      const rep = () => { go(); n++; t = setTimeout(rep, n > 5 ? 70 : 140); };
+      t = setTimeout(rep, 420);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, stop));
+    b.addEventListener('click', (e) => { if (e.detail === 0) go(); }); // keyboard
+  });
   syncBlock(sh);
 }
 function syncBlock(sh) {
-  const d = bdraft, dur = d.to - d.from;
+  const d = bdraft;
   $('#blk-preview', sh).innerHTML = blockPreview();
-  sh.querySelectorAll('#blk-durs button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === dur));
-  const box = $('#blk-conflict', sh);
-  if (dur < 5) {
-    box.innerHTML = `<div class="blk-warn bad">${glyph('clock')}<div><b>The end is before the start</b><span>Pick an end time after ${hhmm(d.from)}.</span></div></div>`;
-  } else {
-    const c = blockConflicts(d);
-    box.innerHTML = c.length
-      ? `<div class="blk-warn">${glyph('clock')}<div><b>Overlaps ${c.map((x) => esc(x.b.a.name)).join(' and ')}</b><span>${c.map((x) => `${esc(x.b.a.name)} ${hhmm(x.b.from)}–${hhmm(x.b.to)} will be ${x.whole ? 'replaced' : 'shortened'}`).join(' · ')}</span></div></div>`
-      : '';
-  }
-  sh.querySelectorAll('[data-act="blk-save"]').forEach((b) => { b.disabled = dur < 5; });
+  $('#blk-from-t', sh).textContent = clock(d.from);
+  $('#blk-from', sh).value = hhmm(d.from);
+  $('#blk-len-t', sh).textContent = durText(d.len);
+  $('#blk-days-hint', sh).innerHTML = daysHint();
+  $$('#blk-durs button', sh).forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === d.len));
+  const del = $('#blk-del', sh);
+  if (del) del.textContent = `Remove from ${dayNames(removeDays(), true)}`;
+  const c = blockConflicts();
+  $('#blk-conflict', sh).innerHTML = c.length
+    ? `<div class="blk-warn">${glyph('clock')}<div><b>Overlaps ${[...new Set(c.map((x) => esc(x.b.a.name)))].join(' and ')}</b><span>${c.map((x) => `${WK[x.j]}: ${esc(x.b.a.name)} ${clock(x.b.from)}–${clock(x.b.to)} will be ${x.whole ? 'replaced' : 'shortened'}`).join(' · ')}</span></div></div>`
+    : '';
+  $$('[data-act="blk-save"]', sh).forEach((b) => { b.disabled = !d.days.size; });
 }
 // Puts [from, to) on day di for activity act, rebuilding the day around it.
 function paintBlock(di, from, to, act, keepId) {
@@ -383,33 +308,39 @@ function paintBlock(di, from, to, act, keepId) {
   d.start = start;
   d.blocks = blocks;
   mergeFree(di);
+  trimDay(di);
 }
-function saveBlock() {
-  const d = bdraft;
-  if (d.to - d.from < 5) return;
-  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
-  if (d.id && d.origDay !== d.day) {
-    // Moving to another day: its old place becomes free time.
-    const old = S.schedule.days[d.origDay].blocks;
-    const i = old.findIndex((x) => x.id === d.id);
-    if (i >= 0) { old[i] = { id: uid(), act: 'free', dur: old[i].dur }; mergeFree(d.origDay); }
-    paintBlock(d.day, d.from, d.to, d.act, null);
-  } else paintBlock(d.day, d.from, d.to, d.act, d.id);
-  UI.sDay = d.day;
-  save(); buzz(); closeSheet(); render();
-  undoToast(`${actView(d.act).name} · ${WK[d.day]} ${hhmm(d.from)}–${hhmm(d.to)}`, () => { S.schedule.days = snapshot; });
+// A day runs from its first to its last activity: free time at either end is dropped.
+function trimDay(di) {
+  const d = S.schedule.days[di];
+  while (d.blocks.length && d.blocks[0].act === 'free') d.start += d.blocks.shift().dur;
+  while (d.blocks.length && d.blocks[d.blocks.length - 1].act === 'free') d.blocks.pop();
 }
-function removeBlock(di, id) {
+// A block's time becomes free time.
+function freeUp(di, id) {
   const blocks = S.schedule.days[di].blocks;
   const i = blocks.findIndex((b) => b.id === id);
   if (i < 0) return;
-  const snapshot = JSON.parse(JSON.stringify(blocks));
-  const b = blocks[i];
-  if (b.act === 'free') blocks.splice(i, 1);
-  else blocks[i] = { id: uid(), act: 'free', dur: b.dur };
+  blocks[i] = { id: uid(), act: 'free', dur: blocks[i].dur };
   mergeFree(di);
-  save(); render();
-  undoToast(b.act === 'free' ? 'Free time removed' : `${actView(b.act).name} removed — that time is free now`, () => { S.schedule.days[di].blocks = snapshot; });
+  trimDay(di);
+}
+function saveBlock() {
+  const d = bdraft, to = d.from + d.len;
+  if (!d.days.size || d.len < 5) return;
+  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+  if (d.id && !d.days.has(d.day)) freeUp(d.day, d.id); // moved to other days
+  for (const j of dayList(d.days)) paintBlock(j, d.from, to, d.act, idOn(j));
+  UI.lastAct = d.act;
+  save(); buzz(); closeSheet(); render();
+  undoToast(`${actView(d.act).name} · ${dayNames(d.days)} ${clock(d.from)}–${clock(to)}`, () => { S.schedule.days = snapshot; });
+}
+function removeBlocks() {
+  const days = removeDays(), name = actView(bdraft.oact || bdraft.act).name;
+  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+  days.forEach((j) => freeUp(j, idOn(j)));
+  save(); closeSheet(); render();
+  undoToast(`${name} removed from ${dayNames(days)} — that time is free now`, () => { S.schedule.days = snapshot; });
 }
 
 // ================= Activities (things that fill a block) =================
@@ -508,7 +439,7 @@ async function importScheduleCode(code) {
   sch.acts.forEach((a) => { const g = S.groups.find((x) => x.name.toLowerCase() === a.name.toLowerCase()); if (g && a.kind === 'lesson') a.groupId = g.id; });
   S.schedule = sch;
   save();
-  UI.sDay = todayIdx(); UI.sEdit = false;
+  UI.sDay = todayIdx();
   if (sheet) closeSheet();
   if (UI.tab === 'schedule') render(true); else goTab('schedule');
   toast('Your schedule is in ✓');
@@ -516,16 +447,12 @@ async function importScheduleCode(code) {
 
 // ================= Actions =================
 Object.assign(ACTIONS, {
-  'sched-view': (a, v) => { const d = segDir(a); UI.sView = v; UI.sEdit = false; S.settings.schedView = v; save(); renderSub(a, d); },
-  'tb-hi': (a, v) => { UI.sHi = UI.sHi === v ? null : v; buzz(); render(); },
+  'sched-view': (a, v) => { const d = segDir(a); UI.sView = v; S.settings.schedView = v; save(); renderSub(a, d); },
   'sched-day': (a, v) => showDay(Number(v)),
-  'sched-open-day': (a, v) => { UI.sView = 'day'; UI.sDay = Number(v); UI.sEdit = false; render(true); },
-  'sched-edit': () => { UI.sEdit = !UI.sEdit; buzz(); render(); },
+  // A day's name in the Week view opens that day (the title and the Day | Week switch stay put).
+  'sched-open-day': (a, v) => { UI.sDay = Number(v); UI.sView = 'day'; S.settings.schedView = 'day'; save(); window.scrollTo(0, 0); render(true, -1, 1); },
   'sched-add': () => openBlock(UI.sDay, null),
   'sched-block': (a, v, id) => openBlock(a.dataset.day != null ? Number(a.dataset.day) : UI.sDay, id),
-  'sched-start': (a, v) => { const d = S.schedule.days[UI.sDay]; d.start = clamp(d.start + Number(v), 0, 23 * 60); save(); render(); },
-  'sched-dur': (a, v, id) => { const b = S.schedule.days[UI.sDay].blocks.find((x) => x.id === id); if (!b) return; setDur(UI.sDay, id, b.dur + Number(v)); save(); render(); },
-  'sched-del': (a, v, id) => removeBlock(UI.sDay, id),
   'sched-copy': () => { copyTargets = new Set(); openSheet(copyHtml(), null); },
   'copy-day': (a, v) => { const i = Number(v); if (copyTargets.has(i)) copyTargets.delete(i); else copyTargets.add(i); refreshSheet(copyHtml(), null); },
   'copy-do': () => {
@@ -538,10 +465,15 @@ Object.assign(ACTIONS, {
     undoToast(`Copied to ${plural(n, 'day')}`, () => { S.schedule.days = snapshot; });
   },
   'blk-act': (a, v) => { bdraft.act = v; refreshSheet(blockHtml(), mountBlock); },
-  'blk-dur': (a, v) => { bdraft.to = Math.min(bdraft.from + Number(v), 1440); refreshSheet(blockHtml(), mountBlock); },
-  'blk-day': (a, v) => { bdraft.day = Number(v); refreshSheet(blockHtml(), mountBlock); },
+  'blk-dur': (a, v) => { bdraft.len = Math.min(Number(v), 1440 - bdraft.from); syncBlock(sheet.sh); },
+  'blk-day': (a, v) => {
+    const i = Number(v);
+    if (bdraft.days.has(i)) bdraft.days.delete(i); else bdraft.days.add(i);
+    a.classList.toggle('on', bdraft.days.has(i));
+    syncBlock(sheet.sh);
+  },
   'blk-save': () => saveBlock(),
-  'blk-del': () => { const d = bdraft; closeSheet(); removeBlock(d.origDay, d.id); },
+  'blk-del': () => removeBlocks(),
   'act-new': () => openActForm(null, backToBlock()),
   'act-edit': (a, v, id) => openActForm(id, backToBlock()),
   'act-cancel': () => { if (actDraft.back) actDraft.back(); else closeSheet(); },

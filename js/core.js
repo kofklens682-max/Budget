@@ -183,7 +183,7 @@ const defaultAccounts = () => [
 ];
 const FREE_ACT = () => ({ id: 'free', name: 'Free', color: '#8E8E93', kind: 'free', groupId: null });
 const emptySchedule = () => ({ acts: [FREE_ACT()], days: Array.from({ length: 7 }, () => ({ start: 660, blocks: [] })) });
-const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null, schedView: 'table' });
+const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null, schedView: 'day' });
 const blank = () => ({ v: APP_VERSION, rev: 0, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], goals: [], settings: defaultSettings() });
 
 const validTx = (t) => t && t.id && typeof t.amount === 'number' && t.amount > 0 && CUR[t.currency] && /^\d{4}-\d{2}-\d{2}$/.test(t.date)
@@ -295,7 +295,9 @@ const accKind = (a) => ACC_KINDS.find((k) => k.id === a.kind) || ACC_KINDS[3];
 const accIc = (a, cls = '') => ic(accKind(a).g, a.color, cls);
 const grp = (id) => (id ? S.groups.find((g) => g.id === id) || null : null);
 const goalIcon = (g) => GOAL_ICONS.find((x) => x.id === g.icon) || GOAL_ICONS[0];
-const sortTx = (a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0);
+// Dates are "YYYY-MM-DD", so plain comparison sorts them (much faster than localeCompare).
+const cmpDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+const sortTx = (a, b) => cmpDate(b, a) || (b.createdAt || 0) - (a.createdAt || 0);
 
 function badgeText(name) {
   const w = name.trim().split(/\s+/).filter(Boolean);
@@ -320,13 +322,48 @@ function accDelta(t, id, cur) {
   if (t.type === 'transfer' && t.toAccount === id && t.toCurrency === cur) v += t.toAmount;
   return v;
 }
+// While a page is being drawn the data can't change, so totals are worked out once per draw
+// (render() turns this on): all balances in one pass, entries sorted by date once, and period
+// totals read only the entries of that period.
+let memo = null;
+const memoize = (key, f) => { if (!memo) return f(); if (!(key in memo)) memo[key] = f(); return memo[key]; };
+const byDate = () => memoize('byDate', () => S.tx.slice().sort(cmpDate));
+function firstOnOrAfter(list, date) {
+  let lo = 0, hi = list.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (list[m].date < date) lo = m + 1; else hi = m; }
+  return lo;
+}
+const txBetween = (from, to) => { if (!memo) return S.tx; const l = byDate(); return l.slice(firstOnOrAfter(l, from), firstOnOrAfter(l, to)); };
+function sums() {
+  return memoize('sums', () => {
+    const bal = { UZS: 0, USD: 0 }, accs = {}, used = { UZS: false, USD: false };
+    for (const a of S.accounts) {
+      accs[a.id] = { UZS: a.opening.UZS || 0, USD: a.opening.USD || 0 };
+      for (const c of ['UZS', 'USD']) { bal[c] += accs[a.id][c]; if (a.opening[c]) used[c] = true; }
+    }
+    for (const t of S.tx) {
+      const from = accs[t.account];
+      used[t.currency] = true;
+      if (t.type === 'in') { bal[t.currency] += t.amount; if (from) from[t.currency] += t.amount; continue; }
+      bal[t.currency] -= t.amount;
+      if (from) from[t.currency] -= t.amount;
+      if (t.type === 'transfer') {
+        const to = accs[t.toAccount];
+        used[t.toCurrency] = true;
+        bal[t.toCurrency] += t.toAmount;
+        if (to) to[t.toCurrency] += t.toAmount;
+      }
+    }
+    return { bal, accs, used };
+  });
+}
 const openingTotal = (cur) => S.accounts.reduce((a, x) => a + (x.opening[cur] || 0), 0);
-const balance = (cur) => S.tx.reduce((a, t) => a + delta(t, cur), openingTotal(cur));
-const accBalance = (id, cur) => S.tx.reduce((a, t) => a + accDelta(t, id, cur), acc(id).opening[cur] || 0);
-const usesCur = (cur) => S.tx.some((t) => t.currency === cur || (t.type === 'transfer' && t.toCurrency === cur)) || S.accounts.some((a) => a.opening[cur]);
+const balance = (cur) => (memo ? sums().bal[cur] : S.tx.reduce((a, t) => a + delta(t, cur), openingTotal(cur)));
+const accBalance = (id, cur) => (memo && sums().accs[id] ? sums().accs[id][cur] : S.tx.reduce((a, t) => a + accDelta(t, id, cur), acc(id).opening[cur] || 0));
+const usesCur = (cur) => (memo ? sums().used[cur] : S.tx.some((t) => t.currency === cur || (t.type === 'transfer' && t.toCurrency === cur)) || S.accounts.some((a) => a.opening[cur]));
 function totals(cur, from, to) {
   let i = 0, o = 0;
-  for (const t of S.tx) {
+  for (const t of txBetween(from, to)) {
     if (t.currency !== cur || t.date < from || t.date >= to) continue;
     if (t.type === 'in') i += t.amount;
     else if (t.type === 'out') o += t.amount;
@@ -346,11 +383,12 @@ function personColor(name) {
 const letterTile = (name, color, cls = '') => `<span class="ic letter ${cls}" style="--c:${color}">${esc(([...name.trim()][0] || '?').toUpperCase())}</span>`;
 
 // ================= UI state =================
+const HIST_PAGE = 60; // History draws this many entries at a time
 const UI = {
   tab: 'home', cur: S.settings.currency, range: '3M',
-  hView: 'entries', hType: 'all', hCur: 'all', hAcc: 'all', hGroup: 'all', q: '', hLimit: 150,
+  hView: 'entries', hType: 'all', hCur: 'all', hAcc: 'all', hGroup: 'all', q: '', hLimit: HIST_PAGE,
   period: 'month', offset: 0, gMonth: ymNow(),
-  sView: ['day', 'week', 'table'].includes(S.settings.schedView) ? S.settings.schedView : 'table', sDay: todayIdx(), sEdit: false, sDir: 0, sHi: null,
+  sView: S.settings.schedView === 'week' ? 'week' : 'day', sDay: todayIdx(), sDir: 0, lastAct: null,
   lastType: 'in', lastAcc: { in: null, out: null },
   flashId: null, heroShown: {},
 };
@@ -452,7 +490,7 @@ function closeSheetNow() {
 // the top (like iOS). A quick flick closes it too. Mouse users can drag the top bar.
 function bindSheetGestures(sh, ov) {
   let x0 = 0, y0 = null, t0 = 0, dy = 0, mode = null;
-  const skip = (el) => el.closest('input, textarea, select, .drag, .switch');
+  const skip = (el) => el.closest('input, textarea, select, .drag, .switch, .tbtn');
   const begin = (x, y, target) => {
     if (skip(target)) return;
     const body = $('.sheet-body', sh);
@@ -689,6 +727,7 @@ const pageError = (err) => `<header class="lt"><h1>${esc(PAGES[UI.tab].title)}</
 function render(animate, dir = 0, keep = 0) {
   const v = $('#view');
   const page = PAGES[UI.tab];
+  memo = {}; // totals are worked out once for this draw (see sums())
   let html;
   try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
   v.innerHTML = html;
@@ -711,6 +750,7 @@ function render(animate, dir = 0, keep = 0) {
   });
   $('#topbar-title').textContent = page.title;
   if (page.after) { try { page.after(animate); } catch (err) { console.error(err); } }
+  memo = null;
   if (UI.flashId) setTimeout(() => { UI.flashId = null; }, 50);
 }
 // Re-render after a choice in a segmented control (or the ‹ › arrows next to it): what's above

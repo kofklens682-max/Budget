@@ -42,7 +42,7 @@ const goalSort = (a, b) => {
 };
 
 function balanceSeries(cur, range) {
-  const txs = S.tx.filter((t) => delta(t, cur) !== 0).sort((a, b) => a.date.localeCompare(b.date));
+  const txs = (memo ? byDate() : S.tx.slice().sort(cmpDate)).filter((t) => delta(t, cur) !== 0);
   const lastDate = txs.length ? txs[txs.length - 1].date : todayIso();
   const end = parseD(lastDate > todayIso() ? lastDate : todayIso());
   let start;
@@ -111,7 +111,7 @@ function periodInfo(period, offset) {
 // Spending by category, or income by person/category. Items carry g/c for the report picture.
 function breakdown(type, cur, from, to) {
   const map = new Map();
-  for (const t of S.tx) {
+  for (const t of txBetween(from, to)) {
     if (t.type !== type || t.currency !== cur || t.date < from || t.date >= to) continue;
     const c = cat(type, t.category);
     let key, e;
@@ -342,7 +342,17 @@ function histList() {
 }
 function afterHistory() {
   const q = $('#q');
-  if (q) q.addEventListener('input', () => { UI.q = q.value; UI.hLimit = 150; $('#hist-list').innerHTML = histList(); });
+  if (q) q.addEventListener('input', () => { UI.q = q.value; UI.hLimit = HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); });
+  watchMore();
+}
+// History shows entries a page at a time: the next ones load by themselves as you scroll near the end.
+let moreObs = null;
+function watchMore() {
+  if (moreObs) moreObs.disconnect();
+  const b = $('#hist-list [data-act="more"]');
+  if (!b || !('IntersectionObserver' in window)) return;
+  moreObs = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { moreObs.disconnect(); ACTIONS.more(); } }, { rootMargin: '0px 0px 700px 0px' });
+  moreObs.observe(b);
 }
 PAGES.history = { title: 'History', render: renderHistory, after: afterHistory };
 
@@ -1642,11 +1652,11 @@ Object.assign(ACTIONS, {
   settings: () => openSettings(),
   range: (a, v) => { UI.range = v; render(); },
   hview: (a, v) => { const d = segDir(a); UI.hView = v; renderSub(a, d); },
-  htype: (a, v) => { const d = segDir(a); UI.hType = v; UI.hLimit = 150; renderSub(a, d); },
-  hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = 150; render(); },
-  hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = 150; render(); },
-  hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = 150; render(); },
-  more: () => { UI.hLimit += 150; $('#hist-list').innerHTML = histList(); },
+  htype: (a, v) => { const d = segDir(a); UI.hType = v; UI.hLimit = HIST_PAGE; renderSub(a, d); },
+  hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
+  hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
+  hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
+  more: () => { UI.hLimit += HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); },
   period: (a, v) => { const d = segDir(a); UI.period = v; UI.offset = 0; renderSub(a, d); },
   shift: (a, v) => { const o = Math.min(0, UI.offset + Number(v)); if (o === UI.offset) return; UI.offset = o; renderSub(a, Number(v)); },
 
