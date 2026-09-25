@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v11';
+const VERSION = 'budget-v12';
 const SHELL = [
   './',
   './index.html',
@@ -22,11 +22,14 @@ const SHELL = [
   './fonts/inter-cyrillic-ext.woff2',
 ];
 
+// '?v=' makes GitHub's servers hand over this version's files, never a copy they kept of the old ones
+// (the fetch handler below matches with ignoreSearch, so the address works without it).
+const fresh = (u) => new Request(u + (u.includes('?') ? '&' : '?') + 'v=' + VERSION, { cache: 'reload' });
 self.addEventListener('install', (e) => {
   // cache: 'reload' skips the browser's HTTP cache so a new version never installs stale files
   e.waitUntil(
     caches.open(VERSION)
-      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' }))))
+      .then((c) => c.addAll(SHELL.map(fresh)))
       .then(() => self.skipWaiting())
   );
 });
@@ -57,7 +60,7 @@ self.addEventListener('fetch', (e) => {
         if (res && res.ok) cache.put(key, res.clone());
         return res;
       } catch (err) {
-        return (req.mode === 'navigate' && (await cache.match('./index.html'))) || Response.error();
+        return (req.mode === 'navigate' && (await cache.match('./index.html', { ignoreSearch: true }))) || Response.error();
       }
     })
   );
