@@ -694,13 +694,24 @@ textarea { font: inherit; color: inherit; }
 /* ================= Schedule ================= */
 .sched-seg { width: 132px; }
 /* Day: this week's dates in one slim row (dots = that day's lessons) */
-.wstrip { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--card); border-radius: 18px; padding: 7px 4px 6px; box-shadow: var(--shadow); margin-bottom: 12px; }
-.wstrip button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 1px 0; }
-.wstrip small { font-size: 11px; font-weight: 600; color: var(--text-2); }
-.wstrip b { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; font-weight: 600; transition: background .25s, color .25s, transform .15s; }
+.wstrip { position: relative; isolation: isolate; display: grid; grid-template-columns: repeat(7, 1fr); background: var(--card); border-radius: 18px; padding: 7px 4px 6px; box-shadow: var(--shadow); margin-bottom: 12px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+.wstrip button { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 1px 0; }
+.wstrip small { font-size: 11px; line-height: 15px; font-weight: 600; color: var(--text-2); }
+.wstrip b { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 16px; font-weight: 600; transition: color .2s, transform .15s; }
 .wstrip .today b { color: var(--accent); }
-.wstrip .sel b { background: var(--accent); color: #fff; }
+.wstrip .sel b { color: #fff; }
 .wstrip button:active b { transform: scale(.9); }
+/* The blue circle is its own piece: it glides from day to day, follows a finger sliding along the
+   row, and moves along with a swipe of the day below */
+.ws-ind { position: absolute; z-index: 0; top: 26px; left: 4px; width: calc((100% - 8px) / 7); height: 34px; pointer-events: none; transform: translateX(calc(var(--i) * 100%)); animation: seg-slide .38s cubic-bezier(.3, .8, .25, 1); transition: transform .32s cubic-bezier(.3, 1.2, .5, 1); }
+.ws-ind::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 34px; margin-left: -17px; border-radius: 50%; background: var(--accent); transition: box-shadow .2s; }
+.wstrip.moving .ws-ind::before { box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+.wstrip.glide .sel b { animation: ws-lit .38s ease both; } /* turns white as the circle arrives */
+@keyframes ws-lit { 0%, 45% { color: var(--text); } }
+.wstrip.moving .sel b { color: var(--text); animation: none; }
+.wstrip.moving .today b { color: var(--accent); }
+.wstrip.moving .lit b { color: #fff; }
+.wstrip.moving button:active b { transform: none; }
 .wdots { display: flex; gap: 3px; height: 5px; }
 .wdots i { width: 5px; height: 5px; border-radius: 50%; background: var(--c); }
 /* What's on now */
@@ -743,6 +754,13 @@ textarea { font: inherit; color: inherit; }
 .dfoot .link { font-size: 14px; }
 .dday.from-r { animation: slide-r .35s cubic-bezier(.2, .8, .2, 1); }
 .dday.from-l { animation: slide-l .35s cubic-bezier(.2, .8, .2, 1); }
+/* Swiping the day: it follows the finger and the days next to it (.dpage) come in from the sides */
+.dday { position: relative; touch-action: pan-y; }
+.dday.paging { will-change: transform; }
+.dday.settling { pointer-events: none; }
+.dpage { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
+.dday > :first-child, .dpage > :first-child { margin-top: 0; } /* so the days next to it line up exactly */
+.view { overflow-x: clip; } /* the days waiting at the sides never widen the page */
 /* Week: every day as a short list, with a line for each free gap */
 .wday { padding: 2px 0 8px; }
 .wday + .wday { margin-top: 10px; }
@@ -769,7 +787,7 @@ textarea { font: inherit; color: inherit; }
 .bp-time { font-size: 14px; font-weight: 700; color: var(--text-2); }
 .bp-title { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; }
 .bp-sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
-.blk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.blk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; touch-action: pan-y; -webkit-user-select: none; user-select: none; }
 .blk-days button { height: 40px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); font-size: 13px; font-weight: 700; color: var(--dc); transition: background .2s, color .2s, transform .15s, box-shadow .2s; }
 .blk-days button.sib:not(.on) { box-shadow: var(--shadow), inset 0 0 0 1.5px color-mix(in srgb, var(--dc) 55%, transparent); }
 .blk-days button.on { background: var(--dc); color: #fff; box-shadow: 0 6px 14px color-mix(in srgb, var(--dc) 35%, transparent); }

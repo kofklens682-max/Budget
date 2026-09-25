@@ -24,7 +24,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', () => { keepNow(); });
 // Keep the schedule's "Now" card fresh — but never redraw under a finger that's touching the screen.
 let touchedAt = 0;
-document.addEventListener('pointerdown', () => { touchedAt = Date.now(); }, { capture: true, passive: true });
+['pointerdown', 'pointerup'].forEach((t) => document.addEventListener(t, () => { touchedAt = Date.now(); }, { capture: true, passive: true }));
 setInterval(() => { if (UI.tab === 'schedule' && !sheet && !document.hidden && Date.now() - touchedAt > 2000) render(); }, 60000);
 
 // Runs now, or right after the passcode is entered.
@@ -68,6 +68,8 @@ if (hadQuick) {
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 bindTabSlide($('#tabs'), (t) => goTab(t));
 bindSegSlide();
+bindWeekSlide();
+bindDaysSlide();
 
 // Offline support + instant updates: when a new version is installed, reload into it
 // (or wait until the open form is closed so nothing typed is lost).

@@ -60,10 +60,34 @@ function scheduleEmpty() {
 }
 
 // ================= Day: one day as a list =================
-// This week's dates in one slim row; the dots are that day's lessons.
+// This week's dates in one slim row; the dots are that day's lessons. The blue circle is a piece of
+// its own (.ws-ind), so it can glide from day to day, follow a finger sliding along the row, and
+// move along with a swipe of the day below.
+let wsLast = null, wsFrom = null; // the day it showed last time; where the next glide starts (may be between two days)
 function weekStrip(di) {
   const today = todayIdx();
-  return `<div class="wstrip">${WK.map((n, i) => `<button class="${i === di ? 'sel' : ''} ${i === today ? 'today' : ''}" data-act="sched-day" data-v="${i}" aria-label="${WEEK[i]}"><small>${n}</small><b class="num">${weekDate(i).getDate()}</b><span class="wdots">${lessonsIn(dayPlan(i)).slice(0, 4).map((b) => `<i style="--c:${b.a.color}"></i>`).join('')}</span></button>`).join('')}</div>`;
+  const from = wsFrom != null ? wsFrom : wsLast != null ? wsLast : di;
+  wsFrom = null;
+  wsLast = di;
+  return `<div class="wstrip${from !== di ? ' glide' : ''}" id="wstrip"><i class="ws-ind" style="--i:${di};--from:${from}"></i>${WK.map((n, i) => `<button class="${i === di ? 'sel' : ''} ${i === today ? 'today' : ''}" data-act="sched-day" data-v="${i}" aria-label="${WEEK[i]}"><small>${n}</small><b class="num">${weekDate(i).getDate()}</b><span class="wdots">${lessonsIn(dayPlan(i)).slice(0, 4).map((b) => `<i style="--c:${b.a.color}"></i>`).join('')}</span></button>`).join('')}</div>`;
+}
+// Puts the circle at `pos` — a day, or somewhere between two while it moves. The number it covers
+// turns white; `lift` makes it look picked up (under the finger).
+function wsPaint(strip, pos, lift) {
+  const ind = $('.ws-ind', strip);
+  if (!ind) return;
+  ind.style.animation = 'none';
+  ind.style.transform = `translateX(${(pos * ind.offsetWidth).toFixed(1)}px)${lift ? ' scale(1.12)' : ''}`;
+  const n = Math.round(pos), lit = Math.abs(pos - n) < 0.3 ? n : -1;
+  strip.classList.add('moving');
+  $$(':scope > button', strip).forEach((b, i) => b.classList.toggle('lit', i === lit));
+}
+// Back to the chosen day (it glides there).
+function wsRest(strip) {
+  const ind = $('.ws-ind', strip);
+  if (ind) { ind.style.transform = ''; ind.style.transition = ''; }
+  strip.classList.remove('moving');
+  $$(':scope > button', strip).forEach((b) => b.classList.remove('lit'));
 }
 // Today only: what's on now (or free time), how long is left, and what's next.
 function nowCard(plan) {
@@ -88,13 +112,17 @@ function nowCard(plan) {
   return '';
 }
 function dayHtml() {
-  const di = UI.sDay, plan = dayPlan(di), isToday = di === todayIdx(), now = nowMin();
+  const di = UI.sDay;
   const dir = UI.sDir ? (UI.sDir > 0 ? ' from-r' : ' from-l') : '';
-  let h = weekStrip(di) + `<div class="dday${dir}" id="dday">`;
+  return weekStrip(di) + `<div class="dday${dir}" id="dday">${dayBody(di)}</div>`;
+}
+// One day under the week row. A swipe draws the days next to it with this too.
+function dayBody(di) {
+  const plan = dayPlan(di), isToday = di === todayIdx(), now = nowMin();
   if (!plan.length) {
-    return h + `<section class="card empty"><div class="big">${ic('sun', DAY_COLORS[di], 'xl')}</div><h3>Nothing planned</h3><p>${WEEK[di]} is free.</p><button class="btn" data-act="sched-add">Add a block</button></section></div>`;
+    return `<section class="card empty"><div class="big">${ic('sun', DAY_COLORS[di], 'xl')}</div><h3>Nothing planned</h3><p>${WEEK[di]} is free.</p><button class="btn" data-act="sched-add">Add a block</button></section>`;
   }
-  if (isToday) h += nowCard(plan);
+  let h = isToday ? nowCard(plan) : '';
   const L = lessonsIn(plan), free = freeIn(plan);
   h += `<p class="dsum"><b class="num">${clock(plan[0].from)}–${clock(plan[plan.length - 1].to)}</b> · ${plural(L.length, 'lesson')}${L.length ? ` · ${durText(minutesIn(L))} teaching` : ''}${free ? ` · ${durText(free)} free` : ''}</p>`;
   const rows = plan.map((b) => {
@@ -106,7 +134,7 @@ function dayHtml() {
     return `<button class="drow ${cur ? 'now' : ''}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b><span>${clock(b.to)}</span></span><i class="dbar"></i><span class="dmain"><b>${esc(b.a.name)}${cur ? '<em>NOW</em>' : ''}</b>${sub ? `<span>${sub}</span>` : ''}</span><span class="dd num">${durText(b.dur)}</span></button>`;
   }).join('');
   return h + `<section class="card dlist">${rows}</section>
-    <div class="dfoot"><button class="link" data-act="sched-copy">Copy ${WEEK[di]} to other days</button></div></div>`;
+    <div class="dfoot"><button class="link" data-act="sched-copy">Copy ${WEEK[di]} to other days</button></div>`;
 }
 
 // ================= Week: every day as a short list =================
@@ -126,29 +154,159 @@ function weekHtml() {
 }
 
 function afterSchedule() {
-  if (UI.sView === 'day') bindDaySwipe($('#dday'));
+  if (UI.sView === 'day') { fillDay(); bindDayPager($('#dday')); }
   UI.sDir = 0;
 }
-// Swipe the day sideways for the next / previous day.
-function bindDaySwipe(el) {
-  if (!el) return;
-  let x0 = null, y0 = 0, t0 = 0;
-  el.addEventListener('touchstart', (e) => { const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); }, { passive: true });
-  el.addEventListener('touchend', (e) => {
-    if (x0 === null) return;
-    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
-    x0 = null;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && Date.now() - t0 < 700) showDay((UI.sDay + (dx < 0 ? 1 : 6)) % 7, dx < 0 ? 1 : -1);
-  }, { passive: true });
+// The whole space under the week row takes a swipe, even below a short day.
+function fillDay() {
+  const dd = $('#dday');
+  if (!dd) return;
+  dd.style.minHeight = '';
+  const pb = parseFloat(getComputedStyle($('#view')).paddingBottom) || 0;
+  dd.style.minHeight = Math.max(0, Math.floor(window.innerHeight - pb - (dd.getBoundingClientRect().top + window.scrollY))) + 'px';
 }
-function showDay(i, dir) {
+// Swipe the day sideways and it follows the finger: the next (or previous) day comes in from the
+// side and the circle in the week row glides along. Let go past about a third of the way, or
+// flick, and that day stays; otherwise it springs back. Monday and Sunday only give a little —
+// they are the ends of the week.
+const PAGE_GAP = 32; // space between two days while they move
+function bindDayPager(el) {
+  if (!el) return;
+  const strip = $('#wstrip');
+  let st = null, movedAt = 0;
+  const side = (j, s) => {
+    if (j < 0 || j > 6) return null;
+    const p = document.createElement('div');
+    p.className = 'dpage';
+    p.inert = true;
+    p.setAttribute('aria-hidden', 'true');
+    p.style.transform = `translateX(${s * st.W}px)`;
+    p.innerHTML = dayBody(j);
+    el.appendChild(p);
+    return p;
+  };
+  const follow = (dx) => {
+    const end = (dx > 0 && !st.prev) || (dx < 0 && !st.next);
+    st.x = end ? dx / 3 : clamp(dx, -st.W, st.W);
+    el.style.transform = `translate3d(${st.x.toFixed(1)}px,0,0)`;
+    if (strip) wsPaint(strip, clamp(UI.sDay - st.x / st.W, 0, 6));
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if ((st && (st.on || st.done)) || e.button > 0) return; // one finger at a time
+    st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: 0, pts: [] };
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id || st.done) return;
+    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
+    if (!st.on) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.2) { st = null; return; } // scrolling up or down
+      st.on = true;
+      el.classList.remove('from-r', 'from-l');
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      st.W = el.offsetWidth + PAGE_GAP;
+      st.prev = side(UI.sDay - 1, -1);
+      st.next = side(UI.sDay + 1, 1);
+      el.classList.add('paging');
+    }
+    st.pts.push([e.timeStamp, e.clientX]);
+    if (st.pts.length > 8) st.pts.shift();
+    follow(dx);
+  });
+  const release = (e) => {
+    if (!st || e.pointerId !== st.id || st.done) return;
+    const s = st;
+    if (!s.on) { st = null; return; }
+    s.done = true; // a new swipe waits until this one has settled
+    movedAt = Date.now();
+    // How fast the finger was moving at the end (px per ms): a flick turns the page too.
+    const last = s.pts[s.pts.length - 1], recent = s.pts.filter((p) => last[0] - p[0] <= 100);
+    const v = recent.length > 1 ? (last[1] - recent[0][1]) / Math.max(1, last[0] - recent[0][0]) : 0;
+    let dir = 0;
+    if (e.type === 'pointerup') {
+      if (s.next && s.x < -16 && (s.x < -s.W * 0.3 || v < -0.25)) dir = 1;
+      else if (s.prev && s.x > 16 && (s.x > s.W * 0.3 || v > 0.25)) dir = -1;
+    }
+    const to = -dir * s.W;
+    const ms = reduceMotion() ? 0 : Math.round(clamp(Math.abs(to - s.x) / Math.max(Math.abs(v), 1.2), 150, 330));
+    const ease = `transform ${ms}ms cubic-bezier(.2, .75, .25, 1)`;
+    el.classList.add('settling');
+    el.style.transition = ease;
+    el.style.transform = `translate3d(${to}px,0,0)`;
+    if (strip) { $('.ws-ind', strip).style.transition = ease; wsPaint(strip, UI.sDay + dir); }
+    setTimeout(() => {
+      st = null;
+      if (!el.isConnected) return; // the page was drawn again meanwhile
+      if (dir) { const y = window.scrollY; UI.sDay += dir; wsFrom = UI.sDay; buzz(); render(); settleScroll(y); return; }
+      [s.prev, s.next].forEach((p) => p && p.remove());
+      el.classList.remove('paging', 'settling');
+      el.style.transition = '';
+      el.style.transform = '';
+      if (strip) wsRest(strip);
+    }, ms + 30);
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  // the end of a swipe must not also count as a tap on a row
+  el.addEventListener('click', (e) => { if (Date.now() - movedAt < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
+// from: where the circle starts gliding (the finger's place after sliding along the row)
+function showDay(i, dir, from) {
   if (i === UI.sDay) return;
+  const y = window.scrollY;
   UI.sDir = dir || (i > UI.sDay ? 1 : -1);
+  if (from != null) wsFrom = from;
   UI.sDay = i;
   buzz();
   render();
+  settleScroll(y);
 }
-PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule };
+// A shorter day can't stay scrolled as far down as the day before: the page glides up to it
+// instead of jumping (the extra room below goes at the next redraw).
+function settleScroll(y) {
+  const max = document.documentElement.scrollHeight - window.innerHeight, dd = $('#dday');
+  if (!dd || y <= max + 1) return;
+  dd.style.minHeight = `${dd.offsetHeight + Math.ceil(y - max)}px`;
+  window.scrollTo(0, y);
+  window.scrollTo({ top: max, behavior: reduceMotion() ? 'auto' : 'smooth' });
+}
+// Press on the week row and slide along it: the circle follows the finger and the day under it
+// opens when you let go — like the tab bar. A tap still opens a day at once.
+function bindWeekSlide() {
+  let st = null, slidAt = 0;
+  document.addEventListener('pointerdown', (e) => {
+    const strip = e.button > 0 ? null : e.target.closest('.wstrip');
+    st = strip ? { strip, id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, over: -1, pos: 0 } : null;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.on) {
+      const dx = Math.abs(e.clientX - st.x0), dy = Math.abs(e.clientY - st.y0);
+      if (dy > 10 && dy > dx) { st = null; return; }
+      if (dx < 8) return;
+      st.on = true;
+      try { st.strip.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+    const r = st.strip.getBoundingClientRect(), w = (r.width - 8) / 7;
+    st.pos = clamp((e.clientX - r.left - 4) / w - 0.5, 0, 6);
+    wsPaint(st.strip, st.pos, true);
+    const over = Math.round(st.pos);
+    if (over !== st.over) { if (st.over >= 0) tick(); st.over = over; }
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const s = st;
+    st = null;
+    if (!s.on) return;
+    slidAt = Date.now();
+    if (e.type === 'pointerup' && s.over !== UI.sDay && s.strip.isConnected) showDay(s.over, 0, s.pos);
+    else wsRest(s.strip);
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+  document.addEventListener('click', (e) => { if (e.isTrusted && Date.now() - slidAt < 350 && e.target.closest('.wstrip')) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
+PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedule, resize: fillDay };
 
 // ================= Block sheet =================
 // What, which days, when it starts and how long it takes. The block is "painted" onto every ticked
@@ -282,6 +440,47 @@ function syncBlock(sh) {
     ? `<div class="blk-warn">${glyph('clock')}<div><b>Overlaps ${[...new Set(c.map((x) => esc(x.b.a.name)))].join(' and ')}</b><span>${c.map((x) => `${WK[x.j]}: ${esc(x.b.a.name)} ${clock(x.b.from)}–${clock(x.b.to)} will be ${x.whole ? 'replaced' : 'shortened'}`).join(' · ')}</span></div></div>`
     : '';
   $$('[data-act="blk-save"]', sh).forEach((b) => { b.disabled = !d.days.size; });
+}
+// Days in the block sheet: tap one, or press on a day and slide across the others to tick (or
+// untick) them all in one go.
+function bindDaysSlide() {
+  let st = null, slidAt = 0;
+  const setDay = (j) => {
+    if (bdraft.days.has(j) === st.to) return;
+    if (st.to) bdraft.days.add(j); else bdraft.days.delete(j);
+    const b = $(`:scope > [data-v="${j}"]`, st.row);
+    if (b) b.classList.toggle('on', st.to);
+    tick();
+    if (sheet) syncBlock(sheet.sh);
+  };
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.button > 0 || !bdraft ? null : e.target.closest('.blk-days > button');
+    st = b ? { row: b.parentElement, id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, to: !bdraft.days.has(Number(b.dataset.v)), last: Number(b.dataset.v) } : null;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.on) {
+      const dx = Math.abs(e.clientX - st.x0), dy = Math.abs(e.clientY - st.y0);
+      if (dy > 10 && dy > dx) { st = null; return; }
+      if (dx < 8) return;
+      st.on = true;
+      try { st.row.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      setDay(st.last);
+    }
+    const r = st.row.getBoundingClientRect();
+    const i = clamp(Math.floor(((e.clientX - r.left) / r.width) * 7), 0, 6);
+    // every day between the last one and this one: a quick slide can skip over some
+    for (let j = Math.min(i, st.last); j <= Math.max(i, st.last); j++) setDay(j);
+    st.last = i;
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    if (st.on) slidAt = Date.now();
+    st = null;
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+  document.addEventListener('click', (e) => { if (e.isTrusted && Date.now() - slidAt < 350 && e.target.closest('.blk-days')) { e.stopPropagation(); e.preventDefault(); } }, true);
 }
 // Puts [from, to) on day di for activity act, rebuilding the day around it.
 function paintBlock(di, from, to, act, keepId) {
