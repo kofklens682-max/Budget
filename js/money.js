@@ -159,6 +159,7 @@ function txRow(t, showDate, inAccount) {
     amt = `<div class="row-amt num ${t.type}">${fmt(t.type === 'in' ? t.amount : -t.amount, t.currency, { sign: true })}</div>`;
   }
   if (t.note) parts.push(t.note);
+  if (t.repeat || t.fromRepeat) parts.push('Monthly');
   if (showDate) parts.push(dayLabel(t.date));
   return `<button class="row ${UI.flashId === t.id ? 'flash' : ''}" data-act="edit-tx" data-id="${t.id}">${tile}
     <div class="row-main"><div class="row-title">${esc(title)}</div>${parts.length ? `<div class="row-sub">${esc(parts.join(' · '))}</div>` : ''}</div>${amt}</button>`;
@@ -556,6 +557,8 @@ function openTx(id, preset = {}) {
   if (!draft.toCurrency) draft.toCurrency = draft.currency;
   if (!draft.toAccount) draft.toAccount = (S.accounts.find((a) => a.id !== draft.account) || S.accounts[0]).id;
   draft.back = preset.back || null;
+  const tpl = repeatTemplate(draft);
+  draft.repeatOn = !!(tpl && tpl.repeat);
   openSheet(txHtml(), mountTx);
 }
 function reopenTx() { openSheet(txHtml(), mountTx); }
@@ -624,7 +627,9 @@ function txHtml() {
     <div class="group plain">
       <label class="row field"><span>Date</span><input type="date" id="date" value="${d.date}"></label>
       <label class="row field"><span>Note</span><input id="note" placeholder="Optional" value="${esc(d.note)}" autocomplete="off" enterkeyhint="done"></label>
+      ${canRepeat(d) ? `<div class="row field"><span style="flex:1">Every month</span><label class="switch"><input type="checkbox" id="tx-repeat" ${d.repeatOn ? 'checked' : ''} aria-label="Add this every month"><i></i></label></div>` : ''}
     </div>
+    ${canRepeat(d) && d.repeatOn ? `<p class="hint">${d.fromRepeat ? 'Added automatically each month. Switch off to stop.' : `Added again on the ${ordinal(Number(d.date.slice(8)))} of every month.`}</p>` : ''}
     <div class="actions">
       <button class="btn" data-act="save-tx" ${ok ? '' : 'disabled'}>${editing ? 'Save changes' : isTr ? 'Save transfer' : isIn ? 'Add money in' : 'Add money out'}</button>
       ${editing ? `<button class="btn danger" data-act="del-tx">Delete ${isTr ? 'transfer' : 'entry'}</button>` : ''}
@@ -654,8 +659,10 @@ function mountTx(sh) {
   });
   const toAmt = $('#to-amt', sh);
   if (toAmt) toAmt.addEventListener('input', () => { const r = typedAmount(toAmt.value, draft.toCurrency); toAmt.value = r.shown; draft.toAmount = r.value; syncTx(); });
-  $('#date', sh).addEventListener('change', (e) => { draft.date = e.target.value || todayIso(); });
+  $('#date', sh).addEventListener('change', (e) => { draft.date = e.target.value || todayIso(); if (draft.repeatOn) refreshSheet(txHtml(), mountTx); });
   $('#note', sh).addEventListener('input', (e) => { draft.note = e.target.value; });
+  const rep = $('#tx-repeat', sh);
+  if (rep) rep.addEventListener('change', () => { draft.repeatOn = rep.checked; refreshSheet(txHtml(), mountTx); });
   blurOnEnter(sh);
   syncTx();
   if (!draft.id && !draft.amount) setTimeout(() => amt.focus({ preventScroll: true }), 420);
@@ -680,6 +687,14 @@ function saveTx() {
     UI.lastAcc[d.type] = d.account;
   }
   if (d.demo) rec.demo = true;
+  const old = S.tx.find((t) => t.id === rec.id);
+  const tpl = d.fromRepeat ? S.tx.find((t) => t.id === d.fromRepeat) : null;
+  if (d.fromRepeat) rec.fromRepeat = d.fromRepeat;
+  if (tpl) {
+    if (!d.repeatOn) stopRepeat(tpl); else if (!tpl.repeat) startRepeat(tpl);
+  } else if (d.repeatOn && canRepeat(rec)) {
+    startRepeat(rec, old && old.repeat && old.date === rec.date ? old.repeatNext : null);
+  }
   const i = S.tx.findIndex((t) => t.id === rec.id);
   if (i >= 0) S.tx[i] = rec; else S.tx.push(rec);
   const spendGoal = i < 0 && rec.type === 'out' && d.goalSpend ? goalById(d.goalSpend) : null;
@@ -701,8 +716,49 @@ function saveTx() {
   else if (rec.type === 'transfer' && rec.toCurrency !== rec.currency) toast(`Exchanged ${fmt(rec.amount, rec.currency)} → ${fmt(rec.toAmount, rec.toCurrency)}`);
   else if (rec.type === 'transfer') toast(`Moved ${fmt(rec.amount, rec.currency)} · ${acc(rec.account).name} → ${acc(rec.toAccount).name}`);
   else if (rec.groupId) toast(`${rec.person || 'Payment'} · ${grp(rec.groupId).name} · ${fmt(rec.amount, rec.currency)}`);
-  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}`);
+  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}${rec.repeat ? ' · every month' : ''}`);
+  if (rec.repeat && runRepeats()) render();
 }
+
+// ================= Every month =================
+// An entry marked "Every month" adds a copy of itself on the same day each month (from the next
+// month on; months before today are not back-filled). Copies carry fromRepeat, so their switch stops the series.
+const canRepeat = (d) => d.type !== 'transfer' && !(d.type === 'in' && grp(d.groupId));
+const repeatTemplate = (d) => (d.fromRepeat ? S.tx.find((t) => t.id === d.fromRepeat) || null : d.id ? S.tx.find((t) => t.id === d.id) || null : null);
+const ordinal = (n) => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+function monthAfter(date, day) {
+  const [y, m] = date.split('-').map(Number);
+  const last = new Date(y, m + 1, 0).getDate();
+  return `${m === 12 ? y + 1 : y}-${pad2((m % 12) + 1)}-${pad2(Math.min(day, last))}`;
+}
+function startRepeat(t, next) {
+  t.repeat = 'monthly';
+  t.repeatDay = Number(t.date.slice(8));
+  let n = next || monthAfter(t.date, t.repeatDay);
+  while (n < todayIso()) n = monthAfter(n, t.repeatDay); // today's copy is still added
+  t.repeatNext = n;
+}
+function stopRepeat(t) { delete t.repeat; delete t.repeatDay; delete t.repeatNext; }
+// Add the copies that are due (at start and when coming back to the app).
+function runRepeats() {
+  const today = todayIso(), added = [];
+  for (const t of S.tx.filter((x) => x.repeat === 'monthly')) {
+    let guard = 0;
+    while (t.repeatNext <= today && guard++ < 24) {
+      const copy = { ...t, id: uid(), date: t.repeatNext, createdAt: Date.now(), fromRepeat: t.id };
+      stopRepeat(copy);
+      S.tx.push(copy);
+      added.push(copy);
+      t.repeatNext = monthAfter(t.repeatNext, t.repeatDay);
+    }
+  }
+  if (!added.length) return false;
+  save();
+  const a = added[0];
+  toast(added.length === 1 ? `Added this month's ${a.person || cat(a.type, a.category).name} · ${fmt(a.amount, a.currency)}` : `Added ${added.length} monthly entries`);
+  return true;
+}
+
 
 // ================= Accounts =================
 let accId = null;

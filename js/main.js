@@ -16,7 +16,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) { hiddenAt = Date.now(); return; }
   if (S.settings.pin && hiddenAt && Date.now() - hiddenAt > 60000) lockNow();
   if (swReg) swReg.update().catch(() => {});
-  if (UI.tab === 'schedule' && !sheet) render();
+  if (runRepeats() && !sheet) render();
+  else if (UI.tab === 'schedule' && !sheet) render();
 });
 // Keep the schedule's clock, "Now" line and badges fresh.
 setInterval(() => { if (UI.tab === 'schedule' && !sheet && !UI.sEdit && !document.hidden) render(); }, 60000);
@@ -38,6 +39,7 @@ const hasLink = location.hash.startsWith('#schedule=');
 history.replaceState({ tab: 'home' }, '', location.search && !hasLink ? location.pathname : undefined);
 applyTheme();
 if (S.settings.pin) lockNow();
+runRepeats();
 render(true);
 if (addParam === 'in' || addParam === 'out') whenOpen(() => openTx(null, { type: addParam }));
 if (TAB_ORDER.includes(tabParam) && tabParam !== 'home') goTab(tabParam);

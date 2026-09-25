@@ -252,6 +252,10 @@ function normalize(d) {
     if (r.type === 'transfer' && !ids.has(r.toAccount)) r.toAccount = first;
     if (r.type !== 'in' || !gids.has(r.groupId)) { delete r.groupId; delete r.studentId; delete r.forMonth; }
     else if (!/^\d{4}-\d{2}$/.test(r.forMonth || '')) r.forMonth = r.date.slice(0, 7);
+    // "Every month" entries: the original keeps repeat/repeatDay/repeatNext; copies point back with fromRepeat.
+    if (r.repeat !== 'monthly' || r.type === 'transfer' || r.groupId || !/^\d{4}-\d{2}-\d{2}$/.test(r.repeatNext || '')) { delete r.repeat; delete r.repeatNext; delete r.repeatDay; }
+    else r.repeatDay = clamp(Math.round(Number(r.repeatDay)) || Number(r.date.slice(8)), 1, 31);
+    if (typeof r.fromRepeat !== 'string') delete r.fromRepeat;
     return r;
   });
   const goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => g && g.id && g.name && CUR[g.currency]).map((g) => ({
