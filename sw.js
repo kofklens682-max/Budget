@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v6';
+const VERSION = 'budget-v7';
 const SHELL = [
   './',
   './index.html',
@@ -15,6 +15,10 @@ const SHELL = [
   './icons/icon-96.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './fonts/inter-latin.woff2',
+  './fonts/inter-latin-ext.woff2',
+  './fonts/inter-cyrillic.woff2',
+  './fonts/inter-cyrillic-ext.woff2',
 ];
 
 self.addEventListener('install', (e) => {
@@ -35,26 +39,25 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Serve from cache instantly, refresh the cache in the background (stale-while-revalidate).
+// The app opens straight from the phone's copy: no waiting for the network and no re-downloading
+// every file at each start. New versions arrive through a new service worker (see VERSION).
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const sameOrigin = url.origin === self.location.origin;
-  const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-  if (!sameOrigin && !isFont) return;
-
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
   e.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const key = req.mode === 'navigate' ? './index.html' : req;
-      const cached = await cache.match(key, { ignoreSearch: true });
-      const network = fetch(req)
-        .then((res) => {
-          if (res && res.ok) cache.put(key, res.clone());
-          return res;
-        })
-        .catch(() => cached || Response.error());
-      return cached || network;
+      const hit = await cache.match(key, { ignoreSearch: true });
+      if (hit) return hit;
+      try {
+        const res = await fetch(req);
+        if (res && res.ok) cache.put(key, res.clone());
+        return res;
+      } catch (err) {
+        return (req.mode === 'navigate' && (await cache.match('./index.html'))) || Response.error();
+      }
     })
   );
 });
