@@ -14,6 +14,8 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
+  <!-- Stay upright: the installed app could otherwise start sideways or upside down. -->
+  <script>try { screen.orientation.lock('portrait-primary').catch(function () {}); } catch (e) {}</script>
 </head>
 <body>
   <div class="topbar" id="topbar"><span id="topbar-title"></span></div>
