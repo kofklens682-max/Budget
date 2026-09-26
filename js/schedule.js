@@ -114,7 +114,7 @@ function nowCard(plan) {
 function dayHtml() {
   const di = UI.sDay;
   const dir = UI.sDir ? (UI.sDir > 0 ? ' from-r' : ' from-l') : '';
-  return weekStrip(di) + `<div class="dday${dir}" id="dday">${dayBody(di)}</div>`;
+  return weekStrip(di) + `<div class="dday pager${dir}" id="dday">${dayBody(di)}</div>`;
 }
 // One day under the week row. A swipe draws the days next to it with this too.
 function dayBody(di) {
@@ -165,90 +165,21 @@ function fillDay() {
   const pb = parseFloat(getComputedStyle($('#view')).paddingBottom) || 0;
   dd.style.minHeight = Math.max(0, Math.floor(window.innerHeight - pb - (dd.getBoundingClientRect().top + window.scrollY))) + 'px';
 }
-// Swipe the day sideways and it follows the finger: the next (or previous) day comes in from the
-// side and the circle in the week row glides along. Let go past about a third of the way, or
-// flick, and that day stays; otherwise it springs back. Monday and Sunday only give a little —
-// they are the ends of the week.
-const PAGE_GAP = 32; // space between two days while they move
+// Swipe the day sideways (see bindPager): the next or previous day comes in from the side and the
+// circle in the week row glides along. Monday and Sunday are the ends of the week.
 function bindDayPager(el) {
-  if (!el) return;
   const strip = $('#wstrip');
-  let st = null, movedAt = 0;
-  const side = (j, s) => {
-    if (j < 0 || j > 6) return null;
-    const p = document.createElement('div');
-    p.className = 'dpage';
-    p.inert = true;
-    p.setAttribute('aria-hidden', 'true');
-    p.style.transform = `translateX(${s * st.W}px)`;
-    p.innerHTML = dayBody(j);
-    el.appendChild(p);
-    return p;
-  };
-  const follow = (dx) => {
-    const end = (dx > 0 && !st.prev) || (dx < 0 && !st.next);
-    st.x = end ? dx / 3 : clamp(dx, -st.W, st.W);
-    el.style.transform = `translate3d(${st.x.toFixed(1)}px,0,0)`;
-    if (strip) wsPaint(strip, clamp(UI.sDay - st.x / st.W, 0, 6));
-  };
-  el.addEventListener('pointerdown', (e) => {
-    if ((st && (st.on || st.done)) || e.button > 0) return; // one finger at a time
-    st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: 0, pts: [] };
+  bindPager(el, {
+    has: (dir) => UI.sDay + dir >= 0 && UI.sDay + dir <= 6,
+    page: (dir) => dayBody(UI.sDay + dir),
+    move: (p, ease) => {
+      if (!strip) return;
+      if (ease) $('.ws-ind', strip).style.transition = ease;
+      wsPaint(strip, clamp(UI.sDay + p, 0, 6));
+    },
+    go: (dir) => { UI.sDay += dir; wsFrom = UI.sDay; render(); },
+    rest: () => { if (strip) wsRest(strip); },
   });
-  el.addEventListener('pointermove', (e) => {
-    if (!st || e.pointerId !== st.id || st.done) return;
-    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
-    if (!st.on) {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-      if (Math.abs(dx) < Math.abs(dy) * 1.2) { st = null; return; } // scrolling up or down
-      st.on = true;
-      el.classList.remove('from-r', 'from-l');
-      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-      st.W = el.offsetWidth + PAGE_GAP;
-      st.prev = side(UI.sDay - 1, -1);
-      st.next = side(UI.sDay + 1, 1);
-      el.classList.add('paging');
-    }
-    st.pts.push([e.timeStamp, e.clientX]);
-    if (st.pts.length > 8) st.pts.shift();
-    follow(dx);
-  });
-  const release = (e) => {
-    if (!st || e.pointerId !== st.id || st.done) return;
-    const s = st;
-    if (!s.on) { st = null; return; }
-    s.done = true; // a new swipe waits until this one has settled
-    movedAt = Date.now();
-    // How fast the finger was moving at the end (px per ms): a flick turns the page too.
-    const last = s.pts[s.pts.length - 1], recent = s.pts.filter((p) => last[0] - p[0] <= 100);
-    const v = recent.length > 1 ? (last[1] - recent[0][1]) / Math.max(1, last[0] - recent[0][0]) : 0;
-    let dir = 0;
-    if (e.type === 'pointerup') {
-      if (s.next && s.x < -16 && (s.x < -s.W * 0.3 || v < -0.25)) dir = 1;
-      else if (s.prev && s.x > 16 && (s.x > s.W * 0.3 || v > 0.25)) dir = -1;
-    }
-    const to = -dir * s.W;
-    const ms = reduceMotion() ? 0 : Math.round(clamp(Math.abs(to - s.x) / Math.max(Math.abs(v), 1.2), 150, 330));
-    const ease = `transform ${ms}ms cubic-bezier(.2, .75, .25, 1)`;
-    el.classList.add('settling');
-    el.style.transition = ease;
-    el.style.transform = `translate3d(${to}px,0,0)`;
-    if (strip) { $('.ws-ind', strip).style.transition = ease; wsPaint(strip, UI.sDay + dir); }
-    setTimeout(() => {
-      st = null;
-      if (!el.isConnected) return; // the page was drawn again meanwhile
-      if (dir) { const y = window.scrollY; UI.sDay += dir; wsFrom = UI.sDay; buzz(); render(); settleScroll(y); return; }
-      [s.prev, s.next].forEach((p) => p && p.remove());
-      el.classList.remove('paging', 'settling');
-      el.style.transition = '';
-      el.style.transform = '';
-      if (strip) wsRest(strip);
-    }, ms + 30);
-  };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
-  // the end of a swipe must not also count as a tap on a row
-  el.addEventListener('click', (e) => { if (Date.now() - movedAt < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
 }
 // from: where the circle starts gliding (the finger's place after sliding along the row)
 function showDay(i, dir, from) {
@@ -260,15 +191,6 @@ function showDay(i, dir, from) {
   buzz();
   render();
   settleScroll(y);
-}
-// A shorter day can't stay scrolled as far down as the day before: the page glides up to it
-// instead of jumping (the extra room below goes at the next redraw).
-function settleScroll(y) {
-  const max = document.documentElement.scrollHeight - window.innerHeight, dd = $('#dday');
-  if (!dd || y <= max + 1) return;
-  dd.style.minHeight = `${dd.offsetHeight + Math.ceil(y - max)}px`;
-  window.scrollTo(0, y);
-  window.scrollTo({ top: max, behavior: reduceMotion() ? 'auto' : 'smooth' });
 }
 // Press on the week row and slide along it: the circle follows the finger and the day under it
 // opens when you let go — like the tab bar. A tap still opens a day at once.

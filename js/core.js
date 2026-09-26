@@ -370,6 +370,13 @@ function totals(cur, from, to) {
   }
   return { in: i, out: o };
 }
+// Everything in so'm: dollars count at the rate from Settings (0 = no rate set, dollars left out).
+const somRate = () => (S.settings.rate > 0 ? S.settings.rate : 0);
+const inSom = (v, cur) => (cur === 'USD' ? v * somRate() : v);
+function totalsSom(from, to) {
+  const a = totals('UZS', from, to), b = totals('USD', from, to), r = somRate();
+  return { in: a.in + b.in * r, out: a.out + b.out * r };
+}
 const goalSaved = (g) => g.contribs.reduce((a, c) => a + c.amount, 0);
 const savedInGoals = (cur) => S.goals.filter((g) => g.currency === cur).reduce((a, g) => a + goalSaved(g), 0);
 const freeMoney = (cur) => balance(cur) - savedInGoals(cur); // not set aside for any goal
@@ -387,6 +394,7 @@ const HIST_PAGE = 60; // History draws this many entries at a time
 const UI = {
   tab: 'home', cur: S.settings.currency, range: '3M',
   hView: 'entries', hType: 'all', hCur: 'all', hAcc: 'all', hGroup: 'all', q: '', hLimit: HIST_PAGE,
+  calYm: ymNow(), calDay: todayIso(),
   period: 'month', offset: 0, gMonth: ymNow(),
   sView: S.settings.schedView === 'week' ? 'week' : 'day', sDay: todayIdx(), sDir: 0, lastAct: null,
   lastType: 'in', lastAcc: { in: null, out: null },
@@ -765,6 +773,117 @@ function renderSub(el, dir) {
 function segDir(a) {
   const bs = $$(':scope > button', a.parentElement);
   return Math.sign(bs.indexOf(a) - bs.findIndex((b) => b.classList.contains('on')));
+}
+
+// ================= Swiping between pages =================
+// Part of a page (a day, a month) that follows the finger sideways: the next or previous page comes
+// in from the side. Let go past about a third of the way, or flick, and it stays; otherwise it
+// springs back. At the ends it only gives a little. dir: 1 = next (finger moves left), -1 = previous.
+// o: { has(dir), page(dir) → html, mount(pane, dir), move(p), go(dir), rest(), skip(target) }
+const PAGE_GAP = 32; // space between two pages while they move
+let quietDraw = false; // charts appear at once (no grow animation) after a swipe, as the page already showed them
+function bindPager(el, o) {
+  if (!el) return;
+  let st = null, movedAt = 0;
+  const side = (dir) => {
+    if (!o.has(dir)) return null;
+    const p = document.createElement('div');
+    p.className = 'pg-side';
+    p.inert = true;
+    p.setAttribute('aria-hidden', 'true');
+    p.style.transform = `translateX(${dir * st.W}px)`;
+    p.innerHTML = o.page(dir);
+    p.querySelectorAll('[id]').forEach((x) => x.removeAttribute('id'));
+    el.appendChild(p);
+    if (o.mount) o.mount(p, dir);
+    return p;
+  };
+  const follow = (dx) => {
+    const end = (dx > 0 && !st.prev) || (dx < 0 && !st.next);
+    st.x = end ? dx / 3 : clamp(dx, -st.W, st.W);
+    el.style.transform = `translate3d(${st.x.toFixed(1)}px,0,0)`;
+    if (o.move) o.move(-st.x / st.W);
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if ((st && (st.on || st.done)) || e.button > 0 || (o.skip && o.skip(e.target))) return; // one finger at a time
+    st = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: 0, pts: [] };
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!st || e.pointerId !== st.id || st.done) return;
+    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
+    if (!st.on) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.2) { st = null; return; } // scrolling up or down
+      st.on = true;
+      el.classList.remove('from-r', 'from-l');
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      st.W = el.offsetWidth + PAGE_GAP;
+      st.prev = side(-1);
+      st.next = side(1);
+      el.classList.add('paging');
+    }
+    st.pts.push([e.timeStamp, e.clientX]);
+    if (st.pts.length > 8) st.pts.shift();
+    follow(dx);
+  });
+  const release = (e) => {
+    if (!st || e.pointerId !== st.id || st.done) return;
+    const s = st;
+    if (!s.on) { st = null; return; }
+    s.done = true; // a new swipe waits until this one has settled
+    movedAt = Date.now();
+    // How fast the finger was moving at the end (px per ms): a flick turns the page too.
+    const last = s.pts[s.pts.length - 1], recent = s.pts.filter((p) => last[0] - p[0] <= 100);
+    const v = recent.length > 1 ? (last[1] - recent[0][1]) / Math.max(1, last[0] - recent[0][0]) : 0;
+    let dir = 0;
+    if (e.type === 'pointerup') {
+      if (s.next && s.x < -16 && (s.x < -s.W * 0.3 || v < -0.25)) dir = 1;
+      else if (s.prev && s.x > 16 && (s.x > s.W * 0.3 || v > 0.25)) dir = -1;
+    }
+    const to = -dir * s.W;
+    const ms = reduceMotion() ? 0 : Math.round(clamp(Math.abs(to - s.x) / Math.max(Math.abs(v), 1.2), 150, 330));
+    const ease = `transform ${ms}ms cubic-bezier(.2, .75, .25, 1)`;
+    el.classList.add('settling');
+    el.style.transition = ease;
+    el.style.transform = `translate3d(${to}px,0,0)`;
+    if (o.move) o.move(dir, ease);
+    setTimeout(() => {
+      st = null;
+      if (!el.isConnected) return; // the page was drawn again meanwhile
+      if (dir) {
+        const y = window.scrollY;
+        buzz();
+        quietDraw = true;
+        try { o.go(dir); } finally { quietDraw = false; }
+        settleScroll(y);
+        return;
+      }
+      [s.prev, s.next].forEach((p) => p && p.remove());
+      el.classList.remove('paging', 'settling');
+      el.style.transition = '';
+      el.style.transform = '';
+      if (o.rest) o.rest();
+    }, ms + 30);
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  // the end of a swipe must not also count as a tap
+  el.addEventListener('click', (e) => { if (Date.now() - movedAt < 400) { e.stopPropagation(); e.preventDefault(); } }, true);
+}
+// A shorter page can't stay scrolled as far down as the one before: the window glides up to it
+// instead of jumping (the extra room below goes at the next redraw).
+function settleScroll(y) {
+  const max = document.documentElement.scrollHeight - window.innerHeight, pg = $('#view .pager');
+  if (!pg || y <= max + 1) return;
+  pg.style.minHeight = `${pg.offsetHeight + Math.ceil(y - max)}px`;
+  window.scrollTo(0, y);
+  window.scrollTo({ top: max, behavior: reduceMotion() ? 'auto' : 'smooth' });
+}
+// After ‹ › or a tap on another page: the pager's content slides in from that side.
+function pagerIn(dir) {
+  const p = $('#view .pager');
+  if (!p || !dir || reduceMotion()) return;
+  p.classList.add(dir > 0 ? 'from-r' : 'from-l');
 }
 
 let pushedTab = false;

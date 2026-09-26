@@ -12,16 +12,19 @@ function topPeople(type) {
   return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map((e) => e[0]);
 }
 
+// A goal is an envelope: money put in (saved), money already paid out of it for the thing (paid —
+// "I paid for it" lines, e.g. a first instalment of a fee), and what is still needed.
+const goalPaid = (g) => g.contribs.reduce((a, c) => a + (c.txId && c.amount < 0 ? -c.amount : 0), 0);
 function goalStats(g) {
-  const saved = goalSaved(g), cur = g.currency;
-  const left = Math.max(0, g.target - saved);
-  const pct = g.target > 0 ? clamp((saved / g.target) * 100, 0, 100) : 0;
+  const saved = goalSaved(g), paid = goalPaid(g), covered = saved + paid, cur = g.currency;
+  const left = Math.max(0, g.target - covered);
+  const pct = g.target > 0 ? clamp((covered / g.target) * 100, 0, 100) : 0;
   const today = todayIso();
   const daysLeft = daysBetween(today, g.deadline);
   const step = cur === 'UZS' ? 1000 : 1;
   let pace, status;
-  if (g.paid) return { saved, left: 0, pct: 100, daysLeft, pace: `Paid on ${medDate(g.paid)} 🎉`, status: ['good', '✓ Paid'] };
-  if (saved >= g.target) { pace = 'Fully saved 🎉 — tap “I paid for it” when you pay'; status = ['good', '✓ Reached']; }
+  if (g.paid) return { saved, paid, covered, left: 0, pct: 100, daysLeft, pace: `Paid on ${medDate(g.paid)} 🎉`, status: ['good', '✓ Paid'] };
+  if (covered >= g.target) { pace = 'All the money is there 🎉 — tap “I paid for it” when you pay'; status = ['good', '✓ Reached']; }
   else if (daysLeft < 0) { pace = `<b>${fmt(left, cur)}</b> still to go`; status = ['warn', '! Date passed']; }
   else if (daysLeft === 0) { pace = `<b>${fmt(left, cur)}</b> to go today`; status = ['warn', '! Due today']; }
   else {
@@ -32,17 +35,30 @@ function goalStats(g) {
     const total = Math.max(1, daysBetween(start, g.deadline));
     const elapsed = clamp(daysBetween(start, today), 0, total);
     const expected = (g.target * elapsed) / total;
-    status = saved >= expected * 0.97 ? ['good', '✓ On track'] : ['warn', '! Behind'];
+    status = covered >= expected * 0.97 ? ['good', '✓ On track'] : ['warn', '! Behind'];
   }
-  return { saved, left, pct, daysLeft, pace, status };
+  return { saved, paid, covered, left, pct, daysLeft, pace, status };
+}
+// The goal as one bar: already paid (darker) · in the envelope · still needed (empty), with a key.
+function goalBar(g, st, big) {
+  const c = goalIcon(g).c, w = (v) => (g.target > 0 ? clamp((v / g.target) * 100, 0, 100) : 0).toFixed(2);
+  const paidC = `color-mix(in srgb, ${c} 55%, var(--text))`;
+  const rows = [];
+  if (st.paid > 0) rows.push(`<div><i style="background:${paidC}"></i>Already paid<b class="num">${fmt(st.paid, g.currency)}</b></div>`);
+  if (!g.paid || st.saved > 0) rows.push(`<div><i style="background:${c}"></i>In the envelope<b class="num">${fmt(st.saved, g.currency)}</b></div>`);
+  if (!g.paid) rows.push(`<div><i style="background:var(--fill)"></i>Still needed<b class="num">${fmt(st.left, g.currency)}</b></div>`);
+  return `<div class="g3${big ? ' big' : ''}">${st.paid > 0 ? `<i style="width:${w(st.paid)}%;background:${paidC}"></i>` : ''}${st.saved > 0 ? `<i style="width:${w(st.saved)}%;background:${c}"></i>` : ''}</div>
+    <div class="g3-leg">${rows.join('')}</div>`;
 }
 const goalSort = (a, b) => {
   const rank = (g) => (g.paid ? 2 : goalSaved(g) >= g.target ? 1 : 0);
   return rank(a) - rank(b) || a.deadline.localeCompare(b.deadline);
 };
 
+// cur 'ALL' = everything in so'm (dollars at the rate from Settings).
 function balanceSeries(cur, range) {
-  const txs = (memo ? byDate() : S.tx.slice().sort(cmpDate)).filter((t) => delta(t, cur) !== 0);
+  const r = somRate(), dv = cur === 'ALL' ? (t) => delta(t, 'UZS') + delta(t, 'USD') * r : (t) => delta(t, cur);
+  const txs = (memo ? byDate() : S.tx.slice().sort(cmpDate)).filter((t) => dv(t) !== 0);
   const lastDate = txs.length ? txs[txs.length - 1].date : todayIso();
   const end = parseD(lastDate > todayIso() ? lastDate : todayIso());
   let start;
@@ -53,18 +69,18 @@ function balanceSeries(cur, range) {
   if (daysBetween(iso(start), iso(end)) < 7) start = addDays(end, -7);
   const span = daysBetween(iso(start), iso(end));
   const step = span > 400 ? 7 : 1;
-  let bal = openingTotal(cur), i = 0;
+  let bal = cur === 'ALL' ? openingTotal('UZS') + openingTotal('USD') * r : openingTotal(cur), i = 0;
   const s0 = iso(start);
-  while (i < txs.length && txs[i].date < s0) bal += delta(txs[i++], cur);
+  while (i < txs.length && txs[i].date < s0) bal += dv(txs[i++]);
   const pts = [];
   for (let k = 0; k <= span; k += step) {
     const di = iso(addDays(start, k));
-    while (i < txs.length && txs[i].date <= di) bal += delta(txs[i++], cur);
+    while (i < txs.length && txs[i].date <= di) bal += dv(txs[i++]);
     pts.push({ date: di, v: bal });
   }
   const endIso = iso(end);
   if (pts[pts.length - 1].date !== endIso) {
-    while (i < txs.length && txs[i].date <= endIso) bal += delta(txs[i++], cur);
+    while (i < txs.length && txs[i].date <= endIso) bal += dv(txs[i++]);
     pts.push({ date: endIso, v: bal });
   }
   return pts;
@@ -115,7 +131,7 @@ function breakdown(type, cur, from, to) {
     if (t.type !== type || t.currency !== cur || t.date < from || t.date >= to) continue;
     const c = cat(type, t.category);
     let key, e;
-    if (type === 'out') { key = c.id; e = { name: c.name, g: c.g, c: c.c }; }
+    if (type === 'out') { key = c.id; e = { id: c.id, name: c.name, g: c.g, c: c.c }; }
     else if (grp(t.groupId)) { const g = grp(t.groupId); key = 'g:' + g.id; e = { name: g.name, badge: g, c: g.color }; }
     else {
       const p = (t.person || '').trim();
@@ -184,9 +200,9 @@ const heroHtml = (v, cur) => (cur === 'UZS' ? `${fmt(v, cur, { bare: true })}<sm
 
 function renderHome() {
   const now = new Date();
-  const cur = UI.cur, other = OTHER[cur];
+  const cur = 'UZS', other = 'USD'; // Home shows everything in so'm (dollars at the rate from Settings)
   let h = `<header class="lt"><div><div class="eyebrow">${DOW_LONG[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</div><h1>Overview</h1></div>
-    <div class="lt-right">${hasAnything() ? curSeg() : ''}<button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
+    <div class="lt-right"><button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
 
   const prevYm = ymShift(ymNow(), -1);
   const [pf, pt] = ymRange(prevYm);
@@ -207,20 +223,28 @@ function renderHome() {
   if (!hasAnything()) {
     h += emptyWelcome();
   } else {
-    const bal = balance(cur);
-    const inGoals = savedInGoals(cur);
+    // One total: so'm plus dollars at the rate from Settings.
+    const rate = somRate(), usd = usesCur(other) ? balance(other) : 0;
+    const bal = balance(cur) + usd * rate;
     const meta = [];
-    if (inGoals) meta.push(`<span>In goals <b class="num">${fmt(inGoals, cur)}</b></span>`, `<span>Free <b class="num">${fmt(bal - inGoals, cur)}</b></span>`);
-    if (usesCur(other)) {
-      const ob = balance(other);
-      meta.push(`<span>Also <b class="num">${fmt(ob, other)}</b></span>`);
-      const rate = S.settings.rate;
-      if (rate > 0) meta.push(`<span>≈ <b class="num">${fmt(cur === 'UZS' ? bal + ob * rate : bal + ob / rate, cur, { round: true })}</b> together</span>`);
+    if (usd && rate) meta.push(`<span>incl. <b class="num">${fmt(usd, other)}</b> ≈ ${fmt(usd * rate, cur)} at ${fmt(rate, cur, { bare: true })}</span>`);
+    else if (usd) meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(usd, other)} — set the dollar rate in Settings to count it in</button>`);
+    // How it's split: money free to spend, and what each goal's envelope holds.
+    const envs = S.goals.filter((g) => !g.paid && goalSaved(g) > 0 && (g.currency === cur || rate))
+      .map((g) => ({ name: g.name, v: inSom(goalSaved(g), g.currency), c: goalIcon(g).c, env: true }));
+    let split = '';
+    if (envs.length) {
+      const segs = [{ name: 'Free to spend', v: Math.max(0, bal - envs.reduce((a, e) => a + e.v, 0)), c: 'var(--in)' }, ...envs];
+      const sum = segs.reduce((a, e) => a + e.v, 0) || 1;
+      split = `<div class="label split-h">How it's split</div>
+        <div class="split">${segs.filter((s) => s.v > 0).map((s) => `<i style="width:${((s.v / sum) * 100).toFixed(2)}%;background:${s.c}"></i>`).join('')}</div>
+        <div class="split-leg">${segs.map((s) => `<div><i style="background:${s.c}"></i>${esc(s.name)}${s.env ? '<span class="muted"> · envelope</span>' : ''}<b class="num">${fmt(s.v, cur)}</b></div>`).join('')}</div>`;
     }
     h += `<section class="card">
       <div class="label">Total balance</div>
       <div class="hero num" id="hero" data-v="${bal}">${heroHtml(bal, cur)}</div>
       ${meta.length ? `<div class="hero-meta">${meta.join('')}</div>` : ''}
+      ${split}
       <div class="chart" id="bal-chart"></div>
       <div class="seg full sm ranges">${segButtons('range', [['1M', '1 month'], ['3M', '3 months'], ['1Y', '1 year'], ['All', 'All']], UI.range)}</div>
     </section>`;
@@ -245,14 +269,16 @@ function renderHome() {
   if (S.tx.length) {
     const [mFrom, mTo] = monthRange(now.getFullYear(), now.getMonth());
     const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const tm = totals(cur, mFrom, mTo), lm = totals(cur, pf, pt);
-    const tile = (type, label, val, prevVal) => `<button class="card tile-stat" data-act="tab" data-tab="stats">
-        <div class="ts-head"><span class="ts-ic ${type}">${type === 'in' ? I.inArrow : I.outArrow}</span>${label}</div>
-        <div class="ts-val num">${cur === 'UZS' ? `<span>${fmt(val, cur, { bare: true })}</span> <small>so'm</small>` : `<span>${fmt(val, cur)}</span>`}</div>
-        <div class="ts-sub">${MONTHS[prev.getMonth()]}: ${compactU(prevVal, cur)}</div>
+    const tm = totalsSom(mFrom, mTo), lm = totalsSom(pf, pt), net = tm.in - tm.out;
+    h += `<div class="sec-head"><h2>${MONTHS[now.getMonth()]} so far</h2></div>
+      <button class="card mon-card" data-act="tab" data-tab="stats">
+        <div class="mon3">
+          <div><span>Money in</span><b class="num in">${compactU(tm.in, cur)}</b></div>
+          <div><span>Money out</span><b class="num">${compactU(tm.out, cur)}</b></div>
+          <div><span>Left over</span><b class="num">${net > 0 ? '+' : ''}${compactU(net, cur)}</b></div>
+        </div>
+        <div class="mon-prev">${MONTHS[prev.getMonth()]}: in ${compactU(lm.in, cur)} · out ${compactU(lm.out, cur)}</div>
       </button>`;
-    h += `<div class="sec-head"><h2>${MONTHS[now.getMonth()]}</h2></div>
-      <div class="tiles">${tile('in', 'Money in', tm.in, lm.in)}${tile('out', 'Money out', tm.out, lm.out)}</div>`;
   }
 
   // Goals
@@ -263,7 +289,7 @@ function renderHome() {
       return `<button class="card goal-mini" data-act="goal" data-id="${g.id}">
         ${ring(st.pct, 46, 5, `<span style="color:${gi.c}">${glyph(gi.id)}</span>`, st.pct >= 100)}
         <div class="gm-name">${esc(g.name)}</div>
-        <div class="gm-sub num">${Math.floor(st.pct)}% · ${compact(st.saved, g.currency)} of ${compact(g.target, g.currency)}</div>
+        <div class="gm-sub num">${Math.floor(st.pct)}% · ${compact(st.covered, g.currency)} of ${compact(g.target, g.currency)}</div>
       </button>`;
     }).join('')}<button class="card goal-mini add" data-act="new-goal"><span class="icon-btn">${I.plus}</span><div class="gm-name">New goal</div></button></div>`;
   } else {
@@ -281,9 +307,9 @@ function afterHome(animate) {
   drawCharts(true);
   const el = $('#hero');
   if (el) {
-    const v = Number(el.dataset.v), cur = UI.cur;
-    const prev = UI.heroShown[cur];
-    UI.heroShown[cur] = v;
+    const v = Number(el.dataset.v), cur = 'UZS';
+    const prev = UI.heroShown.home;
+    UI.heroShown.home = v;
     if (prev == null ? animate : prev !== v) countUp(el, prev == null ? 0 : prev, v, (x) => heroHtml(x, cur), prev == null ? 900 : 600);
   }
 }
@@ -296,8 +322,9 @@ PAGES.home = { title: 'Overview', render: renderHome, after: afterHome, resize: 
 // ================= History =================
 function renderHistory() {
   let h = `<header class="lt"><h1>History</h1></header>
-    <div class="seg full seg-lg">${segButtons('hview', [['entries', 'Entries'], ['groups', 'Groups']], UI.hView)}</div>`;
+    <div class="seg full seg-lg">${segButtons('hview', [['entries', 'Entries'], ['cal', 'Calendar'], ['groups', 'Groups']], UI.hView)}</div>`;
   if (UI.hView === 'groups') return h + renderGroupsList();
+  if (UI.hView === 'cal') return h + `<div class="pager" id="calpg">${calBody(UI.calYm, UI.calDay)}</div>`;
   const chip = (act, v, label, on, dot) => `<button class="fchip ${on ? 'on' : ''}" data-act="${act}" data-v="${v}">${dot ? `<i style="--c:${dot}"></i>` : ''}${label}</button>`;
   return h + `
     <div class="search" style="margin-top:12px">${glyph('search')}<input id="q" type="search" placeholder="Search names, notes, amounts" value="${esc(UI.q)}" autocomplete="off" enterkeyhint="search"></div>
@@ -340,7 +367,49 @@ function histList() {
   if (list.length > shown.length) html += `<div class="actions"><button class="btn soft" data-act="more">Show more (${list.length - shown.length})</button></div>`;
   return html;
 }
+// ================= History → Calendar =================
+// A month as a calendar: what went out each day (a green dot when money came in). Tap a day for its
+// entries; swipe sideways — or use ‹ › — for another month. Amounts are in so'm (dollars at the rate).
+const calPick = (ym) => (ym === ymNow() ? todayIso() : null); // a month opens on today, others on nothing
+function calBody(ym, sel) {
+  const [y, m] = ym.split('-').map(Number);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, days = new Date(y, m, 0).getDate(), today = todayIso();
+  const [from, to] = ymRange(ym), t = totalsSom(from, to), byDay = {};
+  for (const x of txBetween(from, to)) {
+    if (x.date < from || x.date >= to || x.type === 'transfer') continue;
+    const d = byDay[x.date] || (byDay[x.date] = { out: 0, in: false });
+    if (x.type === 'out') d.out += inSom(x.amount, x.currency); else d.in = true;
+  }
+  let cells = WK.map((w) => `<div class="cal-h">${w.slice(0, 2)}</div>`).join('') + '<i class="cal-b"></i>'.repeat(lead);
+  for (let d = 1; d <= days; d++) {
+    const di = `${ym}-${pad2(d)}`, v = byDay[di];
+    cells += `<button class="cal-d${di === sel ? ' sel' : ''}${di === today ? ' today' : ''}${di > today ? ' fut' : ''}" data-act="cal-day" data-v="${di}"><b>${d}</b>${v && v.out ? `<small class="num">−${compact(v.out, 'UZS')}</small>` : ''}${v && v.in ? '<span class="cal-in"></span>' : ''}</button>`;
+  }
+  let h = `<div class="period-nav cal-nav">
+      <button class="icon-btn" data-act="cal-month" data-v="-1" aria-label="Previous month">${I.left}</button>
+      <div class="cal-t"><div class="pn-title">${ymLabel(ym)}</div><div class="card-sub num">In ${compactU(t.in, 'UZS')} · Out ${compactU(t.out, 'UZS')}</div></div>
+      <button class="icon-btn" data-act="cal-month" data-v="1" aria-label="Next month" ${ym < ymNow() ? '' : 'disabled'}>${I.right}</button>
+    </div>
+    <div class="cal">${cells}</div>
+    <p class="hint cal-key"><span class="cal-k-out">−120K</span> spent that day · <span class="cal-in"></span> money came in</p>`;
+  if (!sel || !sel.startsWith(ym)) return h + '<p class="hint cal-none">Tap a day to see what happened.</p>';
+  const list = S.tx.filter((x) => x.date === sel).sort(sortTx);
+  if (!list.length) return h + `<div class="day-head"><span>${dayLabel(sel)}</span></div><p class="hint cal-none">Nothing on this day.</p>`;
+  const curs = new Set(list.flatMap((x) => (x.type === 'transfer' ? [x.currency, x.toCurrency] : [x.currency])));
+  let net = '';
+  if (curs.size === 1) { const c = [...curs][0], v = list.reduce((a, x) => a + delta(x, c), 0); if (v) net = fmt(v, c, { sign: true }); }
+  return h + `<div class="day-head"><span>${dayLabel(sel)}</span><span class="num">${net}</span></div><div class="group">${list.map((x) => txRow(x, false)).join('')}</div>`;
+}
+function bindCalPager() {
+  const first = S.tx.reduce((m, t) => (t.date < m ? t.date : m), todayIso()).slice(0, 7);
+  bindPager($('#calpg'), {
+    has: (dir) => (dir > 0 ? UI.calYm < ymNow() : UI.calYm > first),
+    page: (dir) => { const ym = ymShift(UI.calYm, dir); return calBody(ym, calPick(ym)); },
+    go: (dir) => { UI.calYm = ymShift(UI.calYm, dir); UI.calDay = calPick(UI.calYm); render(); },
+  });
+}
 function afterHistory() {
+  if (UI.hView === 'cal') { bindCalPager(); return; }
   const q = $('#q');
   if (q) q.addEventListener('input', () => { UI.q = q.value; UI.hLimit = HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); });
   watchMore();
@@ -357,19 +426,24 @@ function watchMore() {
 PAGES.history = { title: 'History', render: renderHistory, after: afterHistory };
 
 // ================= Stats =================
+// One period (week, month or year) at a time. Swipe sideways — or use ‹ › — for the one before or
+// after; the period's own title moves with it.
 function renderStats() {
   let h = `<header class="lt"><h1>Stats</h1><div class="lt-right">${curSeg()}</div></header>`;
   if (!S.tx.length) {
     return h + `<section class="card empty"><div class="big">${ic('chart', '#AF52DE', 'xl')}</div><h3>Nothing to show yet</h3><p>Charts appear here after you add a few entries.</p><button class="btn" data-act="add">Add entry</button><button class="link" data-act="load-demo">or try it with demo data</button></section>`;
   }
-  const cur = UI.cur, info = periodInfo(UI.period, UI.offset);
+  return h + `<div class="seg full">${segButtons('period', [['week', 'Week'], ['month', 'Month'], ['year', 'Year']], UI.period)}</div>
+    <div class="pager" id="pbody">${statsBody(UI.offset)}</div>`;
+}
+function statsBody(offset) {
+  const cur = UI.cur, info = periodInfo(UI.period, offset);
   const t = totals(cur, info.from, info.to);
   const net = t.in - t.out;
-  h += `<div class="seg full">${segButtons('period', [['week', 'Week'], ['month', 'Month'], ['year', 'Year']], UI.period)}</div>
-    <div class="period-nav">
+  let h = `<div class="period-nav">
       <button class="icon-btn" data-act="shift" data-v="-1" aria-label="Previous">${I.left}</button>
       <div class="pn-title">${info.title}</div>
-      <button class="icon-btn" data-act="shift" data-v="1" aria-label="Next" ${UI.offset >= 0 ? 'disabled' : ''}>${I.right}</button>
+      <button class="icon-btn" data-act="shift" data-v="1" aria-label="Next" ${offset >= 0 ? 'disabled' : ''}>${I.right}</button>
     </div>
     ${info.ym ? `<button class="card report-cta" data-act="report" data-v="${info.ym}">${ic('report', '#5856D6')}<div class="row-main"><b>${MONTHS[parseD(info.from).getMonth()]} report</b><span>Summary, comparison, share as a picture</span></div>${I.chev}</button>` : ''}
     <section class="card">
@@ -380,30 +454,67 @@ function renderStats() {
         ? (net >= 0 ? `You kept <b>${Math.round((net / t.in) * 100)}%</b> of the money that came in.` : `You spent <b>${fmt(-net, cur)}</b> more than came in.`)
         : (t.out > 0 ? 'No money came in during this period.' : 'No entries in this period.')}</div>
     </section>
+    ${spendRing(cur, info)}
     <section class="card">
       <div class="card-title">Money in and out</div>
       <div class="card-sub">${info.chartTitle}</div>
       <div class="legend"><span><i class="key in"></i>Money in</span><span><i class="key out"></i>Money out</span></div>
       <div class="chart" id="col-chart"></div>
     </section>`;
-  const brkCard = (arr, type, title, emptyMsg) => {
-    const total = arr.reduce((a, r) => a + r.v, 0);
-    let body;
-    if (!arr.length) body = `<p class="card-sub" style="margin:10px 0 2px">${emptyMsg}</p>`;
-    else {
-      const max = arr[0].v;
-      body = arr.map((r) => `<div class="brk">${r.tile || brkTile(r)}<div class="brk-main">
-          <div class="brk-top"><span class="n">${esc(r.name)}</span><span class="a num">${fmt(r.v, cur)}</span></div>
-          <div class="brk-bar"><i class="${type}" style="width:${Math.max(1.5, (r.v / max) * 80).toFixed(1)}%;${r.bar ? `background:${r.bar}` : ''}"></i><span>${Math.round((r.v / total) * 100)}%</span></div>
-        </div></div>`).join('');
-    }
-    return `<section class="card"><div class="card-title">${title}</div>${body}</section>`;
-  };
-  h += brkCard(breakdown('out', cur, info.from, info.to), 'out', 'Where the money went', 'No spending in this period.');
-  h += brkCard(breakdown('in', cur, info.from, info.to), 'in', 'Where the money came from', 'No money came in during this period.');
-  return h;
+  const arr = breakdown('in', cur, info.from, info.to);
+  let body;
+  if (!arr.length) body = '<p class="card-sub" style="margin:10px 0 2px">No money came in during this period.</p>';
+  else {
+    const max = arr[0].v, total = arr.reduce((a, r) => a + r.v, 0);
+    body = arr.map((r) => `<div class="brk">${brkTile(r)}<div class="brk-main">
+        <div class="brk-top"><span class="n">${esc(r.name)}</span><span class="a num">${fmt(r.v, cur)}</span></div>
+        <div class="brk-bar"><i class="in" style="width:${Math.max(1.5, (r.v / max) * 80).toFixed(1)}%"></i><span>${Math.round((r.v / total) * 100)}%</span></div>
+      </div></div>`).join('');
+  }
+  return h + `<section class="card"><div class="card-title">Where the money came from</div>${body}</section>`;
 }
-PAGES.stats = { title: 'Stats', render: renderStats, after: () => drawCharts(true), resize: () => drawCharts(false) };
+// Where the money went: a ring split by category, with the amounts under it. Tap a line for its entries.
+function spendRing(cur, info) {
+  const arr = breakdown('out', cur, info.from, info.to);
+  if (!arr.length) return '<section class="card"><div class="card-title">Where the money went</div><p class="card-sub" style="margin:10px 0 2px">No spending in this period.</p></section>';
+  const total = arr.reduce((a, r) => a + r.v, 0), size = 196, sw = 30, r0 = (size - sw) / 2, c = 2 * Math.PI * r0, cx = size / 2;
+  let off = 0;
+  const arcs = arr.map((r) => {
+    const len = (c * r.v) / total, gap = arr.length > 1 ? Math.min(2.5, len / 3) : 0;
+    const el = `<circle cx="${cx}" cy="${cx}" r="${r0}" fill="none" stroke="${r.c}" stroke-width="${sw}" stroke-dasharray="${Math.max(0.1, len - gap).toFixed(2)} ${c.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${cx} ${cx})"/>`;
+    off += len;
+    return el;
+  }).join('');
+  const row = (r) => {
+    const inner = `<i style="background:${r.c}"></i><span class="n">${esc(r.name)}</span><b class="num">${fmt(r.v, cur, { bare: cur === 'UZS' })}</b><span class="p num">${Math.round((r.v / total) * 100)}%</span>`;
+    return r.id ? `<button class="leg-row" data-act="cat-entries" data-v="${r.id}">${inner}${I.chev}</button>` : `<div class="leg-row">${inner}<span class="chev-sp"></span></div>`;
+  };
+  return `<section class="card"><div class="card-title">Where the money went</div>
+    <div class="donut"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="Spending by category">${arcs}</svg><div class="donut-c"><div><b class="num">${compact(total, cur)}</b><span>spent</span></div></div></div>
+    <div class="leg">${arr.map(row).join('')}</div></section>`;
+}
+// The entries of one category in the period on show.
+function openCatEntries(id) {
+  const cur = UI.cur, info = periodInfo(UI.period, UI.offset), c = cat('out', id);
+  const list = S.tx.filter((t) => t.type === 'out' && t.category === id && t.currency === cur && t.date >= info.from && t.date < info.to).sort(sortTx);
+  const sum = list.reduce((a, t) => a + t.amount, 0);
+  openSheet(sheetHead(esc(c.name), '', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body">
+    <div class="gd-hero">${ic(c.g, c.c, 'lg')}<div class="gd-name num">${fmt(sum, cur)}</div><div class="gd-amt">${info.title} · ${list.length === 1 ? '1 entry' : list.length + ' entries'}</div></div>
+    <div class="group" style="margin-top:16px">${list.map((t) => txRow(t, true)).join('')}</div></div>`, null);
+}
+function bindStatsPager() {
+  const el = $('#pbody');
+  if (!el) return;
+  const first = S.tx.reduce((m, t) => (t.date < m ? t.date : m), todayIso());
+  bindPager(el, {
+    has: (dir) => (dir > 0 ? UI.offset < 0 : first < periodInfo(UI.period, UI.offset).from),
+    page: (dir) => statsBody(UI.offset + dir),
+    mount: (p, dir) => { const c = $('.chart', p); if (c) drawColumns(c, false, UI.offset + dir); },
+    go: (dir) => { UI.offset += dir; render(); },
+    skip: (t) => !!t.closest('.chart'), // sliding along a chart shows its numbers instead
+  });
+}
+PAGES.stats = { title: 'Stats', render: renderStats, after: () => { drawCharts(!quietDraw); bindStatsPager(); }, resize: () => drawCharts(false) };
 
 // ================= Goals =================
 function renderGoals() {
@@ -421,8 +532,7 @@ function renderGoals() {
         <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}</div></div>
         <span class="chip ${st.status[0]}">${st.status[1]}</span>
       </div>
-      <div class="meter ${st.pct >= 100 ? 'done' : ''}"><i style="width:${st.pct.toFixed(1)}%"></i></div>
-      <div class="gc-nums">${g.paid ? `<span><b>Paid</b> <span class="muted">· goal ${fmt(g.target, g.currency)}</span></span><span class="muted">✓</span>` : `<span><b class="num">${fmt(st.saved, g.currency)}</b> <span class="muted">of ${fmt(g.target, g.currency)}</span></span><span class="muted num">${Math.floor(st.pct)}%</span>`}</div>
+      ${goalBar(g, st)}
       <div class="gc-pace">${glyph('calendar')}<span>${st.pace}</span></div>
     </button>`;
   }
@@ -456,12 +566,12 @@ function bindScrub(el, locate) {
 }
 
 function drawBalance(el, anim) {
-  const cur = UI.cur;
-  if (!usesCur(cur)) {
-    el.innerHTML = `<p class="card-sub" style="text-align:center;padding:26px 0">No money in ${cur === 'UZS' ? "so'm" : 'dollars'} yet.</p>`;
+  const cur = 'UZS', all = somRate() > 0 && usesCur('USD'); // Home's total: so'm, plus dollars at the rate
+  if (!usesCur(cur) && !all) {
+    el.innerHTML = `<p class="card-sub" style="text-align:center;padding:26px 0">No money in so'm yet.</p>`;
     return;
   }
-  const pts = balanceSeries(cur, UI.range);
+  const pts = balanceSeries(all ? 'ALL' : cur, UI.range);
   const W = Math.max(240, el.clientWidth), H = 160, padT = 12, padB = 22, padL = 4, padR = 48;
   const vals = pts.map((p) => p.v);
   const { lo, hi, ticks } = niceScale(Math.min(0, ...vals), Math.max(0, ...vals), 3);
@@ -507,8 +617,8 @@ function colPath(x, w, top, base, fill, i, anim) {
   return `<path class="bar${anim}" style="--i:${i}" d="M${x.toFixed(1)},${base.toFixed(1)}V${(top + r).toFixed(1)}A${r},${r} 0 0 1 ${(x + r).toFixed(1)},${top.toFixed(1)}H${(x + w - r).toFixed(1)}A${r},${r} 0 0 1 ${(x + w).toFixed(1)},${(top + r).toFixed(1)}V${base.toFixed(1)}Z" fill="${fill}"/>`;
 }
 
-function drawColumns(el, anim) {
-  const cur = UI.cur, info = periodInfo(UI.period, UI.offset);
+function drawColumns(el, anim, offset = UI.offset) {
+  const cur = UI.cur, info = periodInfo(UI.period, offset);
   const groups = info.groups.map((g) => ({ ...g, ...totals(cur, g.from, g.to) }));
   const W = Math.max(240, el.clientWidth), H = 190, padT = 12, padB = 24, padL = 2, padR = 44;
   const maxV = Math.max(0, ...groups.flatMap((g) => [g.in, g.out]));
@@ -560,7 +670,7 @@ function openTx(id, preset = {}) {
     draft = {
       id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: to, toAmount: 0, toCurrency: cur,
       person: preset.person || '', category: preset.category || null, date: todayIso(), note: preset.note || '',
-      goalSpend: preset.goalSpend || null,
+      goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast,
       groupId: preset.groupId || null, studentId: preset.studentId || null, forMonth: preset.forMonth || null,
     };
   }
@@ -627,12 +737,14 @@ function txHtml() {
   }
   return sheetHead(title, '<button data-act="tx-cancel">Cancel</button>', `<button data-act="save-tx" ${ok ? '' : 'disabled'}>Save</button>`) + `
   <div class="sheet-body">
-    ${d.goalSpend && goalById(d.goalSpend) && !editing ? `<div class="blk-warn good" style="margin:0 0 12px">${glyph('receipt')}<div><b>Paying for “${esc(goalById(d.goalSpend).name)}”</b><span>The expense is recorded and the goal's money is used for it.</span></div></div>` : ''}
+    ${d.goalSpend && goalById(d.goalSpend) && !editing ? `<div class="blk-warn good" style="margin:0 0 12px">${glyph('receipt')}<div style="flex:1"><b>Paying for “${esc(goalById(d.goalSpend).name)}”</b><span>The expense is recorded and taken from the envelope (${fmt(goalSaved(goalById(d.goalSpend)), goalById(d.goalSpend).currency)} in it). Pay all of it, or just a part.</span>
+      <div class="gl-last"><span>This payment finishes the goal</span><label class="switch"><input type="checkbox" id="tx-goal-last" ${d.goalLast ? 'checked' : ''} aria-label="This payment finishes the goal"><i></i></label></div></div></div>` : ''}
     <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']], d.type)}</div>
     <div class="amount-box">
       <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount">
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
     </div>
+    ${!editing && d.type === 'out' && !d.goalSpend ? againRow(d) : ''}
     ${body}
     <div class="form-label">Details</div>
     <div class="group plain">
@@ -646,6 +758,29 @@ function txHtml() {
       ${editing ? `<button class="btn danger" data-act="del-tx">Delete ${isTr ? 'transfer' : 'entry'}</button>` : ''}
     </div>
   </div>`;
+}
+// Things you pay for again and again (same name and category, at least twice in the last 4 months),
+// most frequent first: one tap fills in the amount, category, name and account.
+function againList() {
+  const since = iso(addDays(new Date(), -120)), map = new Map();
+  for (const t of S.tx) {
+    if (t.type !== 'out' || t.date < since || t.demo) continue;
+    const name = (t.person || '').trim() || (t.note || '').trim();
+    if (!name) continue;
+    const k = name.toLowerCase() + '|' + t.category, e = map.get(k) || { n: 0, last: null };
+    e.n++;
+    if (!e.last || cmpDate(t, e.last) > 0 || (t.date === e.last.date && (t.createdAt || 0) > (e.last.createdAt || 0))) e.last = t;
+    map.set(k, e);
+  }
+  return [...map.values()].filter((e) => e.n >= 2).sort((a, b) => b.n - a.n || cmpDate(b.last, a.last)).slice(0, 6).map((e) => e.last);
+}
+function againRow(d) {
+  const list = againList();
+  if (!list.length) return '';
+  return `<div class="form-label">Again?</div><div class="quick again">${list.map((t) => {
+    const on = d.amount === t.amount && d.category === t.category && (d.person || '') === (t.person || '');
+    return `<button data-act="again" data-id="${t.id}" class="${on ? 'on' : ''}"><b>${esc((t.person || t.note).trim())} · ${fmt(t.amount, t.currency, { bare: t.currency === 'UZS' })}</b><small>${esc(cat('out', t.category).name)} · ${esc(acc(t.account).name)}</small></button>`;
+  }).join('')}</div>`;
 }
 function mountTx(sh) {
   const amt = $('#amt', sh);
@@ -674,6 +809,8 @@ function mountTx(sh) {
   $('#note', sh).addEventListener('input', (e) => { draft.note = e.target.value; });
   const rep = $('#tx-repeat', sh);
   if (rep) rep.addEventListener('change', () => { draft.repeatOn = rep.checked; refreshSheet(txHtml(), mountTx); });
+  const gl = $('#tx-goal-last', sh);
+  if (gl) gl.addEventListener('change', () => { draft.goalLast = gl.checked; });
   blurOnEnter(sh);
   syncTx();
   if (!draft.id && !draft.amount) setTimeout(() => amt.focus({ preventScroll: true }), 420);
@@ -711,8 +848,14 @@ function saveTx() {
   const spendGoal = i < 0 && rec.type === 'out' && d.goalSpend ? goalById(d.goalSpend) : null;
   if (spendGoal && spendGoal.currency === rec.currency) {
     const t = Math.min(rec.amount, goalSaved(spendGoal));
-    if (t > 0) spendGoal.contribs.push({ id: uid(), amount: -t, date: rec.date, note: `Spent — ${rec.person || cat('out', rec.category).name}`, txId: rec.id });
-    if (goalSaved(spendGoal) <= 0.004) spendGoal.paid = rec.date;
+    if (t > 0) spendGoal.contribs.push({ id: uid(), amount: -t, date: rec.date, note: rec.person ? `Paid — ${rec.person}` : 'Paid', txId: rec.id });
+    // A part-payment (like a first instalment) leaves the goal open; the last one closes it and
+    // whatever is still in the envelope goes back to free money.
+    if (d.goalLast) {
+      const rest = goalSaved(spendGoal);
+      if (rest > 0.004) spendGoal.contribs.push({ id: uid(), amount: -rest, date: rec.date, note: 'Left over — back to free money' });
+      spendGoal.paid = rec.date;
+    }
   }
   const outCur = rec.type === 'out' ? rec.currency : rec.type === 'transfer' && rec.toCurrency !== rec.currency ? rec.currency : null;
   if (rec.type !== 'transfer') UI.cur = rec.currency;
@@ -722,7 +865,7 @@ function saveTx() {
   txDone();
   render();
   if (outCur && goalsShort(outCur)) toast(`Your goals now hold ${fmt(-freeMoney(outCur), outCur)} more than you have`, { label: 'Fix', run: () => fixGoals(outCur) });
-  else if (spendGoal) toast(spendGoal.paid ? `${spendGoal.name} — paid ✓` : `Used ${fmt(rec.amount, rec.currency)} from ${spendGoal.name}`);
+  else if (spendGoal) toast(spendGoal.paid ? `${spendGoal.name} — paid ✓` : `Paid ${fmt(rec.amount, rec.currency)} · ${fmt(goalSaved(spendGoal), spendGoal.currency)} left in ${spendGoal.name}`);
   else if (i >= 0) toast('Changes saved');
   else if (rec.type === 'transfer' && rec.toCurrency !== rec.currency) toast(`Exchanged ${fmt(rec.amount, rec.currency)} → ${fmt(rec.toAmount, rec.toCurrency)}`);
   else if (rec.type === 'transfer') toast(`Moved ${fmt(rec.amount, rec.currency)} · ${acc(rec.account).name} → ${acc(rec.toAccount).name}`);
@@ -1052,32 +1195,31 @@ function openGoal(id) { gid = id; openSheet(goalDetailHtml(), null); }
 function goalDetailHtml() {
   const g = S.goals.find((x) => x.id === gid);
   if (!g) return sheetHead('', '', '<button data-act="close-sheet">Done</button>') + '<div class="sheet-body"></div>';
-  const st = goalStats(g), cur = g.currency, done = st.pct >= 100, gi = goalIcon(g);
+  const st = goalStats(g), cur = g.currency, gi = goalIcon(g);
   const free = freeMoney(cur);
   const contribs = [...g.contribs].sort((a, b) => b.date.localeCompare(a.date) || 0);
   return sheetHead('', `<button data-act="edit-goal" data-id="${g.id}">Edit</button>`, '<button data-act="close-sheet">Done</button>') + `
   <div class="sheet-body">
     <div class="gd-hero">
-      ${ring(st.pct, 136, 12, `<div><span style="color:${gi.c}">${glyph(gi.id, 'big')}</span><div style="font-size:16px;font-weight:700;margin-top:4px">${g.paid ? 'Paid' : Math.floor(st.pct) + '%'}</div></div>`, done || !!g.paid)}
+      ${ic(gi.id, gi.c, 'xl')}
       <div class="gd-name">${esc(g.name)}</div>
-      <div class="gd-amt"><b class="num">${fmt(st.saved, cur)}</b> of ${fmt(g.target, cur)}</div>
+      <div class="gd-amt">Goal <b class="num">${fmt(g.target, cur)}</b> · by ${medDate(g.deadline)}</div>
       <div style="margin-top:10px"><span class="chip ${st.status[0]}">${st.status[1]}</span></div>
     </div>
-    <div class="group plain" style="margin-top:20px">
-      <div class="row"><div class="row-main">Still needed</div><div class="row-amt num">${fmt(st.left, cur)}</div></div>
-      <div class="row"><div class="row-main">Free money you can add</div><div class="row-amt num ${free > 0 ? 'in' : ''}">${fmt(Math.max(0, free), cur)}</div></div>
-      <div class="row"><div class="row-main">Deadline</div><div class="row-amt" style="font-weight:500">${medDate(g.deadline)}<small>${daysLeftText(st.daysLeft)}</small></div></div>
-      <div class="row gc-pace" style="border:0;margin:0;padding-top:10px">${glyph('calendar')}<div class="row-main" style="white-space:normal">${st.pace}</div></div>
-    </div>
+    <section class="card" style="margin-top:18px">
+      ${goalBar(g, st, true)}
+      <div class="gc-pace">${glyph('calendar')}<span>${st.pace}${!g.paid && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
+    </section>
+    ${!g.paid && st.left > 0 ? `<p class="hint">Free money you can add: <b class="num ${free > 0 ? 'in' : ''}">${fmt(Math.max(0, free), cur)}</b></p>` : ''}
     <div class="btn-row" style="margin-top:14px">
       <button class="btn" data-act="goal-move" data-v="1">＋ Add money</button>
       <button class="btn grey" data-act="goal-move" data-v="-1" ${st.saved > 0 ? '' : 'disabled'}>Take out</button>
     </div>
-    ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} I paid for it — use ${fmt(st.saved, cur)}</button>` : ''}
+    ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} I paid for it (all or part)</button>` : ''}
     <div class="form-label">History</div>
-    ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmt(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
+    ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.txId ? (c.note || 'Paid').replace(/^Spent — /, 'Paid — ') : c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}${c.txId ? ' · also in History' : ''}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmt(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
       <p class="hint">Tap a line to undo it.</p>` : '<p class="hint">Nothing added yet. Use “Add money” whenever you put some aside.</p>'}
-    <p class="hint" style="margin-top:16px">Goals only hold money you really have: your total balance is split into money in goals and free money. Paying for the thing with “I paid for it” records the expense and uses the goal's money.</p>
+    <p class="hint" style="margin-top:16px">Goals only hold money you really have: your total balance is split into money in goals and free money. “I paid for it” records the expense and takes it from the envelope — all at once, or in parts like a fee paid in instalments.</p>
   </div>`;
 }
 
@@ -1255,7 +1397,8 @@ function reportData(ym, cur) {
   const txs = S.tx.filter((x) => x.type !== 'transfer' && x.currency === cur && x.date >= from && x.date < to);
   const outs = txs.filter((x) => x.type === 'out').sort((a, b) => b.amount - a.amount);
   const change = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
-  const goalsMonth = S.goals.map((g) => ({ g, added: g.contribs.filter((c) => c.date >= from && c.date < to).reduce((a, c) => a + c.amount, 0) })).filter((x) => x.added);
+  // What was put aside that month (payments made from a goal are spending, not saving)
+  const goalsMonth = S.goals.map((g) => ({ g, added: g.contribs.filter((c) => c.date >= from && c.date < to && !c.txId).reduce((a, c) => a + c.amount, 0) })).filter((x) => x.added);
   return {
     ym, cur, prevYm, from, to, t, p,
     net: t.in - t.out,
@@ -1652,13 +1795,23 @@ Object.assign(ACTIONS, {
   settings: () => openSettings(),
   range: (a, v) => { UI.range = v; render(); },
   hview: (a, v) => { const d = segDir(a); UI.hView = v; renderSub(a, d); },
+  'cal-day': (a, v) => { UI.calDay = v; render(); },
+  'cal-month': (a, v) => { const ym = ymShift(UI.calYm, Number(v)); if (ym > ymNow()) return; UI.calYm = ym; UI.calDay = calPick(ym); render(); pagerIn(Number(v)); },
+  again: (a, v, id) => {
+    const t = S.tx.find((x) => x.id === id);
+    if (!t) return;
+    Object.assign(draft, { amount: t.amount, currency: t.currency, category: t.category, person: t.person || '', note: t.person ? draft.note : t.note || '', account: S.accounts.some((x) => x.id === t.account) ? t.account : draft.account });
+    buzz();
+    refreshSheet(txHtml(), mountTx);
+  },
   htype: (a, v) => { const d = segDir(a); UI.hType = v; UI.hLimit = HIST_PAGE; renderSub(a, d); },
   hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   more: () => { UI.hLimit += HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); },
   period: (a, v) => { const d = segDir(a); UI.period = v; UI.offset = 0; renderSub(a, d); },
-  shift: (a, v) => { const o = Math.min(0, UI.offset + Number(v)); if (o === UI.offset) return; UI.offset = o; renderSub(a, Number(v)); },
+  shift: (a, v) => { const o = Math.min(0, UI.offset + Number(v)); if (o === UI.offset) return; UI.offset = o; render(); pagerIn(Number(v)); },
+  'cat-entries': (a, v) => openCatEntries(v),
 
   // entries
   'edit-tx': (a, v, id) => {
@@ -1776,7 +1929,8 @@ Object.assign(ACTIONS, {
   'goal-spend': () => {
     const g = goalById(gid);
     if (!g) return;
-    openTx(null, { type: 'out', amount: goalSaved(g), currency: g.currency, note: g.name, goalSpend: g.id, back: () => openGoal(g.id) });
+    // Paying everything that's in the envelope finishes the goal when it covers the rest of it.
+    openTx(null, { type: 'out', amount: goalSaved(g), currency: g.currency, note: g.name, goalSpend: g.id, goalLast: goalStats(g).left <= 0.004, back: () => openGoal(g.id) });
   },
   'goals-fix': (a, v) => fixGoals(v),
   'g-all-free': () => {

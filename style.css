@@ -752,15 +752,16 @@ textarea { font: inherit; color: inherit; }
 .dadd .gl { width: 15px; height: 15px; stroke-width: 2.6; }
 .dfoot { text-align: center; margin-top: 14px; }
 .dfoot .link { font-size: 14px; }
-.dday.from-r { animation: slide-r .35s cubic-bezier(.2, .8, .2, 1); }
-.dday.from-l { animation: slide-l .35s cubic-bezier(.2, .8, .2, 1); }
-/* Swiping the day: it follows the finger and the days next to it (.dpage) come in from the sides */
-.dday { position: relative; touch-action: pan-y; }
-.dday.paging { will-change: transform; }
-.dday.settling { pointer-events: none; }
-.dpage { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
-.dday > :first-child, .dpage > :first-child { margin-top: 0; } /* so the days next to it line up exactly */
-.view { overflow-x: clip; } /* the days waiting at the sides never widen the page */
+/* Pages that follow the finger sideways (a day here, a month in Stats and the History calendar):
+   the pages next to it (.pg-side) come in from the sides */
+.pager { position: relative; touch-action: pan-y; }
+.pager.from-r { animation: slide-r .35s cubic-bezier(.2, .8, .2, 1); }
+.pager.from-l { animation: slide-l .35s cubic-bezier(.2, .8, .2, 1); }
+.pager.paging { will-change: transform; }
+.pager.settling { pointer-events: none; }
+.pg-side { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
+.pager > :first-child, .pg-side > :first-child { margin-top: 0; } /* so the pages next to it line up exactly */
+.view { overflow-x: clip; } /* the pages waiting at the sides never widen the page */
 /* Week: every day as a short list, with a line for each free gap */
 .wday { padding: 2px 0 8px; }
 .wday + .wday { margin-top: 10px; }
@@ -813,7 +814,8 @@ label.tval b { border-bottom: 1.5px dashed var(--text-3); }
 .alloc { margin-bottom: 0; }
 .alloc + .alloc { margin-top: 12px; }
 .al-total { font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; }
-.al-bar { height: 16px; border-radius: 8px; margin: 12px 0 10px; }
+.al-bar { display: flex; gap: 2px; overflow: hidden; height: 16px; border-radius: 8px; margin: 12px 0 10px; }
+.al-bar i { display: block; height: 100%; background: var(--c); flex: none; animation: fill-x .8s cubic-bezier(.2, .8, .2, 1) backwards; }
 .al-bar i.free { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--in) 40%, transparent) 0 5px, color-mix(in srgb, var(--in) 18%, transparent) 5px 10px); box-shadow: none; }
 .al-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text-2); }
 .al-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -827,6 +829,72 @@ label.tval b { border-bottom: 1.5px dashed var(--text-3); }
 .mv-chips button { background: var(--accent-soft); color: var(--accent); font-weight: 600; box-shadow: none; }
 .banner.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .btn.soft .gl { width: 20px; height: 20px; }
+/* A goal as one bar: already paid (darker) · in the envelope · still needed (empty) */
+.g3 { display: flex; gap: 2px; height: 10px; border-radius: 5px; overflow: hidden; background: var(--fill); margin: 14px 0 10px; }
+.g3.big { height: 14px; border-radius: 7px; margin-top: 2px; }
+.g3 i { display: block; height: 100%; flex: none; animation: fill-x .9s cubic-bezier(.2, .8, .2, 1) backwards; }
+.g3-leg { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+.g3-leg div { display: flex; align-items: center; gap: 8px; }
+.g3-leg i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.g3-leg b { margin-left: auto; color: var(--text); font-weight: 600; white-space: nowrap; }
+.gl-last { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--text); }
+.gl-last > span { flex: 1; }
+
+/* ================= Home: one total ================= */
+.split-h { margin-top: 14px; }
+.split { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; margin: 8px 0 10px; }
+.split i { display: block; height: 100%; min-width: 3px; flex: none; animation: fill-x .8s cubic-bezier(.2, .8, .2, 1) backwards; }
+.split-leg { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+.split-leg div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.split-leg i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.split-leg b { margin-left: auto; color: var(--text); font-weight: 600; white-space: nowrap; }
+.split-leg .muted { color: var(--text-3); white-space: nowrap; }
+.mon-card { display: block; width: 100%; text-align: left; }
+.mon3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mon3 span { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.mon3 b { display: block; font-size: 18px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; white-space: nowrap; }
+.mon3 b.in { color: var(--in-text); }
+.mon-prev { font-size: 12.5px; color: var(--text-2); margin-top: 10px; padding-top: 10px; border-top: .5px solid var(--sep); }
+
+/* ================= Stats: where the money went, as a ring ================= */
+.donut { position: relative; display: flex; justify-content: center; margin: 14px 0 6px; }
+.donut svg { animation: donut-in .6s cubic-bezier(.2, .8, .2, 1) backwards; }
+@keyframes donut-in { from { opacity: 0; transform: rotate(-60deg) scale(.92); } }
+.pg-side .donut svg, .view.ghost .donut svg { animation: none; }
+.donut-c { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none; }
+.donut-c b { display: block; font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.donut-c span { font-size: 12px; color: var(--text-2); }
+.leg-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 0; font-size: 15px; text-align: left; }
+.leg-row + .leg-row { border-top: .5px solid var(--sep); }
+.leg-row > i { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+.leg-row .n { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.leg-row b { font-weight: 600; white-space: nowrap; }
+.leg-row .p { width: 38px; text-align: right; font-size: 13px; color: var(--text-2); }
+.leg-row .chev, .chev-sp { width: 14px; flex: none; }
+button.leg-row:active { opacity: .6; }
+
+/* ================= History: calendar ================= */
+.cal-nav { margin: 14px 0 8px; }
+.cal-t { text-align: center; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-h { font-size: 11px; font-weight: 600; color: var(--text-2); text-align: center; padding: 0 0 4px; }
+.cal-d { min-height: 54px; border-radius: 10px; background: var(--card); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 1px 4px; transition: background .2s, box-shadow .2s, transform .12s; }
+.cal-d b { font-size: 14px; font-weight: 600; }
+.cal-d small { font-size: 10px; font-weight: 600; color: var(--out); letter-spacing: -.02em; white-space: nowrap; }
+.cal-in { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--in); }
+.cal-d.today b { color: var(--accent); }
+.cal-d.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-d.fut { opacity: .4; }
+.cal-d:active { transform: scale(.94); }
+.cal-key { margin: 8px 4px 0; }
+.cal-k-out { color: var(--out); font-weight: 600; }
+.cal-none { text-align: center; margin: 22px 0 0; }
+
+/* ================= Entry form: "Again?" ================= */
+.again button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 13px; border-radius: 14px; text-align: left; }
+.again button b { font-weight: 600; }
+.again button small { font-size: 12px; color: var(--text-2); font-weight: 500; }
+.again button.on small { color: rgba(255, 255, 255, .82); }
 
 /* Phone turned sideways: a slimmer tab bar leaves more room for the table */
 @media (max-height: 500px) {
