@@ -55,9 +55,9 @@ const goalSort = (a, b) => {
   return rank(a) - rank(b) || a.deadline.localeCompare(b.deadline);
 };
 
-// cur 'ALL' = everything in so'm (dollars at the rate from Settings).
+// cur 'ALL' = both currencies together, in the chosen currency (at the dollar rate).
 function balanceSeries(cur, range) {
-  const r = somRate(), dv = cur === 'ALL' ? (t) => delta(t, 'UZS') + delta(t, 'USD') * r : (t) => delta(t, cur);
+  const dv = cur === 'ALL' ? (t) => deltaIn(t) : (t) => delta(t, cur);
   const txs = (memo ? byDate() : S.tx.slice().sort(cmpDate)).filter((t) => dv(t) !== 0);
   const lastDate = txs.length ? txs[txs.length - 1].date : todayIso();
   const end = parseD(lastDate > todayIso() ? lastDate : todayIso());
@@ -69,7 +69,7 @@ function balanceSeries(cur, range) {
   if (daysBetween(iso(start), iso(end)) < 7) start = addDays(end, -7);
   const span = daysBetween(iso(start), iso(end));
   const step = span > 400 ? 7 : 1;
-  let bal = cur === 'ALL' ? openingTotal('UZS') + openingTotal('USD') * r : openingTotal(cur), i = 0;
+  let bal = cur === 'ALL' ? conv(openingTotal('UZS'), 'UZS') + conv(openingTotal('USD'), 'USD') : openingTotal(cur), i = 0;
   const s0 = iso(start);
   while (i < txs.length && txs[i].date < s0) bal += dv(txs[i++]);
   const pts = [];
@@ -128,7 +128,7 @@ function periodInfo(period, offset) {
 function breakdown(type, cur, from, to) {
   const map = new Map();
   for (const t of txBetween(from, to)) {
-    if (t.type !== type || t.currency !== cur || t.date < from || t.date >= to) continue;
+    if (t.type !== type || t.date < from || t.date >= to) continue;
     const c = cat(type, t.category);
     let key, e;
     if (type === 'out') { key = c.id; e = { id: c.id, name: c.name, g: c.g, c: c.c }; }
@@ -139,7 +139,7 @@ function breakdown(type, cur, from, to) {
       else { key = 'c:' + c.id; e = { name: c.name, g: c.g, c: c.c }; }
     }
     const cur0 = map.get(key) || { ...e, v: 0 };
-    cur0.v += t.amount;
+    cur0.v += conv(t.amount, t.currency, cur);
     map.set(key, cur0);
   }
   let arr = [...map.values()].sort((a, b) => b.v - a.v);
@@ -163,7 +163,9 @@ function txRow(t, showDate, inAccount) {
     parts.push(exch ? rateText(t.amount, t.currency, t.toAmount, t.toCurrency) || 'Exchange' : 'Transfer');
     amt = exch
       ? `<div class="row-amt num">${fmt(t.toAmount, t.toCurrency)}<small>for ${fmt(t.amount, t.currency)}</small></div>`
-      : `<div class="row-amt num neutral">${fmt(t.amount, t.currency)}</div>`;
+      : t.currency !== UI.cur && somRate()
+        ? `<div class="row-amt num neutral">${fmtIn(t.amount, t.currency)}<small>${fmt(t.amount, t.currency)}</small></div>`
+        : `<div class="row-amt num neutral">${fmt(t.amount, t.currency)}</div>`;
   } else {
     const c = cat(t.type, t.category);
     const g = t.type === 'in' ? grp(t.groupId) : null;
@@ -172,7 +174,10 @@ function txRow(t, showDate, inAccount) {
     if (g) parts.push(g.name + (t.forMonth && t.forMonth !== t.date.slice(0, 7) ? ` · for ${ymLabel(t.forMonth, true)}` : ''));
     else if (t.person) parts.push(c.name);
     if (S.accounts.length > 1 && !inAccount) parts.push(acc(t.account).name);
-    amt = `<div class="row-amt num ${t.type}">${fmt(t.type === 'in' ? t.amount : -t.amount, t.currency, { sign: true })}</div>`;
+    const v = t.type === 'in' ? t.amount : -t.amount;
+    amt = t.currency !== UI.cur && somRate()
+      ? `<div class="row-amt num ${t.type}">${fmtIn(v, t.currency, { sign: true })}<small>${fmt(v, t.currency, { sign: true })}</small></div>`
+      : `<div class="row-amt num ${t.type}">${fmt(v, t.currency, { sign: true })}</div>`;
   }
   if (t.note) parts.push(t.note);
   if (t.repeat || t.fromRepeat) parts.push('Monthly');
@@ -200,9 +205,9 @@ const heroHtml = (v, cur) => (cur === 'UZS' ? `${fmt(v, cur, { bare: true })}<sm
 
 function renderHome() {
   const now = new Date();
-  const cur = 'UZS', other = 'USD'; // Home shows everything in so'm (dollars at the rate from Settings)
+  const cur = UI.cur, other = cur === 'UZS' ? 'USD' : 'UZS'; // everything in the chosen currency
   let h = `<header class="lt"><div><div class="eyebrow">${DOW_LONG[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</div><h1>Overview</h1></div>
-    <div class="lt-right"><button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
+    <div class="lt-right">${curSeg()}<button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
 
   const prevYm = ymShift(ymNow(), -1);
   const [pf, pt] = ymRange(prevYm);
@@ -223,15 +228,16 @@ function renderHome() {
   if (!hasAnything()) {
     h += emptyWelcome();
   } else {
-    // One total: so'm plus dollars at the rate from Settings.
-    const rate = somRate(), usd = usesCur(other) ? balance(other) : 0;
-    const bal = balance(cur) + usd * rate;
+    // One total: so'm and dollars added together in the chosen currency, at the dollar rate.
+    const rate = somRate(), bal = balanceIn(cur);
     const meta = [];
-    if (usd && rate) meta.push(`<span>incl. <b class="num">${fmt(usd, other)}</b> ≈ ${fmt(usd * rate, cur)} at ${fmt(rate, cur, { bare: true })}</span>`);
-    else if (usd) meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(usd, other)} — set the dollar rate in Settings to count it in</button>`);
+    if (usesCur('UZS') && usesCur('USD')) {
+      if (rate) meta.push(`<span><b class="num">${fmt(balance('UZS'), 'UZS')}</b> + <b class="num">${fmt(balance('USD'), 'USD')}</b> · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
+      else meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(balance(other), other)} — set the dollar rate in Settings to count it in</button>`);
+    } else if (usesCur(other) && rate) meta.push(`<span>${fmt(balance(other), other)} · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
     // How it's split: money free to spend, and what each goal's envelope holds.
     const envs = S.goals.filter((g) => !g.paid && goalSaved(g) > 0 && (g.currency === cur || rate))
-      .map((g) => ({ name: g.name, v: inSom(goalSaved(g), g.currency), c: goalIcon(g).c, env: true }));
+      .map((g) => ({ name: g.name, v: conv(goalSaved(g), g.currency, cur), c: goalIcon(g).c, env: true }));
     let split = '';
     if (envs.length) {
       const segs = [{ name: 'Free to spend', v: Math.max(0, bal - envs.reduce((a, e) => a + e.v, 0)), c: 'var(--in)' }, ...envs];
@@ -253,12 +259,13 @@ function renderHome() {
   // Accounts
   h += `<div class="sec-head"><h2>Accounts</h2>${S.accounts.length > 1 ? '<button class="link" data-act="new-transfer">Transfer</button>' : ''}</div>
     <div class="strip">${S.accounts.map((a) => {
-      const main = accBalance(a.id, cur), sec = accBalance(a.id, other);
+      // The account's money in the chosen currency; underneath, what's in it in the other currency.
+      const main = accBalanceIn(a.id, cur), sec = accBalance(a.id, other);
       return `<button class="card acc-card" data-act="account" data-id="${a.id}">
         ${accIc(a, 'sm')}
         <div class="acc-name">${esc(a.name)}</div>
         <div class="acc-bal num">${fmt(main, cur)}</div>
-        <div class="acc-sub num">${sec ? fmt(sec, other) : '&nbsp;'}</div>
+        <div class="acc-sub num">${sec ? `incl. ${fmt(sec, other)}` : '&nbsp;'}</div>
       </button>`;
     }).join('')}<button class="card acc-card add" data-act="new-account"><span class="icon-btn">${I.plus}</span><div class="acc-name">Add account</div><div class="acc-sub">Card, bank, savings…</div></button></div>`;
   if (!hasAnything()) h += '<p class="hint" style="margin-top:8px">Tip: tap Cash or Card to enter how much money is there right now.</p>';
@@ -269,7 +276,7 @@ function renderHome() {
   if (S.tx.length) {
     const [mFrom, mTo] = monthRange(now.getFullYear(), now.getMonth());
     const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const tm = totalsSom(mFrom, mTo), lm = totalsSom(pf, pt), net = tm.in - tm.out;
+    const tm = totals(cur, mFrom, mTo), lm = totals(cur, pf, pt), net = tm.in - tm.out;
     h += `<div class="sec-head"><h2>${MONTHS[now.getMonth()]} so far</h2></div>
       <button class="card mon-card" data-act="tab" data-tab="stats">
         <div class="mon3">
@@ -289,7 +296,7 @@ function renderHome() {
       return `<button class="card goal-mini" data-act="goal" data-id="${g.id}">
         ${ring(st.pct, 46, 5, `<span style="color:${gi.c}">${glyph(gi.id)}</span>`, st.pct >= 100)}
         <div class="gm-name">${esc(g.name)}</div>
-        <div class="gm-sub num">${Math.floor(st.pct)}% · ${compact(st.covered, g.currency)} of ${compact(g.target, g.currency)}</div>
+        <div class="gm-sub num">${Math.floor(st.pct)}% · ${compact(conv(st.covered, g.currency), cur)} of ${compact(conv(g.target, g.currency), cur)}</div>
       </button>`;
     }).join('')}<button class="card goal-mini add" data-act="new-goal"><span class="icon-btn">${I.plus}</span><div class="gm-name">New goal</div></button></div>`;
   } else {
@@ -307,9 +314,9 @@ function afterHome(animate) {
   drawCharts(true);
   const el = $('#hero');
   if (el) {
-    const v = Number(el.dataset.v), cur = 'UZS';
-    const prev = UI.heroShown.home;
-    UI.heroShown.home = v;
+    const v = Number(el.dataset.v), cur = UI.cur, k = 'home' + cur; // counts up in the currency shown
+    const prev = UI.heroShown[k];
+    UI.heroShown[k] = v;
     if (prev == null ? animate : prev !== v) countUp(el, prev == null ? 0 : prev, v, (x) => heroHtml(x, cur), prev == null ? 900 : 600);
   }
 }
@@ -355,13 +362,9 @@ function histList() {
   while (i < shown.length) {
     const date = shown[i].date, day = [];
     while (i < shown.length && shown[i].date === date) day.push(shown[i++]);
-    const curs = new Set(day.flatMap((t) => (t.type === 'transfer' ? [t.currency, t.toCurrency] : [t.currency])));
-    let net = '';
-    if (curs.size === 1) {
-      const c = [...curs][0];
-      const v = day.reduce((a, t) => a + delta(t, c), 0);
-      if (v) net = fmt(v, c, { sign: true });
-    }
+    // The day's total, both currencies together in the chosen one.
+    const nv = day.reduce((a, t) => a + deltaIn(t), 0);
+    const net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
     html += `<div class="day-head"><span>${dayLabel(date)}</span><span class="num">${net}</span></div><div class="group">${day.map((t) => txRow(t, false)).join('')}</div>`;
   }
   if (list.length > shown.length) html += `<div class="actions"><button class="btn soft" data-act="more">Show more (${list.length - shown.length})</button></div>`;
@@ -369,25 +372,25 @@ function histList() {
 }
 // ================= History → Calendar =================
 // A month as a calendar: what went out each day (a green dot when money came in). Tap a day for its
-// entries; swipe sideways — or use ‹ › — for another month. Amounts are in so'm (dollars at the rate).
+// entries; swipe sideways — or use ‹ › — for another month. Amounts are in the chosen currency.
 const calPick = (ym) => (ym === ymNow() ? todayIso() : null); // a month opens on today, others on nothing
 function calBody(ym, sel) {
   const [y, m] = ym.split('-').map(Number);
   const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, days = new Date(y, m, 0).getDate(), today = todayIso();
-  const [from, to] = ymRange(ym), t = totalsSom(from, to), byDay = {};
+  const [from, to] = ymRange(ym), t = totals(UI.cur, from, to), byDay = {};
   for (const x of txBetween(from, to)) {
     if (x.date < from || x.date >= to || x.type === 'transfer') continue;
     const d = byDay[x.date] || (byDay[x.date] = { out: 0, in: false });
-    if (x.type === 'out') d.out += inSom(x.amount, x.currency); else d.in = true;
+    if (x.type === 'out') d.out += conv(x.amount, x.currency); else d.in = true;
   }
   let cells = WK.map((w) => `<div class="cal-h">${w.slice(0, 2)}</div>`).join('') + '<i class="cal-b"></i>'.repeat(lead);
   for (let d = 1; d <= days; d++) {
     const di = `${ym}-${pad2(d)}`, v = byDay[di];
-    cells += `<button class="cal-d${di === sel ? ' sel' : ''}${di === today ? ' today' : ''}${di > today ? ' fut' : ''}" data-act="cal-day" data-v="${di}"><b>${d}</b>${v && v.out ? `<small class="num">−${compact(v.out, 'UZS')}</small>` : ''}${v && v.in ? '<span class="cal-in"></span>' : ''}</button>`;
+    cells += `<button class="cal-d${di === sel ? ' sel' : ''}${di === today ? ' today' : ''}${di > today ? ' fut' : ''}" data-act="cal-day" data-v="${di}"><b>${d}</b>${v && v.out ? `<small class="num">−${compact(v.out, UI.cur)}</small>` : ''}${v && v.in ? '<span class="cal-in"></span>' : ''}</button>`;
   }
   let h = `<div class="period-nav cal-nav">
       <button class="icon-btn" data-act="cal-month" data-v="-1" aria-label="Previous month">${I.left}</button>
-      <div class="cal-t"><div class="pn-title">${ymLabel(ym)}</div><div class="card-sub num">In ${compactU(t.in, 'UZS')} · Out ${compactU(t.out, 'UZS')}</div></div>
+      <div class="cal-t"><div class="pn-title">${ymLabel(ym)}</div><div class="card-sub num">In ${compactU(t.in, UI.cur)} · Out ${compactU(t.out, UI.cur)}</div></div>
       <button class="icon-btn" data-act="cal-month" data-v="1" aria-label="Next month" ${ym < ymNow() ? '' : 'disabled'}>${I.right}</button>
     </div>
     <div class="cal">${cells}</div>
@@ -395,9 +398,7 @@ function calBody(ym, sel) {
   if (!sel || !sel.startsWith(ym)) return h + '<p class="hint cal-none">Tap a day to see what happened.</p>';
   const list = S.tx.filter((x) => x.date === sel).sort(sortTx);
   if (!list.length) return h + `<div class="day-head"><span>${dayLabel(sel)}</span></div><p class="hint cal-none">Nothing on this day.</p>`;
-  const curs = new Set(list.flatMap((x) => (x.type === 'transfer' ? [x.currency, x.toCurrency] : [x.currency])));
-  let net = '';
-  if (curs.size === 1) { const c = [...curs][0], v = list.reduce((a, x) => a + delta(x, c), 0); if (v) net = fmt(v, c, { sign: true }); }
+  const nv = list.reduce((a, x) => a + deltaIn(x), 0), net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
   return h + `<div class="day-head"><span>${dayLabel(sel)}</span><span class="num">${net}</span></div><div class="group">${list.map((x) => txRow(x, false)).join('')}</div>`;
 }
 function bindCalPager() {
@@ -517,7 +518,7 @@ function spendRing(cur, info) {
 // The entries of one category in the period on show.
 function openCatEntries(id) {
   const cur = UI.cur, info = periodInfo(UI.period, UI.offset), c = cat('out', id);
-  const list = S.tx.filter((t) => t.type === 'out' && t.category === id && t.currency === cur && t.date >= info.from && t.date < info.to).sort(sortTx);
+  const list = S.tx.filter((t) => t.type === 'out' && t.category === id && t.date >= info.from && t.date < info.to).sort(sortTx);
   const sum = list.reduce((a, t) => a + t.amount, 0);
   openSheet(sheetHead(esc(c.name), '', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body">
     <div class="gd-hero">${ic(c.g, c.c, 'lg')}<div class="gd-name num">${fmt(sum, cur)}</div><div class="gd-amt">${info.title} · ${list.length === 1 ? '1 entry' : list.length + ' entries'}</div></div>
@@ -587,12 +588,8 @@ function bindScrub(el, locate) {
 }
 
 function drawBalance(el, anim) {
-  const cur = 'UZS', all = somRate() > 0 && usesCur('USD'); // Home's total: so'm, plus dollars at the rate
-  if (!usesCur(cur) && !all) {
-    el.innerHTML = `<p class="card-sub" style="text-align:center;padding:26px 0">No money in so'm yet.</p>`;
-    return;
-  }
-  const pts = balanceSeries(all ? 'ALL' : cur, UI.range);
+  const cur = UI.cur; // Home's total: both currencies together, in the chosen one
+  const pts = balanceSeries('ALL', UI.range);
   const W = Math.max(240, el.clientWidth), H = 160, padT = 12, padB = 22, padL = 4, padR = 48;
   const vals = pts.map((p) => p.v);
   const { lo, hi, ticks } = niceScale(Math.min(0, ...vals), Math.max(0, ...vals), 3);
@@ -1394,7 +1391,7 @@ function fixGoals(cur) {
 // After money leaves your balance, warn if goals now hold more than you have.
 function goalsShort(cur) { return S.goals.some((g) => g.currency === cur && goalSaved(g) > 0) && freeMoney(cur) < -0.004; }
 function allocCard(cur) {
-  const total = balance(cur), inGoals = savedInGoals(cur), free = total - inGoals;
+  const total = balanceIn(cur), inGoals = savedInGoalsIn(cur), free = total - inGoals;
   const denom = Math.max(total, inGoals, 1);
   const segs = S.goals.filter((g) => g.currency === cur && goalSaved(g) > 0)
     .map((g) => `<i style="--c:${goalIcon(g).c};width:${((goalSaved(g) / denom) * 100).toFixed(2)}%"></i>`).join('')
@@ -1415,8 +1412,8 @@ function reportData(ym, cur) {
   const prevYm = ymShift(ym, -1);
   const [pf, pt] = ymRange(prevYm);
   const t = totals(cur, from, to), p = totals(cur, pf, pt);
-  const txs = S.tx.filter((x) => x.type !== 'transfer' && x.currency === cur && x.date >= from && x.date < to);
-  const outs = txs.filter((x) => x.type === 'out').sort((a, b) => b.amount - a.amount);
+  const txs = S.tx.filter((x) => x.type !== 'transfer' && x.date >= from && x.date < to);
+  const outs = txs.filter((x) => x.type === 'out').sort((a, b) => conv(b.amount, b.currency, cur) - conv(a.amount, a.currency, cur));
   const change = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
   // What was put aside that month (payments made from a goal are spending, not saving)
   const goalsMonth = S.goals.map((g) => ({ g, added: g.contribs.filter((c) => c.date >= from && c.date < to && !c.txId).reduce((a, c) => a + c.amount, 0) })).filter((x) => x.added);
@@ -1479,7 +1476,7 @@ function reportHtml() {
       <div class="card-title">Highlights</div>
       <div class="rep-hl">
         <div><span>Entries</span><b class="num">${r.count}</b></div>
-        <div><span>Biggest expense</span><b class="num">${r.biggest ? fmt(r.biggest.amount, cur) : '—'}</b>${r.biggest ? `<small>${esc(r.biggest.person || cat('out', r.biggest.category).name)} · ${shortDate(r.biggest.date)}</small>` : ''}</div>
+        <div><span>Biggest expense</span><b class="num">${r.biggest ? fmt(conv(r.biggest.amount, r.biggest.currency, cur), cur) : '—'}</b>${r.biggest ? `<small>${esc(r.biggest.person || cat('out', r.biggest.category).name)} · ${shortDate(r.biggest.date)}</small>` : ''}</div>
         ${r.goalsMonth.map((x) => `<div><span>Saved for ${esc(x.g.name)}</span><b class="num">${fmt(x.added, x.g.currency, { sign: true })}</b></div>`).join('')}
       </div>
     </section>
@@ -1613,9 +1610,9 @@ function settingsHtml() {
       ${navRow('groups-view', '', ic('users', '#007AFF', 'sm'), 'Groups', S.groups.length ? plural(S.groups.length, 'group') : 'Your classes and who paid')}
     </div>
 
-    <div class="form-label">Main currency</div>
+    <div class="form-label">Show amounts in</div>
     <div class="seg full">${segButtons('set-cur', curItems, s.currency)}</div>
-    <p class="hint">The app opens in this currency. You can switch at the top of Overview and Stats.</p>
+    <p class="hint">Everything — the total, months, charts, history, goals — is shown in this currency: so'm and dollars are added together at the dollar rate below. Your entries keep the currency you wrote them in. You can also switch at the top of Overview and Stats.</p>
 
     <div class="form-label">Exchange rate</div>
     <div class="group plain" id="rate-box">${rateBoxHtml()}</div>

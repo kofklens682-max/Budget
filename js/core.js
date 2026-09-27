@@ -361,22 +361,35 @@ const openingTotal = (cur) => S.accounts.reduce((a, x) => a + (x.opening[cur] ||
 const balance = (cur) => (memo ? sums().bal[cur] : S.tx.reduce((a, t) => a + delta(t, cur), openingTotal(cur)));
 const accBalance = (id, cur) => (memo && sums().accs[id] ? sums().accs[id][cur] : S.tx.reduce((a, t) => a + accDelta(t, id, cur), acc(id).opening[cur] || 0));
 const usesCur = (cur) => (memo ? sums().used[cur] : S.tx.some((t) => t.currency === cur || (t.type === 'transfer' && t.toCurrency === cur)) || S.accounts.some((a) => a.opening[cur]));
+// Money in and out between two dates, both currencies added together in `cur` (see conv).
 function totals(cur, from, to) {
   let i = 0, o = 0;
   for (const t of txBetween(from, to)) {
-    if (t.currency !== cur || t.date < from || t.date >= to) continue;
-    if (t.type === 'in') i += t.amount;
-    else if (t.type === 'out') o += t.amount;
+    if (t.date < from || t.date >= to) continue;
+    if (t.type === 'in') i += conv(t.amount, t.currency, cur);
+    else if (t.type === 'out') o += conv(t.amount, t.currency, cur);
   }
   return { in: i, out: o };
 }
-// Everything in so'm: dollars count at the rate from Settings (0 = no rate set, dollars left out).
+// ================= One currency for everything =================
+// Amounts are shown in the currency chosen (UI.cur: the so'm / $ switch on Overview and Stats, and
+// in Settings). Both currencies are added together in it — the other one at the dollar rate (the
+// bank's, see rate.js). Entries keep the currency they were written in.
 const somRate = () => (S.settings.rate > 0 ? S.settings.rate : 0);
-const inSom = (v, cur) => (cur === 'USD' ? v * somRate() : v);
-function totalsSom(from, to) {
-  const a = totals('UZS', from, to), b = totals('USD', from, to), r = somRate();
-  return { in: a.in + b.in * r, out: a.out + b.out * r };
+function conv(v, from, to = UI.cur) {
+  if (!v || from === to) return v;
+  const r = somRate();
+  if (!r) return 0; // no rate yet: the other currency can't be counted
+  return from === 'USD' ? v * r : v / r;
 }
+const inSom = (v, cur) => conv(v, cur, 'UZS');
+const fmtIn = (v, from, o) => fmt(conv(v, from), UI.cur, o);
+const deltaIn = (t, cur = UI.cur) => conv(delta(t, 'UZS'), 'UZS', cur) + conv(delta(t, 'USD'), 'USD', cur);
+const balanceIn = (cur = UI.cur) => conv(balance('UZS'), 'UZS', cur) + conv(balance('USD'), 'USD', cur);
+const accBalanceIn = (id, cur = UI.cur) => conv(accBalance(id, 'UZS'), 'UZS', cur) + conv(accBalance(id, 'USD'), 'USD', cur);
+const savedInGoalsIn = (cur = UI.cur) => S.goals.reduce((a, g) => a + conv(goalSaved(g), g.currency, cur), 0);
+// Both currencies in use but no rate to add them up with.
+const needsRate = () => !somRate() && usesCur('UZS') && usesCur('USD');
 const goalSaved = (g) => g.contribs.reduce((a, c) => a + c.amount, 0);
 const savedInGoals = (cur) => S.goals.filter((g) => g.currency === cur).reduce((a, g) => a + goalSaved(g), 0);
 const freeMoney = (cur) => balance(cur) - savedInGoals(cur); // not set aside for any goal
@@ -1153,7 +1166,7 @@ const pick = (a, sel) => a.closest(sel).querySelectorAll('button').forEach((b) =
 Object.assign(ACTIONS, {
   tab: (a) => goTab(a.dataset.tab),
   'close-sheet': () => closeSheet(),
-  cur: (a, v) => { UI.cur = v; render(); },
+  cur: (a, v) => { if (UI.cur === v) return; UI.cur = v; S.settings.currency = v; save(); render(); },
   fab: () => {
     if (UI.tab === 'goals') openGoalForm();
     else if (UI.tab === 'schedule') openBlock(UI.sDay, null);
