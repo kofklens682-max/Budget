@@ -397,6 +397,10 @@ button.row:active, .row.tap:active { background: var(--fill-2); }
 
 /* ---------- Sheets ---------- */
 /* a row that was just added fades in where it belongs (see animateChange in core.js) */
+/* the automatic dollar rate in Settings */
+.rate-sub { display: block; font-size: 13px; color: var(--text-2); margin-top: 1px; }
+.rate-now b { margin-left: auto; font-size: 17px; }
+.rate-when { font-size: 12px; text-align: right; max-width: 60%; line-height: 1.3; }
 .appear { animation: appear .4s cubic-bezier(.2, .9, .3, 1) both; }
 @keyframes appear { from { opacity: 0; transform: translateY(-8px) scale(.97); } }
 .overlay { position: fixed; inset: 0; background: var(--overlay); opacity: 0; transition: opacity .3s; z-index: 40; touch-action: none; }

@@ -52,6 +52,7 @@ function start() {
   if (TAB_ORDER.includes(tabParam) && tabParam !== 'home') goTab(tabParam);
   takeScheduleLink();
   if (hadQuick) save(); // stores data from older versions in the new format
+  setTimeout(startRate, 800); // the dollar rate from the bank (see rate.js)
 }
 // Open at once from the quick copy, then compare it with the second copy. With no quick copy
 // (first start, or it was lost), open from the second copy.

@@ -1618,8 +1618,8 @@ function settingsHtml() {
     <p class="hint">The app opens in this currency. You can switch at the top of Overview and Stats.</p>
 
     <div class="form-label">Exchange rate</div>
-    <div class="group plain"><label class="row field"><span>1 $ =</span><input id="rate" inputmode="decimal" placeholder="e.g. 12 000" value="${s.rate ? shownAmount(s.rate, 'UZS') : ''}" autocomplete="off" enterkeyhint="done"><span class="muted" style="min-width:0">so'm</span></label></div>
-    <p class="hint">Only used to show an approximate combined total on the Overview. Your entries are never converted.</p>
+    <div class="group plain" id="rate-box">${rateBoxHtml()}</div>
+    <p class="hint">Used only for the one total in so'm on the Overview — your entries are never converted. With Automatic on, the app takes the official rate of the Central Bank of Uzbekistan by itself (it changes once a day) and checks again every hour while it's open.</p>
 
     <div class="form-label">Appearance</div>
     <div class="seg full">${segButtons('set-theme', [['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']], s.theme)}</div>
@@ -1629,7 +1629,7 @@ function settingsHtml() {
       <div class="row field"><span style="flex:1">Passcode lock</span><label class="switch"><input type="checkbox" id="pin-toggle" ${s.pin ? 'checked' : ''} aria-label="Passcode lock"><i></i></label></div>
       ${s.pin ? action('change-pin', 'Change passcode') : ''}
     </div>
-    <p class="hint">Asks for a 4-digit code when you open the app. Everything you enter is stored only on this phone — nothing is sent anywhere. <span id="persist-note"></span></p>
+    <p class="hint">Asks for a 4-digit code when you open the app. Everything you enter is stored only on this phone — nothing is sent anywhere (the app only asks the bank for the dollar rate). <span id="persist-note"></span></p>
 
     <div class="form-label">Backup</div>
     <div class="group plain">
@@ -1649,8 +1649,7 @@ function settingsHtml() {
   </div>`;
 }
 function mountSettings(sh) {
-  const rate = $('#rate', sh);
-  rate.addEventListener('input', () => { const r = typedAmount(rate.value, 'UZS'); rate.value = r.shown; S.settings.rate = r.value || null; save(); render(); });
+  bindRateBox(sh);
   blurOnEnter(sh);
   $('#pin-toggle', sh).addEventListener('change', (e) => {
     if (e.target.checked) {
