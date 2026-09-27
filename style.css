@@ -28,7 +28,7 @@
   --grid: #E9E9EE;
   --axis: #C7C7CC;
   --muted: #8E8E93;
-  --bar: rgba(249, 249, 251, .86);
+  --bar: rgb(249, 249, 251); /* solid bars: a live blur behind them made scrolling stutter on phones */
   --overlay: rgba(0, 0, 0, .32);
   --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .04);
   --r: 16px;
@@ -56,7 +56,7 @@
     --warn: #FFB340;
     --grid: #2C2C2E;
     --axis: #3A3A3C;
-    --bar: rgba(22, 22, 24, .84);
+    --bar: rgb(22, 22, 24);
     --overlay: rgba(0, 0, 0, .55);
     --shadow: none;
   }
@@ -82,7 +82,7 @@
   --warn: #FFB340;
   --grid: #2C2C2E;
   --axis: #3A3A3C;
-  --bar: rgba(22, 22, 24, .84);
+  --bar: rgb(22, 22, 24);
   --overlay: rgba(0, 0, 0, .55);
   --shadow: none;
 }
@@ -121,8 +121,6 @@ svg { display: block; }
   display: flex; align-items: center; justify-content: center;
   font-weight: 600; font-size: 16px;
   background: var(--bar);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
   border-bottom: .5px solid var(--sep);
   opacity: 0; pointer-events: none; transition: opacity .2s;
 }
@@ -265,7 +263,7 @@ button.row:active, .row.tap:active { background: var(--fill-2); }
 .day-head span:first-child { text-transform: uppercase; letter-spacing: .02em; }
 .day-head:first-child { margin-top: 4px; }
 /* Long History lists: days scrolled far away are not laid out or painted until they come near */
-#hist-list > .group { content-visibility: auto; contain-intrinsic-size: auto 240px; }
+/* (no content-visibility here: rows drawn only when they scroll into view made scrolling stutter) */
 
 /* ---------- Empty states ---------- */
 .empty { text-align: center; padding: 34px 20px; }
@@ -357,8 +355,6 @@ button.row:active, .row.tap:active { background: var(--fill-2); }
   position: relative; flex: 1; height: 62px; display: flex; padding: 5px;
   border-radius: 31px;
   background: var(--bar);
-  -webkit-backdrop-filter: saturate(180%) blur(22px);
-  backdrop-filter: saturate(180%) blur(22px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .14), 0 1px 3px rgba(0, 0, 0, .06), inset 0 0 0 .5px var(--sep);
 }
 .tab-ind {
@@ -400,7 +396,12 @@ button.row:active, .row.tap:active { background: var(--fill-2); }
 .tabs.sliding button.over svg { transform: translateY(-1px) scale(1.12); }
 
 /* ---------- Sheets ---------- */
-.overlay { position: fixed; inset: 0; background: var(--overlay); opacity: 0; transition: opacity .3s; z-index: 40; }
+/* a row that was just added fades in where it belongs (see animateChange in core.js) */
+.appear { animation: appear .4s cubic-bezier(.2, .9, .3, 1) both; }
+@keyframes appear { from { opacity: 0; transform: translateY(-8px) scale(.97); } }
+.overlay { position: fixed; inset: 0; background: var(--overlay); opacity: 0; transition: opacity .3s; z-index: 40; touch-action: none; }
+.sheet { overscroll-behavior: contain; }
+.sheet-grab, .sheet-head { touch-action: none; }
 .overlay.show { opacity: 1; }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;

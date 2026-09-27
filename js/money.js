@@ -414,6 +414,27 @@ function afterHistory() {
   if (q) q.addEventListener('input', () => { UI.q = q.value; UI.hLimit = HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); });
   watchMore();
 }
+// The next entries are added under the ones already showing, a few days per frame, so scrolling
+// never stops while they appear (the list isn't drawn again from the top).
+function moreHistory() {
+  const box = $('#hist-list');
+  if (!box) return;
+  const t = document.createElement('template');
+  t.innerHTML = histList();
+  const neu = [...t.content.children], old = [...box.children];
+  let k = 0;
+  while (k < old.length && k < neu.length && old[k].isEqualNode(neu[k])) k++;
+  old.slice(k).forEach((n) => n.remove());
+  let i = k;
+  const step = () => {
+    if (!box.isConnected) return;
+    box.append(...neu.slice(i, i + 8));
+    i += 8;
+    if (i < neu.length) requestAnimationFrame(step);
+    else watchMore();
+  };
+  step();
+}
 // History shows entries a page at a time: the next ones load by themselves as you scroll near the end.
 let moreObs = null;
 function watchMore() {
@@ -1808,7 +1829,7 @@ Object.assign(ACTIONS, {
   hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
-  more: () => { UI.hLimit += HIST_PAGE; $('#hist-list').innerHTML = histList(); watchMore(); },
+  more: () => { UI.hLimit += HIST_PAGE; moreHistory(); },
   period: (a, v) => { const d = segDir(a); UI.period = v; UI.offset = 0; renderSub(a, d); },
   shift: (a, v) => { const o = Math.min(0, UI.offset + Number(v)); if (o === UI.offset) return; UI.offset = o; render(); pagerIn(Number(v)); },
   'cat-entries': (a, v) => openCatEntries(v),

@@ -464,7 +464,8 @@ function openSheet(html, mount) {
   sheet = { ov, sh, hid: uid() };
   requestAnimationFrame(() => requestAnimationFrame(() => { ov.classList.add('show'); sh.classList.add('show'); }));
   history.pushState({ tab: UI.tab, sheet: sheet.hid }, '');
-  document.body.style.overflow = 'hidden';
+  // (The page behind isn't locked with overflow: hidden — that made the whole page lay itself out
+  // again on every open and close. The dimmed layer takes the touches instead.)
   bindSheetGestures(sh, ov);
   mount && mount(sh);
 }
@@ -491,7 +492,6 @@ function closeSheetNow() {
   ov.style.opacity = '';
   ov.classList.remove('show');
   sh.classList.remove('show');
-  document.body.style.overflow = '';
   setTimeout(() => { ov.remove(); sh.remove(); if (pendingReload) location.reload(); }, 450);
 }
 // Pull a sheet down to close it — from anywhere inside it, as long as its content is scrolled to
@@ -732,9 +732,42 @@ const pageError = (err) => `<header class="lt"><h1>${esc(PAGES[UI.tab].title)}</
 // dir (1 / -1): the page slides in from the right / left — another tab. With `keep`, only the
 // blocks after the first `keep` ones slide (a new choice in a segmented control: the title and
 // the control stay where they are).
-function render(animate, dir = 0, keep = 0) {
+// A change on the page you're looking at (not a new tab or a new choice sliding in): rows glide
+// to their new places and a new row fades in, instead of everything jumping.
+function render(animate, dir = 0, keep = 0, fromTab = false) {
+  if (!animate && !fromTab && !reduceMotion()) { animateChange($('#view'), () => draw(animate, dir, keep, fromTab)); return; }
+  draw(animate, dir, keep, fromTab);
+}
+const ROW_BOX = '.row, .card';
+function animateChange(root, change) {
+  const vh = window.innerHeight, before = new Map();
+  for (const n of root.querySelectorAll('[data-id]')) {
+    const k = n.dataset.act + ':' + n.dataset.id;
+    if (before.has(k)) continue;
+    const r = (n.closest(ROW_BOX) || n).getBoundingClientRect();
+    if (r.height && r.bottom > -80 && r.top < vh + 80) before.set(k, r);
+  }
+  change();
+  if (!before.size) return;
+  const seen = new Set(), done = new Set(), fresh = [];
+  for (const n of root.querySelectorAll('[data-id]')) {
+    const k = n.dataset.act + ':' + n.dataset.id, box = n.closest(ROW_BOX) || n;
+    if (seen.has(k) || done.has(box)) continue;
+    seen.add(k);
+    done.add(box);
+    const r0 = before.get(k);
+    if (!r0) { fresh.push(box); continue; }
+    if (done.size > 80) continue;
+    const r = box.getBoundingClientRect(), dx = r0.left - r.left, dy = r0.top - r.top;
+    if ((Math.abs(dx) < 1 && Math.abs(dy) < 1) || Math.abs(dy) > vh) continue;
+    box.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, .9, .3, 1)' });
+  }
+  if (fresh.length <= 4) fresh.forEach((b) => { const r = b.getBoundingClientRect(); if (r.bottom > 0 && r.top < vh) b.classList.add('appear'); });
+}
+function draw(animate, dir, keep, fromTab) {
   const v = $('#view');
   const page = PAGES[UI.tab];
+  if (!fromTab) { kept = {}; keepEpoch++; soonPrewarm(); } // something changed: pages kept from before are out of date
   memo = {}; // totals are worked out once for this draw (see sums())
   let html;
   try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
@@ -749,6 +782,15 @@ function render(animate, dir = 0, keep = 0) {
       v.classList.add(dir ? 'slide' : 'enter');
     }
   }
+  pageChrome();
+  if (page.after) { try { page.after(animate); } catch (err) { console.error(err); } }
+  memo = null;
+  v._built = { tab: UI.tab, rev: S.rev, day: todayIso(), t: Date.now(), epoch: keepEpoch };
+  if (UI.flashId) setTimeout(() => { UI.flashId = null; }, 50);
+}
+// The tab bar and the title for the page that's showing.
+function pageChrome() {
+  const page = PAGES[UI.tab];
   const idx = TAB_ORDER.indexOf(UI.tab);
   $('#tabs').style.setProperty('--i', idx);
   $$('#tabs [data-tab]').forEach((b) => {
@@ -757,10 +799,87 @@ function render(animate, dir = 0, keep = 0) {
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   $('#topbar-title').textContent = page.title;
-  if (page.after) { try { page.after(animate); } catch (err) { console.error(err); } }
-  memo = null;
-  if (UI.flashId) setTimeout(() => { UI.flashId = null; }, 50);
 }
+
+// ================= Pages kept for later =================
+// A tab you leave is not thrown away: its page is kept (off the screen) and comes back at once,
+// where you left it, when you return — unless something changed since, or it's over a minute
+// old (times, "today"), and then it's drawn fresh. Tabs you haven't opened yet are built in a
+// quiet moment after the app starts, so even the first visit opens at once.
+let kept = {}; // tab → { nodes: DocumentFragment, y, rev, day, t, epoch }
+let keepEpoch = 0; // goes up whenever anything changes; a page built before that is out of date
+const KEEP_MS = { schedule: 60000 }; // the schedule shows the time now; other pages only the day
+// (Not tied to every save: background saves, like the daily safety copy, change nothing on a page.
+// Every change you can see redraws the page you're on, and that makes keepEpoch go up.)
+const keptFresh = (k, tab) => !!k && k.epoch === keepEpoch && k.day === todayIso() && Date.now() - k.t < (KEEP_MS[tab] || 600000);
+function keepPage(tab, nodes, y, built) {
+  if (!built || built.tab !== tab || !keptFresh(built, tab)) return;
+  const frag = document.createDocumentFragment();
+  frag.append(...nodes);
+  frag.querySelectorAll('[data-kid]').forEach((el) => { el.id = el.dataset.kid; el.removeAttribute('data-kid'); });
+  kept[tab] = { nodes: frag, y, rev: built.rev, day: built.day, t: built.t, epoch: built.epoch };
+}
+// Show a kept page again. Returns false when there's none (or it's out of date).
+function restorePage(tab, dir) {
+  const k = kept[tab];
+  delete kept[tab];
+  if (!keptFresh(k, tab)) return false;
+  const v = $('#view');
+  v.replaceChildren(k.nodes);
+  v._built = { tab, rev: k.rev, day: k.day, t: k.t, epoch: k.epoch };
+  v.classList.remove('enter', 'slide');
+  window.scrollTo(0, k.y);
+  if (dir && !reduceMotion()) {
+    v.style.setProperty('--dir', dir);
+    void v.offsetWidth;
+    v.classList.add('slide');
+  }
+  pageChrome();
+  return true;
+}
+// Build the tabs not opened yet, one per quiet moment. All in one step, so nothing on the screen
+// moves: the page you're on steps aside, the other one is drawn and put away, yours comes back.
+function prewarmPages() {
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  const next = TAB_ORDER.find((t) => t !== UI.tab && !keptFresh(kept[t], t));
+  if (!next) return;
+  idle(() => {
+    if (sheet || locked || document.hidden || keptFresh(kept[next], next) || next === UI.tab || Date.now() - lastTouch < 1500) { setTimeout(prewarmPages, 1500); return; }
+    const v = $('#view'), mine = document.createDocumentFragment(), y = window.scrollY, tab = UI.tab, built = v._built;
+    const classes = v.className, dirVar = v.style.getPropertyValue('--dir');
+    mine.append(...v.childNodes);
+    UI.tab = next;
+    try {
+      memo = {};
+      let html;
+      try { html = PAGES[next].render(); } catch (err) { html = null; }
+      if (html != null) {
+        v.innerHTML = html;
+        if (PAGES[next].after) { try { PAGES[next].after(false); } catch (err) { console.error(err); } }
+        void v.offsetHeight; // lay it out now, while nothing else is happening
+        const nodes = [...v.childNodes];
+        kept[next] = null;
+        const frag = document.createDocumentFragment();
+        frag.append(...nodes);
+        kept[next] = { nodes: frag, y: 0, rev: S.rev, day: todayIso(), t: Date.now(), epoch: keepEpoch };
+      }
+    } finally {
+      memo = null;
+      UI.tab = tab;
+      v.replaceChildren(mine);
+      v.className = classes;
+      if (dirVar) v.style.setProperty('--dir', dirVar);
+      v._built = built;
+      window.scrollTo(0, y);
+    }
+    setTimeout(prewarmPages, 300);
+  }, { timeout: 3000 });
+}
+let lastTouch = 0, prewarmT = 0;
+// After a change, build the other pages again a little later (when you've stopped tapping).
+function soonPrewarm() { clearTimeout(prewarmT); prewarmT = setTimeout(prewarmPages, 2000); }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => window.addEventListener(t, () => { lastTouch = Date.now(); }, { passive: true, capture: true }));
+window.addEventListener('resize', () => { kept = {}; }); // kept charts were drawn for the old width
 // Re-render after a choice in a segmented control (or the ‹ › arrows next to it): what's above
 // stays put, what's below slides in from the side of the new choice.
 function renderSub(el, dir) {
@@ -897,23 +1016,27 @@ function goTab(tab) {
 // The old page slides out one way while the new one slides in from the other (by tab order).
 function showTab(tab) {
   const dir = Math.sign(TAB_ORDER.indexOf(tab) - TAB_ORDER.indexOf(UI.tab)) || 1;
+  const from = UI.tab, y = window.scrollY;
   UI.tab = tab;
-  const v = $('#view');
-  $$('.view.ghost').forEach((g) => g.remove());
+  const v = $('#view'), built = v._built;
+  $$('.view.ghost').forEach((g) => { if (g._done) g._done(); g.remove(); });
   if (!reduceMotion() && v.firstChild) {
+    // The old page slides out inside a "ghost" layer; afterwards it's kept for coming back.
     const g = document.createElement('div');
     g.className = 'view ghost';
     g.setAttribute('aria-hidden', 'true');
     g.inert = true;
-    g.style.top = `${-window.scrollY}px`;
+    g.style.top = `${-y}px`;
     g.style.setProperty('--dir', dir);
     g.append(...v.childNodes);
-    g.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+    g.querySelectorAll('[id]').forEach((el) => { el.dataset.kid = el.id; el.removeAttribute('id'); });
     v.after(g);
-    setTimeout(() => g.remove(), 450);
-  }
+    g._done = () => { g._done = null; if (UI.tab !== from) keepPage(from, [...g.childNodes], y, built); };
+    setTimeout(() => { if (g._done) g._done(); g.remove(); }, 450);
+  } else if (v.firstChild) keepPage(from, [...v.childNodes], y, built);
+  if (restorePage(tab, dir)) return;
   window.scrollTo(0, 0);
-  render(true, dir);
+  render(true, dir, 0, true);
 }
 window.addEventListener('popstate', (e) => {
   const st = e.state || {};
