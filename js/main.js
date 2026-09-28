@@ -62,9 +62,10 @@ if (hadQuick) {
   checked.then((took) => {
     if (took) { applyTheme(); UI.cur = S.settings.currency; if (!sheet) render(); }
     keepCopy('day');
+    if (Acct.signedIn()) Acct.sync(); // newer copy from another phone? unsaved changes? (account.js)
   });
 } else {
-  checked.then(() => { UI.cur = S.settings.currency; start(); keepCopy('day'); });
+  checked.then(() => { UI.cur = S.settings.currency; start(); keepCopy('day'); if (Acct.signedIn()) Acct.sync(); });
 }
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 bindTabSlide($('#tabs'), (t) => goTab(t));

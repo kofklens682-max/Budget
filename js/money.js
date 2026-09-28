@@ -198,6 +198,7 @@ function emptyWelcome() {
     <p>Write down money you receive and money you spend. Totals and charts fill in as you go.</p>
     <button class="btn" data-act="add">Add first entry</button>
     <button class="link" data-act="load-demo">or try it with demo data</button>
+    ${Acct.signedIn() ? '' : '<button class="link" data-act="acct-open" data-v="signin" style="display:block;margin:10px auto 0">New phone? Sign in to bring everything back</button>'}
   </section>`;
 }
 
@@ -1755,7 +1756,8 @@ function settingsHtml() {
   const navRow = (act, v, icon, title, sub) => `<button class="row" data-act="${act}" data-v="${v}">${icon}<div class="row-main"><div class="row-title">${title}</div>${sub ? `<div class="row-sub">${sub}</div>` : ''}</div>${I.chev}</button>`;
   return sheetHead('Settings', '', '<button data-act="close-sheet">Done</button>') + `
   <div class="sheet-body">
-    <div class="form-label" style="margin-top:6px">Accounts</div>
+    ${acctSettingsHtml()}
+    <div class="form-label">Accounts</div>
     <div class="group">
       ${S.accounts.map((a) => `<button class="row" data-act="edit-account" data-id="${a.id}">${accIc(a, 'sm')}<div class="row-main"><div class="row-title">${esc(a.name)}</div><div class="row-sub num">${fmt(accBalance(a.id, 'UZS'), 'UZS')} · ${fmt(accBalance(a.id, 'USD'), 'USD')}</div></div>${I.chev}</button>`).join('')}
       <button class="row" data-act="new-account"><span class="ic sm" style="--c:var(--accent)">${glyph('plus')}</span><div class="row-main" style="color:var(--accent);font-weight:500">Add account</div></button>

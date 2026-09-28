@@ -286,6 +286,7 @@ function save() {
   const json = JSON.stringify(S);
   try { localStorage.setItem(KEY, json); quickFailed = false; } catch (e) { quickFailed = true; }
   keepSoon(S.rev, json, quickFailed);
+  if (window.Acct) Acct.changed(); // the online copy follows (account.js)
   if (!persistAsked && navigator.storage && navigator.storage.persist) { persistAsked = true; navigator.storage.persist().catch(() => {}); }
 }
 
