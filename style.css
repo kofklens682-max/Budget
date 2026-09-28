@@ -7,28 +7,35 @@
 /* ---------- Tokens ---------- */
 :root {
   color-scheme: light;
-  --bg: #F2F2F7;
+  --geo-ring: rgba(255, 200, 61, .55);
+  --geo-t2: rgba(14, 108, 102, .2);
+  --geo-g2: rgba(22, 184, 122, .25);
+  --geo-y2: rgba(255, 200, 61, .35);
+  --geo-t: rgba(14, 108, 102, .5);
+  --geo-g: rgba(22, 184, 122, .6);
+  --geo-y: rgba(255, 200, 61, .8);
+  --bg: #F5F1E6;
   --card: #FFFFFF;
   --elev: #FFFFFF;
   --seg-on: #FFFFFF;
-  --fill: rgba(118, 118, 128, .12);
-  --fill-2: rgba(118, 118, 128, .07);
-  --text: #000000;
-  --text-2: rgba(60, 60, 67, .62);
-  --text-3: rgba(60, 60, 67, .32);
-  --sep: rgba(60, 60, 67, .2);
-  --accent: #007AFF;
-  --accent-soft: rgba(0, 122, 255, .14);
+  --fill: rgba(90, 70, 30, .08);
+  --fill-2: rgba(90, 70, 30, .05);
+  --text: #1D1B16;
+  --text-2: rgba(29, 27, 22, .6);
+  --text-3: rgba(29, 27, 22, .3);
+  --sep: rgba(29, 27, 22, .12);
+  --accent: #0F9D66;
+  --accent-soft: rgba(22, 184, 122, .15);
   --in: #1BAF7A;           /* chart: money in  (validated pair) */
   --out: #EB6834;          /* chart: money out */
   --in-text: #13805A;      /* readable green for +amounts */
   --danger: #FF3B30;
   --good: #0CA30C;
   --warn: #C98500;
-  --grid: #E9E9EE;
-  --axis: #C7C7CC;
-  --muted: #8E8E93;
-  --bar: rgb(249, 249, 251); /* solid bars: a live blur behind them made scrolling stutter on phones */
+  --grid: #ECE6D8;
+  --axis: #D2CBBB;
+  --muted: #8E887A;
+  --bar: #FFFDF8; /* solid bars: a live blur behind them made scrolling stutter on phones */
   --overlay: rgba(0, 0, 0, .32);
   --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .04);
   --r: 16px;
@@ -37,52 +44,66 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #000000;
-    --card: #1C1C1E;
-    --elev: #2C2C2E;
-    --seg-on: #636366;
-    --fill: rgba(118, 118, 128, .24);
-    --fill-2: rgba(118, 118, 128, .14);
-    --text: #FFFFFF;
-    --text-2: rgba(235, 235, 245, .62);
-    --text-3: rgba(235, 235, 245, .3);
-    --sep: rgba(84, 84, 88, .6);
-    --accent: #0A84FF;
-    --accent-soft: rgba(10, 132, 255, .2);
+    --geo-ring: rgba(255, 200, 61, .38);
+    --geo-t2: rgba(26, 156, 146, .22);
+    --geo-g2: rgba(22, 184, 122, .18);
+    --geo-y2: rgba(255, 200, 61, .18);
+    --geo-t: rgba(26, 156, 146, .5);
+    --geo-g: rgba(22, 184, 122, .45);
+    --geo-y: rgba(255, 200, 61, .5);
+    --bg: #13120F;
+    --card: #1F1D18;
+    --elev: #2A2721;
+    --seg-on: #4A463D;
+    --fill: rgba(255, 240, 210, .09);
+    --fill-2: rgba(255, 240, 210, .05);
+    --text: #F5F0E4;
+    --text-2: rgba(245, 240, 228, .62);
+    --text-3: rgba(245, 240, 228, .3);
+    --sep: rgba(255, 240, 210, .12);
+    --accent: #2FBF84;
+    --accent-soft: rgba(47, 191, 132, .18);
     --in: #199E70;
     --out: #D95926;
     --in-text: #30D158;
     --danger: #FF453A;
     --warn: #FFB340;
-    --grid: #2C2C2E;
-    --axis: #3A3A3C;
-    --bar: rgb(22, 22, 24);
+    --grid: #2A2721;
+    --axis: #3A362E;
+    --bar: rgb(31, 29, 24);
     --overlay: rgba(0, 0, 0, .55);
     --shadow: none;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #000000;
-  --card: #1C1C1E;
-  --elev: #2C2C2E;
-  --seg-on: #636366;
-  --fill: rgba(118, 118, 128, .24);
-  --fill-2: rgba(118, 118, 128, .14);
-  --text: #FFFFFF;
-  --text-2: rgba(235, 235, 245, .62);
-  --text-3: rgba(235, 235, 245, .3);
-  --sep: rgba(84, 84, 88, .6);
-  --accent: #0A84FF;
-  --accent-soft: rgba(10, 132, 255, .2);
+  --geo-ring: rgba(255, 200, 61, .38);
+  --geo-t2: rgba(26, 156, 146, .22);
+  --geo-g2: rgba(22, 184, 122, .18);
+  --geo-y2: rgba(255, 200, 61, .18);
+  --geo-t: rgba(26, 156, 146, .5);
+  --geo-g: rgba(22, 184, 122, .45);
+  --geo-y: rgba(255, 200, 61, .5);
+  --bg: #13120F;
+  --card: #1F1D18;
+  --elev: #2A2721;
+  --seg-on: #4A463D;
+  --fill: rgba(255, 240, 210, .09);
+  --fill-2: rgba(255, 240, 210, .05);
+  --text: #F5F0E4;
+  --text-2: rgba(245, 240, 228, .62);
+  --text-3: rgba(245, 240, 228, .3);
+  --sep: rgba(255, 240, 210, .12);
+  --accent: #2FBF84;
+  --accent-soft: rgba(47, 191, 132, .18);
   --in: #199E70;
   --out: #D95926;
   --in-text: #30D158;
   --danger: #FF453A;
   --warn: #FFB340;
-  --grid: #2C2C2E;
-  --axis: #3A3A3C;
-  --bar: rgb(22, 22, 24);
+  --grid: #2A2721;
+  --axis: #3A362E;
+  --bar: rgb(31, 29, 24);
   --overlay: rgba(0, 0, 0, .55);
   --shadow: none;
 }
@@ -929,3 +950,17 @@ button.leg-row:active { opacity: .6; }
    its finished look: nothing inside it plays its entrance animation again. */
 .view.settled *, .view.settled *::before, .view.settled *::after { animation: none !important; }
 .view.settled .chart .line.anim { stroke-dashoffset: 0; }
+
+/* ---------- Geometric look (matches the app icon): the icon's circles in the corner of the balance card
+   and of the small account and goal cards; a yellow ring around the + button ---------- */
+.hero-card { background:
+  radial-gradient(circle at calc(100% - 20px) 2px, var(--geo-y) 0 44px, transparent 45px),
+  radial-gradient(circle at calc(100% - 74px) -14px, var(--geo-g) 0 46px, transparent 47px),
+  radial-gradient(circle at calc(100% + 6px) 58px, var(--geo-t) 0 30px, transparent 31px), var(--card); }
+.acc-card, .goal-mini { position: relative; overflow: hidden; }
+.acc-card > *, .goal-mini > * { position: relative; z-index: 1; }
+.acc-card::after, .goal-mini::after { content: ""; position: absolute; right: -22px; top: -22px; width: 64px; height: 64px; border-radius: 50%; background: var(--geo-c, var(--geo-y2)); pointer-events: none; }
+.strip > .card:nth-child(3n+2) { --geo-c: var(--geo-g2); }
+.strip > .card:nth-child(3n) { --geo-c: var(--geo-t2); }
+.acc-card.add::after, .goal-mini.add::after { display: none; }
+.fab { box-shadow: 0 0 0 5px var(--geo-ring), 0 10px 26px color-mix(in srgb, var(--accent) 40%, transparent), 0 2px 4px rgba(0, 0, 0, .1); }

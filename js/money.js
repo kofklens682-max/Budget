@@ -248,7 +248,7 @@ function renderHome() {
         <div class="split">${segs.filter((s) => s.v > 0).map((s) => `<i style="width:${((s.v / sum) * 100).toFixed(2)}%;background:${s.c}"></i>`).join('')}</div>
         <div class="split-leg">${segs.map((s) => `<div><i style="background:${s.c}"></i>${esc(s.name)}${s.env ? '<span class="muted"> · envelope</span>' : ''}<b class="num">${fmt(s.v, cur)}</b></div>`).join('')}</div>`;
     }
-    h += `<section class="card">
+    h += `<section class="card hero-card">
       <div class="label">Total balance</div>
       <div class="hero num" id="hero" data-v="${bal}">${heroHtml(bal, cur)}</div>
       ${meta.length ? `<div class="hero-meta">${meta.join('')}</div>` : ''}
@@ -1829,7 +1829,7 @@ function applyTheme() {
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', t);
   const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-  $('meta[name="theme-color"]').setAttribute('content', dark ? '#000000' : '#F2F2F7');
+  $('meta[name="theme-color"]').setAttribute('content', dark ? '#13120F' : '#F5F1E6');
 }
 
 // ================= Backup =================
