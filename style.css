@@ -924,3 +924,8 @@ button.leg-row:active { opacity: .6; }
 .row.dim { opacity: .55; }
 .stepper b.bump { animation: split-bump .3s cubic-bezier(.2, .9, .3, 1.4); }
 @keyframes split-bump { 40% { transform: scale(1.18); } }
+
+/* A page put back on the screen (after the other tabs were prepared, or coming back to a tab) keeps
+   its finished look: nothing inside it plays its entrance animation again. */
+.view.settled *, .view.settled *::before, .view.settled *::after { animation: none !important; }
+.view.settled .chart .line.anim { stroke-dashoffset: 0; }

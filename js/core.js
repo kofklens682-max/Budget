@@ -791,7 +791,7 @@ function draw(animate, dir, keep, fromTab) {
   let html;
   try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
   v.innerHTML = html;
-  v.classList.remove('enter', 'slide');
+  v.classList.remove('enter', 'slide', 'settled');
   if (animate && !reduceMotion()) {
     if (dir) v.style.setProperty('--dir', dir);
     if (dir && keep) [...v.children].forEach((c, i) => { if (i >= keep) { c.classList.add('sub-in'); c.style.setProperty('--i', Math.min(i - keep, 5)); } });
@@ -836,7 +836,7 @@ function keepPage(tab, nodes, y, built) {
   const frag = document.createDocumentFragment();
   frag.append(...nodes);
   frag.querySelectorAll('[data-kid]').forEach((el) => { el.id = el.dataset.kid; el.removeAttribute('data-kid'); });
-  kept[tab] = { nodes: frag, y, rev: built.rev, day: built.day, t: built.t, epoch: built.epoch };
+  kept[tab] = { nodes: frag, y, rev: built.rev, day: built.day, t: built.t, epoch: built.epoch, shown: true };
 }
 // Show a kept page again. Returns false when there's none (or it's out of date).
 function restorePage(tab, dir) {
@@ -847,6 +847,8 @@ function restorePage(tab, dir) {
   v.replaceChildren(k.nodes);
   v._built = { tab, rev: k.rev, day: k.day, t: k.t, epoch: k.epoch };
   v.classList.remove('enter', 'slide');
+  // A page that was on the screen before comes back as it was: its charts don't grow again.
+  v.classList.toggle('settled', !!k.shown);
   window.scrollTo(0, k.y);
   if (dir && !reduceMotion()) {
     v.style.setProperty('--dir', dir);
@@ -887,6 +889,8 @@ function prewarmPages() {
       UI.tab = tab;
       v.replaceChildren(mine);
       v.className = classes;
+      // Put back, the page must not play its grow animations again (it looked like the app reloading).
+      v.classList.add('settled');
       if (dirVar) v.style.setProperty('--dir', dirVar);
       v._built = built;
       window.scrollTo(0, y);
@@ -1042,7 +1046,7 @@ function showTab(tab) {
   if (!reduceMotion() && v.firstChild) {
     // The old page slides out inside a "ghost" layer; afterwards it's kept for coming back.
     const g = document.createElement('div');
-    g.className = 'view ghost';
+    g.className = 'view ghost settled';
     g.setAttribute('aria-hidden', 'true');
     g.inert = true;
     g.style.top = `${-y}px`;
