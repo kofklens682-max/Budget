@@ -384,6 +384,10 @@ function conv(v, from, to = UI.cur) {
 }
 const inSom = (v, cur) => conv(v, cur, 'UZS');
 const fmtIn = (v, from, o) => fmt(conv(v, from), UI.cur, o);
+// The currency an amount kept in `from` is shown in: the chosen one, or its own while there's no rate.
+const dispCur = (from) => (from === UI.cur || somRate() ? UI.cur : from);
+// Like fmtIn, but never shows 0 for lack of a rate (goals, where each envelope has its own currency).
+const fmtG = (v, from, o) => { const d = dispCur(from); return fmt(conv(v, from, d), d, o); };
 const deltaIn = (t, cur = UI.cur) => conv(delta(t, 'UZS'), 'UZS', cur) + conv(delta(t, 'USD'), 'USD', cur);
 const balanceIn = (cur = UI.cur) => conv(balance('UZS'), 'UZS', cur) + conv(balance('USD'), 'USD', cur);
 const accBalanceIn = (id, cur = UI.cur) => conv(accBalance(id, 'UZS'), 'UZS', cur) + conv(accBalance(id, 'USD'), 'USD', cur);

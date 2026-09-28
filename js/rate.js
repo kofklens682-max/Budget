@@ -75,7 +75,7 @@ function refreshRate(force) {
 // Turn the automatic rate on (the first time, and for anyone who never typed a rate) and keep it fresh.
 function startRate() {
   const s = S.settings;
-  const ok = (i) => i && Number.isFinite(i.rate) && i.rate >= RATE_MIN && i.rate <= RATE_MAX && /^d{4}-d{2}-d{2}$/.test(i.date) && Number.isFinite(i.checked);
+  const ok = (i) => i && Number.isFinite(i.rate) && i.rate >= RATE_MIN && i.rate <= RATE_MAX && /^\d{4}-\d{2}-\d{2}$/.test(i.date) && Number.isFinite(i.checked);
   if (s.rateInfo && !ok(s.rateInfo)) delete s.rateInfo; // (from an old or damaged backup)
   if (s.rateAuto === undefined) {
     s.rateAuto = true;
