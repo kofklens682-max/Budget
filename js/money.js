@@ -764,6 +764,7 @@ function txHtml() {
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
     </div>
     ${!editing && d.type === 'out' && !d.goalSpend ? againRow(d) : ''}
+    ${d.type === 'in' && (splitGoals().length || (editing && S.goals.some((g) => g.contribs.some((c) => c.auto === d.id)))) ? splitBox(d) : ''}
     ${body}
     <div class="form-label">Details</div>
     <div class="group plain">
@@ -810,6 +811,7 @@ function mountTx(sh) {
     if (th) th.textContent = draft.type === 'transfer' && draft.account === draft.toAccount && draft.toCurrency === draft.currency ? 'Pick two different accounts — or choose “Exchanged” to change currency inside one account.' : '';
     const rh = $('#rate-hint', sh);
     if (rh) rh.textContent = rateText(draft.amount, draft.currency, draft.toAmount, draft.toCurrency);
+    syncSplitBox(sh);
   };
   amt.addEventListener('input', () => { const r = typedAmount(amt.value, draft.currency); amt.value = r.shown; draft.amount = r.value; syncTx(); });
   const person = $('#person', sh);
@@ -828,6 +830,8 @@ function mountTx(sh) {
   $('#note', sh).addEventListener('input', (e) => { draft.note = e.target.value; });
   const rep = $('#tx-repeat', sh);
   if (rep) rep.addEventListener('change', () => { draft.repeatOn = rep.checked; refreshSheet(txHtml(), mountTx); });
+  const sp = $('#tx-split', sh);
+  if (sp) sp.addEventListener('change', () => { draft.noSplit = !sp.checked; syncSplitBox(sh); });
   const gl = $('#tx-goal-last', sh);
   if (gl) gl.addEventListener('change', () => { draft.goalLast = gl.checked; });
   blurOnEnter(sh);
@@ -854,6 +858,8 @@ function saveTx() {
     UI.lastAcc[d.type] = d.account;
   }
   if (d.demo) rec.demo = true;
+  if (rec.type === 'in' && d.noSplit) rec.noSplit = true;
+  const plan = splitPlan(rec); // (worked out while the entry's old version is still there)
   const old = S.tx.find((t) => t.id === rec.id);
   const tpl = d.fromRepeat ? S.tx.find((t) => t.id === d.fromRepeat) : null;
   if (d.fromRepeat) rec.fromRepeat = d.fromRepeat;
@@ -864,6 +870,8 @@ function saveTx() {
   }
   const i = S.tx.findIndex((t) => t.id === rec.id);
   if (i >= 0) S.tx[i] = rec; else S.tx.push(rec);
+  const split = applySplit(rec, plan);
+  const splitNote = split.n ? ` — ${fmt(split.sum, rec.currency)} went into ${split.n === 1 ? split.name : plural(split.n, 'goal')}` : '';
   const spendGoal = i < 0 && rec.type === 'out' && d.goalSpend ? goalById(d.goalSpend) : null;
   // (paid in the other currency: taken from the envelope at the dollar rate)
   const paidIn = spendGoal ? roundCur(spendGoal.currency === rec.currency ? rec.amount : conv(rec.amount, rec.currency, spendGoal.currency), spendGoal.currency) : 0;
@@ -886,11 +894,11 @@ function saveTx() {
   render();
   if (outCur && goalsShort(outCur)) toast(`Your goals now hold ${fmtG(-freeMoney(outCur), outCur)} more than you have`, { label: 'Fix', run: () => fixGoals(outCur) });
   else if (spendGoal) toast(spendGoal.paid ? `${spendGoal.name} — paid ✓` : `Paid ${fmt(rec.amount, rec.currency)} · ${fmtG(goalSaved(spendGoal), spendGoal.currency)} left in ${spendGoal.name}`);
-  else if (i >= 0) toast('Changes saved');
+  else if (i >= 0) toast('Changes saved' + splitNote);
   else if (rec.type === 'transfer' && rec.toCurrency !== rec.currency) toast(`Exchanged ${fmt(rec.amount, rec.currency)} → ${fmt(rec.toAmount, rec.toCurrency)}`);
   else if (rec.type === 'transfer') toast(`Moved ${fmt(rec.amount, rec.currency)} · ${acc(rec.account).name} → ${acc(rec.toAccount).name}`);
-  else if (rec.groupId) toast(`${rec.person || 'Payment'} · ${grp(rec.groupId).name} · ${fmt(rec.amount, rec.currency)}`);
-  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}${rec.repeat ? ' · every month' : ''}`);
+  else if (rec.groupId) toast(`${rec.person || 'Payment'} · ${grp(rec.groupId).name} · ${fmt(rec.amount, rec.currency)}${splitNote}`);
+  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}${rec.repeat ? ' · every month' : ''}${splitNote}`);
   if (rec.repeat && runRepeats()) render();
 }
 
@@ -921,7 +929,9 @@ function runRepeats() {
     while (t.repeatNext <= today && guard++ < 24) {
       const copy = { ...t, id: uid(), date: t.repeatNext, createdAt: Date.now(), fromRepeat: t.id };
       stopRepeat(copy);
+      const plan = splitPlan(copy);
       S.tx.push(copy);
+      applySplit(copy, plan);
       added.push(copy);
       t.repeatNext = monthAfter(t.repeatNext, t.repeatDay);
     }
@@ -1229,6 +1239,7 @@ function goalDetailHtml() {
     <section class="card" style="margin-top:18px">
       ${goalBar(g, st, true)}
       <div class="gc-pace">${glyph('calendar')}<span>${st.pace}${!g.paid && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
+      ${g.auto > 0 && !g.paid ? `<div class="gc-pace">${glyph('split')}<span>Gets <b>${g.auto}%</b> of every money in${st.left <= 0 ? ' (full now, takes nothing)' : ''} · <button class="link inl" data-act="split">Change</button></span></div>` : ''}
     </section>
     ${!g.paid && st.left > 0 ? `<p class="hint">Free money you can add: <b class="num ${free > 0 ? 'in' : ''}">${fmtG(Math.max(0, free), cur)}</b></p>` : ''}
     <div class="btn-row" style="margin-top:14px">
@@ -1418,6 +1429,138 @@ function allocCard() {
     <div class="al-legend"><span><i class="g"></i>In goals <b class="num">${fmt(inGoals, cur)}</b></span><span><i class="f"></i>Free <b class="num">${fmt(Math.max(0, free), cur)}</b></span></div>
     ${short}
   </section>`;
+}
+
+// ================= Split money in =================
+// A part of every "Money in" goes into goals by itself: each goal can take a % of it (goal.auto,
+// set in Settings → Split money in). The parts are ordinary goal lines tied to the entry
+// (contrib.auto = the entry's id), so editing or deleting the entry changes them too. A goal takes
+// nothing once it's full or paid, and never more than is free in its own currency (a $ goal only
+// gets dollars you really have). One entry can skip it (noSplit — a refund, money you owe back).
+const splitGoals = () => [...S.goals].sort(goalSort).filter((g) => g.auto > 0 && !g.paid);
+const splitTotal = () => S.goals.reduce((a, g) => a + (g.paid ? 0 : g.auto || 0), 0);
+// What an entry d ({ id, type, amount, currency }) would put into each goal: [{ g, pct, want, part }]
+// (amounts in the goal's currency). Worked out as if the entry's old version and its old parts
+// were gone, so it's right for a new entry and for one being changed.
+function splitPlan(d) {
+  if (d.type !== 'in' || d.noSplit || !(d.amount > 0) || !splitGoals().length) return [];
+  const free = { UZS: freeMoney('UZS'), USD: freeMoney('USD') };
+  const old = d.id ? S.tx.find((t) => t.id === d.id) : null;
+  if (old) for (const c of ['UZS', 'USD']) free[c] -= delta(old, c);
+  const base = new Map();
+  for (const g of S.goals) {
+    const mine = g.contribs.reduce((a, c) => a + (c.auto && c.auto === d.id ? c.amount : 0), 0);
+    free[g.currency] += mine;
+    base.set(g, goalSaved(g) - mine);
+  }
+  free[d.currency] += d.amount;
+  return splitGoals().map((g) => {
+    const cur = g.currency;
+    const want = cur === d.currency ? roundCur((d.amount * g.auto) / 100, cur) : somRate() ? roundCur(conv((d.amount * g.auto) / 100, d.currency, cur), cur) : 0;
+    const left = Math.max(0, g.target - base.get(g) - goalPaid(g));
+    const part = roundCur(Math.max(0, Math.min(want, left, free[cur])), cur);
+    free[cur] -= part;
+    // why it got less than its %: the goal is (now) full, or there was no more free money in its currency
+    const why = part >= want ? '' : left <= 0.004 ? 'full' : part >= left - 0.004 ? 'fills' : 'free';
+    // (in the entry's currency: exactly the % when nothing was cut, so no rounding crumbs show)
+    const inCur = part >= want ? (d.amount * g.auto) / 100 : cur === d.currency ? part : conv(part, cur, d.currency);
+    return { g, pct: g.auto, want, part, why, inCur };
+  });
+}
+// Put the plan's parts into the goals (taking out the entry's old ones first). Returns
+// { n: goals that got something, sum: in the entry's currency, name: the goal when only one }.
+function applySplit(rec, plan) {
+  S.goals.forEach((g) => { if (g.contribs.some((c) => c.auto === rec.id)) g.contribs = g.contribs.filter((c) => c.auto !== rec.id); });
+  const src = rec.person || (grp(rec.groupId) ? grp(rec.groupId).name : cat('in', rec.category).name);
+  let n = 0, sum = 0, name = '';
+  for (const p of plan) {
+    if (!(p.part > 0)) continue;
+    p.g.contribs.push({ id: uid(), amount: p.part, date: rec.date, note: `Auto ${p.pct}% · ${src}`, auto: rec.id });
+    n++;
+    sum += p.inCur;
+    name = p.g.name;
+  }
+  return { n, sum: roundCur(sum, rec.currency), name };
+}
+// The box in the "Money in" form: where the money will go, and a switch to skip it this time.
+function splitLines(d) {
+  if (d.noSplit) return '<span>Nothing goes into goals this time.</span>';
+  if (!(d.amount > 0)) return splitGoals().map((g) => `<span>${g.auto}% → ${esc(g.name)}</span>`).join('');
+  let used = 0;
+  const rows = splitPlan(d).map((p) => {
+    used += p.inCur;
+    const why = { '': '', full: ' · already full', fills: ' · fills it up', free: p.part > 0 ? ' · all that was free' : ` · no free ${p.g.currency === 'USD' ? 'dollars' : "so'm"}` }[p.why];
+    return `<span>${p.pct}% → ${esc(p.g.name)} · <b class="num">${fmt(p.part, p.g.currency)}</b>${why}</span>`;
+  });
+  return rows.join('') + `<span>${fmt(Math.max(0, d.amount - used), d.currency)} stays free to spend</span>`;
+}
+const splitBox = (d) => `<div class="blk-warn good split-box">${glyph('split')}<div style="flex:1"><b>Split into your goals</b>
+  <div id="split-lines" class="${d.noSplit ? 'off' : ''}">${splitLines(d)}</div>
+  <div class="gl-last"><span>Split this money</span><label class="switch"><input type="checkbox" id="tx-split" ${d.noSplit ? '' : 'checked'} aria-label="Split this money into goals"><i></i></label></div></div></div>`;
+function syncSplitBox(sh) {
+  const box = $('#split-lines', sh);
+  if (!box) return;
+  box.innerHTML = splitLines(draft);
+  box.classList.toggle('off', !!draft.noSplit);
+}
+// Settings → Split money in: a % for each goal; the bar shows how every 100 that comes in is shared.
+function openSplit() { openSheet(splitHtml(), (sh) => syncSplit(sh)); }
+function splitHtml() {
+  const gs = [...S.goals].sort(goalSort);
+  const head = sheetHead('Split money in', '<button data-act="settings">Settings</button>', '<button data-act="close-sheet">Done</button>');
+  if (!gs.length) {
+    return head + `<div class="sheet-body"><section class="card empty"><div class="big">${ic('split', '#FF9500', 'xl')}</div><h3>No goals yet</h3><p>Make a goal first — then choose how much of every money in goes into it by itself.</p><button class="btn" data-act="new-goal">Create a goal</button></section></div>`;
+  }
+  const open = gs.filter((g) => !g.paid);
+  const row = (g) => {
+    const gi = goalIcon(g), st = goalStats(g);
+    const sub = g.paid ? 'Paid — takes nothing' : st.left <= 0 ? 'Full — takes nothing now' : `Goal ${fmtG(g.target, g.currency)}`;
+    return `<div class="row${g.paid ? ' dim' : ''}">${ic(gi.id, gi.c, 'sm')}<div class="row-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${sub}</div></div>
+      ${g.paid ? '' : `<div class="stepper"><button data-act="split-step" data-id="${g.id}" data-v="-5" aria-label="Less">${glyph('minus')}</button><b class="num">${g.auto || 0}%</b><button data-act="split-step" data-id="${g.id}" data-v="5" aria-label="More">${glyph('plus')}</button></div>`}</div>`;
+  };
+  return head + `<div class="sheet-body">
+    <p class="hint" style="margin:2px 4px 14px">Every time money comes in, these parts go into your goals by themselves. The rest stays free to spend.</p>
+    <section class="card">
+      <div class="label">Of every ${UI.cur === 'USD' ? '$100' : "100 so'm"} that comes in</div>
+      <div class="split still" id="split-bar">${open.map((g) => `<i data-sid="${g.id}" style="background:${goalIcon(g).c}"></i>`).join('')}<i data-sid="free" style="background:var(--in)"></i></div>
+      <div class="split-leg" id="split-leg"></div>
+    </section>
+    <div class="form-label">Goals</div>
+    <div class="group">${gs.map(row).join('')}</div>
+    <p class="hint">A goal stops taking money when it's full or paid, and a dollar goal only gets dollars you really have. When you add money in, a switch lets you skip the split — for a refund or money you owe back.</p>
+  </div>`;
+}
+// Bring the sheet up to date in place: the bar's parts glide to their new sizes.
+function syncSplit(sh) {
+  if (!$('#split-bar', sh)) return;
+  const total = splitTotal();
+  $$('#split-bar i', sh).forEach((i) => {
+    const g = goalById(i.dataset.sid), v = i.dataset.sid === 'free' ? 100 - total : (g && g.auto) || 0;
+    i.style.width = `${v}%`;
+    i.style.minWidth = v ? '' : '0';
+  });
+  const open = [...S.goals].sort(goalSort).filter((g) => !g.paid && g.auto > 0);
+  $('#split-leg', sh).innerHTML = open.map((g) => `<div><i style="background:${goalIcon(g).c}"></i>${esc(g.name)}<b class="num">${g.auto}%</b></div>`).join('')
+    + `<div><i style="background:var(--in)"></i>Free to spend<b class="num">${100 - total}%</b></div>`;
+  $$('.stepper', sh).forEach((st) => {
+    const [minus, plus] = $$('button', st), g = goalById(minus.dataset.id), b = $('b', st), v = `${(g && g.auto) || 0}%`;
+    if (!g) return;
+    if (b.textContent !== v) { b.textContent = v; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+    minus.disabled = !(g.auto > 0);
+    plus.disabled = total >= 100;
+  });
+}
+function splitStep(id, v) {
+  const g = goalById(id);
+  if (!g || !sheet) return;
+  const others = splitTotal() - (g.paid ? 0 : g.auto || 0);
+  const next = clamp((g.auto || 0) + v, 0, 100 - others);
+  if (next === (g.auto || 0)) return;
+  if (next) g.auto = next; else delete g.auto;
+  save();
+  buzz();
+  syncSplit(sheet.sh);
+  render();
 }
 
 // ================= Monthly report =================
@@ -1623,6 +1766,7 @@ function settingsHtml() {
       ${navRow('open-cats', 'in', ic('coins', '#34C759', 'sm'), 'Money in categories', `${S.cats.in.length} categories`)}
       ${navRow('open-cats', 'out', ic('cart', '#FF9500', 'sm'), 'Money out categories', `${S.cats.out.length} categories`)}
       ${navRow('groups-view', '', ic('users', '#007AFF', 'sm'), 'Groups', S.groups.length ? plural(S.groups.length, 'group') : 'Your classes and who paid')}
+      ${navRow('split', '', ic('split', '#FF9500', 'sm'), 'Split money in', splitTotal() ? `${splitTotal()}% of every money in goes to ${plural(splitGoals().length, 'goal')}` : 'Send a part of every money in to your goals')}
     </div>
 
     <div class="form-label">Show amounts in</div>
@@ -1902,7 +2046,8 @@ Object.assign(ACTIONS, {
     const goalsBefore = JSON.parse(JSON.stringify(S.goals));
     S.tx = S.tx.filter((t) => t.id !== removed.id);
     // Deleting a "paid for a goal" expense gives the goal its money back.
-    S.goals.forEach((g) => { const n = g.contribs.length; g.contribs = g.contribs.filter((c) => c.txId !== removed.id); if (g.contribs.length !== n) delete g.paid; });
+    // (and the parts Split money in put into goals from it go too)
+    S.goals.forEach((g) => { const paid = g.contribs.some((c) => c.txId === removed.id); g.contribs = g.contribs.filter((c) => c.txId !== removed.id && c.auto !== removed.id); if (paid) delete g.paid; });
     save(); txDone(); render();
     const cur = removed.type === 'in' ? removed.currency : null;
     if (cur && goalsShort(cur)) toast(`Entry deleted — goals now hold ${fmtG(-freeMoney(cur), cur)} more than you have`, { label: 'Fix', run: () => fixGoals(cur) });
@@ -1965,6 +2110,8 @@ Object.assign(ACTIONS, {
     openTx(null, { type: 'out', amount: goalSaved(g), currency: g.currency, note: g.name, goalSpend: g.id, goalLast: goalStats(g).left <= 0.004, back: () => openGoal(g.id) });
   },
   'goals-fix': (a, v) => fixGoals(v),
+  split: () => openSplit(),
+  'split-step': (a, v, id) => splitStep(id, Number(v)),
   'g-all-free': () => {
     gdraft.initial = Math.max(0, freeMoney(gdraft.currency));
     const inp = $('#g-init');

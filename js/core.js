@@ -261,6 +261,7 @@ function normalize(d) {
   const goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => g && g.id && g.name && CUR[g.currency]).map((g) => ({
     ...g,
     icon: G[g.icon] ? g.icon : EMOJI_TO_ICON[g.emoji] || 'target',
+    auto: clamp(Math.round(Number(g.auto)) || 0, 0, 100), // Split money in: % of every money in
     contribs: Array.isArray(g.contribs) ? g.contribs : [],
   }));
   const schedule = normSchedule(d.schedule);

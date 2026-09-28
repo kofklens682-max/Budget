@@ -913,3 +913,14 @@ button.leg-row:active { opacity: .6; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
 }
+
+/* Split money in: the bar in its sheet glides to new sizes; the box in the Money in form */
+.split.still i { animation: none; transition: width .35s cubic-bezier(.2, .9, .3, 1), min-width .35s; }
+.split-box #split-lines span { display: block; margin-top: 3px; }
+.split-box #split-lines b { display: inline; font-size: inherit; color: var(--text); }
+#split-lines { transition: opacity .2s; }
+#split-lines.off { opacity: .55; }
+.link.inl { font-size: inherit; padding: 0; }
+.row.dim { opacity: .55; }
+.stepper b.bump { animation: split-bump .3s cubic-bezier(.2, .9, .3, 1.4); }
+@keyframes split-bump { 40% { transform: scale(1.18); } }
