@@ -109,9 +109,11 @@ const ic = (g, c, cls = '') => `<span class="ic ${cls}" style="--c:${c}"><svg vi
 const glyph = (g, cls = '') => `<svg class="gl ${cls}" viewBox="0 0 24 24" aria-hidden="true">${G[g] || ''}</svg>`;
 
 function fmt(n, cur, o = {}) {
-  const neg = n < 0;
-  const sign = o.sign ? (n > 0 ? '+' : neg ? '−' : '') : (neg ? '−' : '');
   const a = Math.abs(n);
+  // (an amount that rounds to nothing — like −0.3 so'm left over from converting — has no sign)
+  const zero = (cur === 'USD' ? Math.round(a * 100) : Math.round(a)) === 0;
+  const neg = n < 0 && !zero;
+  const sign = o.sign ? (n > 0 && !zero ? '+' : neg ? '−' : '') : (neg ? '−' : '');
   if (cur === 'USD') {
     const cents = Math.round(a * 100);
     let s = '$' + groupDigits(String(Math.floor(cents / 100)), ',');
@@ -261,8 +263,10 @@ function normalize(d) {
   const goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => g && g.id && g.name && CUR[g.currency]).map((g) => ({
     ...g,
     icon: G[g.icon] ? g.icon : EMOJI_TO_ICON[g.emoji] || 'target',
+    target: Number(g.target) > 0 ? Number(g.target) : 0,
+    deadline: /^\d{4}-\d{2}-\d{2}$/.test(g.deadline || '') ? g.deadline : iso(addDays(new Date(), 365)), // (a goal without a date would break the lists)
     auto: clamp(Math.round(Number(g.auto)) || 0, 0, 100), // Split money in: % of every money in
-    contribs: Array.isArray(g.contribs) ? g.contribs : [],
+    contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)), // (one damaged line would turn every total into NaN)
   }));
   const schedule = normSchedule(d.schedule);
   schedule.acts.forEach((a) => { if (a.groupId && !gids.has(a.groupId)) a.groupId = null; });
@@ -360,8 +364,9 @@ function sums() {
   });
 }
 const openingTotal = (cur) => S.accounts.reduce((a, x) => a + (x.opening[cur] || 0), 0);
-const balance = (cur) => (memo ? sums().bal[cur] : S.tx.reduce((a, t) => a + delta(t, cur), openingTotal(cur)));
-const accBalance = (id, cur) => (memo && sums().accs[id] ? sums().accs[id][cur] : S.tx.reduce((a, t) => a + accDelta(t, id, cur), acc(id).opening[cur] || 0));
+// (dollars add up with tiny float crumbs — 0.1 + 0.2 − 0.3 — so balances are rounded to the cent)
+const balance = (cur) => roundCur(memo ? sums().bal[cur] : S.tx.reduce((a, t) => a + delta(t, cur), openingTotal(cur)), cur);
+const accBalance = (id, cur) => roundCur(memo && sums().accs[id] ? sums().accs[id][cur] : S.tx.reduce((a, t) => a + accDelta(t, id, cur), acc(id).opening[cur] || 0), cur);
 const usesCur = (cur) => (memo ? sums().used[cur] : S.tx.some((t) => t.currency === cur || (t.type === 'transfer' && t.toCurrency === cur)) || S.accounts.some((a) => a.opening[cur]));
 // Money in and out between two dates, both currencies added together in `cur` (see conv).
 function totals(cur, from, to) {

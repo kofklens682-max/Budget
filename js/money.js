@@ -870,6 +870,17 @@ function saveTx() {
     startRepeat(rec, old && old.repeat && old.date === rec.date ? old.repeatNext : null);
   }
   const i = S.tx.findIndex((t) => t.id === rec.id);
+  // An expense that was “paid for a goal”, changed: the goal's “already paid” line follows it (a lower
+  // amount gives money back to the envelope, a higher one takes more — never more than it holds).
+  if (old && rec.type === 'out' && (old.amount !== rec.amount || old.currency !== rec.currency || old.date !== rec.date)) {
+    for (const g of S.goals) for (const c of g.contribs) {
+      if (c.txId !== rec.id || !(c.amount < 0)) continue;
+      const was = -c.amount, want = roundCur(g.currency === rec.currency ? rec.amount : conv(rec.amount, rec.currency, g.currency), g.currency);
+      if (want <= 0) continue;
+      c.amount = -(want > was ? was + Math.min(want - was, Math.max(0, goalSaved(g))) : want);
+      c.date = rec.date;
+    }
+  }
   if (i >= 0) S.tx[i] = rec; else S.tx.push(rec);
   const split = applySplit(rec, plan);
   const splitNote = split.n ? ` — ${fmt(split.sum, rec.currency)} went into ${split.n === 1 ? split.name : plural(split.n, 'goal')}` : '';
@@ -2052,8 +2063,9 @@ Object.assign(ACTIONS, {
     S.goals.forEach((g) => { const paid = g.contribs.some((c) => c.txId === removed.id); g.contribs = g.contribs.filter((c) => c.txId !== removed.id && c.auto !== removed.id); if (paid) delete g.paid; });
     save(); txDone(); render();
     const cur = removed.type === 'in' ? removed.currency : null;
-    if (cur && goalsShort(cur)) toast(`Entry deleted — goals now hold ${fmtG(-freeMoney(cur), cur)} more than you have`, { label: 'Fix', run: () => fixGoals(cur) });
-    else undoToast(removed.type === 'transfer' ? 'Transfer deleted' : 'Entry deleted', () => { S.tx.push(removed); S.goals = goalsBefore; });
+    // (always Undo — when goals now hold too much, the Goals page offers “Fix it”)
+    const short = cur && goalsShort(cur) ? ` — goals now hold ${fmtG(-freeMoney(cur), cur)} more than you have` : '';
+    undoToast((removed.type === 'transfer' ? 'Transfer deleted' : 'Entry deleted') + short, () => { S.tx.push(removed); S.goals = goalsBefore; });
   },
 
   // accounts
