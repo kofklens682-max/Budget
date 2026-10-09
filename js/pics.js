@@ -163,9 +163,10 @@ async function takeShared() {
     if (!r) return;
     await c.delete('./shared');
     if (r.headers.get('X-Kind') !== 'image') { openTx(null, {}); return; }
-    const id = await picFrom(await r.blob());
-    openTx(null, { pic: id });
-    toast('Screenshot attached — fill in the amount and tap Save');
+    let id = null;
+    try { id = await picFrom(await r.blob()); } catch (e) { /* a picture this phone can't open */ }
+    openTx(null, id ? { pic: id } : {});
+    toast(id ? 'Screenshot attached — fill in the amount and tap Save' : "Couldn't open that picture — try Add in the form");
   } catch (e) { /* nothing shared after all */ }
 }
 
