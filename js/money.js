@@ -196,7 +196,7 @@ function txRow(t, showDate, inAccount) {
   if (t.repeat || t.fromRepeat) parts.push('Monthly');
   if (showDate) parts.push(dayLabel(t.date));
   return `<button class="row ${UI.flashId === t.id ? 'flash' : ''}" data-act="edit-tx" data-id="${t.id}">${tile}
-    <div class="row-main"><div class="row-title">${esc(title)}</div>${parts.length ? `<div class="row-sub">${esc(parts.join(' · '))}</div>` : ''}</div>${amt}</button>`;
+    <div class="row-main"><div class="row-title">${esc(title)}${t.pic ? glyph('image', 'pic-mark') : ''}</div>${parts.length ? `<div class="row-sub">${esc(parts.join(' · '))}</div>` : ''}</div>${amt}</button>`;
 }
 
 function accPicker(act, selected) {
@@ -702,7 +702,7 @@ function openTx(id, preset = {}) {
     draft = {
       id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: to, toAmount: 0, toCurrency: cur,
       person: preset.person || '', category: preset.category || null, date: todayIso(), note: preset.note || '',
-      goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast, from: preset.from || ['free'],
+      goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast, from: preset.from || ['free'], pic: preset.pic || null,
       groupId: preset.groupId || null, studentId: preset.studentId || null, forMonth: preset.forMonth || null,
     };
   }
@@ -774,7 +774,6 @@ function txHtml() {
     ${d.goalSpend && goalById(d.goalSpend) && !editing ? `<div class="blk-warn good" style="margin:0 0 12px">${glyph('receipt')}<div style="flex:1"><b>Paying for “${esc(goalById(d.goalSpend).name)}”</b><span>The expense is recorded and taken from the envelope (${fmt(goalSaved(goalById(d.goalSpend)), goalById(d.goalSpend).currency)} in it). Pay all of it, or just a part.</span>
       <div class="gl-last"><span>This payment finishes the goal</span><label class="switch"><input type="checkbox" id="tx-goal-last" ${d.goalLast ? 'checked' : ''} aria-label="This payment finishes the goal"><i></i></label></div></div></div>` : ''}
     <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']], d.type)}</div>
-    ${!editing && !d.goalSpend ? `<div id="scan">${scanRow(d)}</div>` : ''}
     <div class="amount-box">
       <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount">
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
@@ -788,6 +787,7 @@ function txHtml() {
       <label class="row field"><span>Date</span><input type="date" id="date" value="${d.date}"></label>
       <label class="row field"><span>Note</span><input id="note" placeholder="Optional" value="${esc(d.note)}" autocomplete="off" enterkeyhint="done"></label>
       ${canRepeat(d) ? `<div class="row field"><span style="flex:1">Every month</span><label class="switch"><input type="checkbox" id="tx-repeat" ${d.repeatOn ? 'checked' : ''} aria-label="Add this every month"><i></i></label></div>` : ''}
+      ${picRow(d)}
     </div>
     ${canRepeat(d) && d.repeatOn ? `<p class="hint">${d.fromRepeat ? 'Added automatically each month. Switch off to stop.' : `Added again on the ${ordinal(Number(d.date.slice(8)))} of every month.`}</p>` : ''}
     <div class="actions">
@@ -854,7 +854,8 @@ function mountTx(sh) {
   if (gl) gl.addEventListener('change', () => { draft.goalLast = gl.checked; });
   blurOnEnter(sh);
   syncTx();
-  if (!draft.id && !draft.amount) setTimeout(() => amt.focus({ preventScroll: true }), 420);
+  picFill(sh);
+  if (!draft.id && !draft.amount && !draft.pic) setTimeout(() => amt.focus({ preventScroll: true }), 420);
 }
 function txDone() { if (draft && draft.back) draft.back(); else closeSheet(); }
 function saveTx() {
@@ -876,9 +877,7 @@ function saveTx() {
     UI.lastAcc[d.type] = d.account;
   }
   if (d.demo) rec.demo = true;
-  // From a screenshot: its receipt number (spots it if it's added again), and which account that card is.
-  if (d.ref && rec.type !== 'transfer') rec.ref = d.ref;
-  if (d.card && rec.type !== 'transfer') S.settings.cards = { ...(S.settings.cards || {}), [d.card]: rec.account };
+  if (d.pic) rec.pic = d.pic; // a screenshot kept with the entry (pics.js)
   if (rec.type === 'in' && d.noSplit) rec.noSplit = true;
   if (rec.type === 'out' && !d.goalSpend && d.from && !(d.from.length === 1 && d.from[0] === 'free')) rec.from = [...d.from];
   const plan = splitPlan(rec); // (worked out while the entry's old version is still there)
@@ -2001,14 +2000,17 @@ function applyTheme() {
 }
 
 // ================= Backup =================
-function backupText() {
+// (with the screenshots kept with entries, so a restore brings them back too)
+async function backupText() {
   const data = JSON.parse(JSON.stringify(S));
   data.settings.pin = null;
-  return JSON.stringify({ app: 'budget', version: APP_VERSION, exportedAt: new Date().toISOString(), data });
+  let pics = {};
+  try { pics = await picsForBackup(S.tx); } catch (e) { /* the money data matters most */ }
+  return JSON.stringify({ app: 'budget', version: APP_VERSION, exportedAt: new Date().toISOString(), data, pics });
 }
 function markBackedUp() { S.settings.lastBackup = Date.now(); save(); render(); if (sheet) refreshSheet(settingsHtml(), mountSettings); }
-function exportBackup() {
-  const url = URL.createObjectURL(new Blob([backupText()], { type: 'application/json' }));
+async function exportBackup() {
+  const url = URL.createObjectURL(new Blob([await backupText()], { type: 'application/json' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = `budget-backup-${todayIso()}.json`;
@@ -2020,7 +2022,7 @@ function exportBackup() {
   toast('Backup saved to Downloads');
 }
 async function shareBackup() {
-  const file = new File([backupText()], `budget-backup-${todayIso()}.txt`, { type: 'text/plain' });
+  const file = new File([await backupText()], `budget-backup-${todayIso()}.txt`, { type: 'text/plain' });
   try {
     await navigator.share({ files: [file], title: 'Budget backup' });
     markBackedUp();
@@ -2039,6 +2041,7 @@ async function importBackupFile(f) {
   const ok = await ask({ title: `Restore backup${when}?`, msg: `It has ${n.tx.length} entries, ${n.accounts.length} accounts, ${n.groups.length} groups and ${n.goals.length} goals. Everything currently in the app will be replaced.`, ok: 'Restore', destructive: true });
   if (!ok) return;
   await keepCopy('before', 'Before a restore');
+  await picsFromBackup(obj.pics);
   n.settings.pin = S.settings.pin;
   if (!data.schedule) n.schedule = S.schedule; // older backups have no schedule — keep the current one
   S = n;

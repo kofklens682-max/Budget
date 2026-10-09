@@ -15,7 +15,7 @@ const SHELL = [
   './js/schedule.js',
   './js/rate.js',
   './js/acctui.js',
-  './js/scan.js',
+  './js/pics.js',
   './js/main.js',
   './manifest.webmanifest',
   './icons/icon-96.png',
@@ -72,8 +72,8 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// Android's Share menu → Budget: a screenshot (or a bank message) is kept for a moment, then the app
-// opens with ?share=1 and fills in a new entry from it (js/scan.js).
+// Android's Share menu → Budget: a screenshot is kept for a moment, then the app opens with ?share=1
+// and starts a new entry with it attached (js/pics.js).
 async function takeShare(req) {
   try {
     const fd = await req.formData();
