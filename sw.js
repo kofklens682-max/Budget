@@ -1,6 +1,7 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
 const VERSION = 'budget-v24';
+const SHARE = 'budget-share'; // a picture or message shared to Budget, until the app picks it up
 const SHELL = [
   './',
   './index.html',
@@ -14,6 +15,7 @@ const SHELL = [
   './js/schedule.js',
   './js/rate.js',
   './js/acctui.js',
+  './js/scan.js',
   './js/main.js',
   './manifest.webmanifest',
   './icons/icon-96.png',
@@ -41,7 +43,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('budget-') && k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('budget-') && k !== VERSION && k !== SHARE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -50,6 +52,7 @@ self.addEventListener('activate', (e) => {
 // every file at each start. New versions arrive through a new service worker (see VERSION).
 self.addEventListener('fetch', (e) => {
   const req = e.request;
+  if (req.method === 'POST' && new URL(req.url).pathname.endsWith('/share-target')) { e.respondWith(takeShare(req)); return; }
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
@@ -68,3 +71,18 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
+
+// Android's Share menu → Budget: a screenshot (or a bank message) is kept for a moment, then the app
+// opens with ?share=1 and fills in a new entry from it (js/scan.js).
+async function takeShare(req) {
+  try {
+    const fd = await req.formData();
+    const file = fd.getAll('file').find((f) => f && typeof f !== 'string' && f.size > 0);
+    const text = ['title', 'text', 'url'].map((k) => fd.get(k)).filter((x) => typeof x === 'string' && x.trim()).join('\n');
+    if (file || text) {
+      const c = await caches.open(SHARE);
+      await c.put('./shared', new Response(file || text, { headers: { 'Content-Type': file ? file.type || 'image/png' : 'text/plain', 'X-Kind': file ? 'image' : 'text' } }));
+    }
+  } catch (err) { /* nothing kept: the app just opens */ }
+  return Response.redirect(new URL('./?share=1', self.registration.scope).href, 303);
+}

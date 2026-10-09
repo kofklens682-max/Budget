@@ -39,6 +39,7 @@ window.addEventListener('hashchange', takeScheduleLink);
 
 const params = new URLSearchParams(location.search);
 const addParam = params.get('add');
+const shareParam = params.get('share'); // a screenshot or message shared from another app (see sw.js)
 const tabParam = params.get('tab');
 const hasLink = location.hash.startsWith('#schedule=');
 history.replaceState({ tab: 'home' }, '', location.search && !hasLink ? location.pathname : undefined);
@@ -49,6 +50,7 @@ function start() {
   runRepeats();
   render(true);
   if (addParam === 'in' || addParam === 'out') whenOpen(() => openTx(null, { type: addParam }));
+  if (shareParam) whenOpen(() => takeShared());
   if (TAB_ORDER.includes(tabParam) && tabParam !== 'home') goTab(tabParam);
   takeScheduleLink();
   if (hadQuick) save(); // stores data from older versions in the new format

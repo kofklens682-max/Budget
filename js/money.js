@@ -774,6 +774,7 @@ function txHtml() {
     ${d.goalSpend && goalById(d.goalSpend) && !editing ? `<div class="blk-warn good" style="margin:0 0 12px">${glyph('receipt')}<div style="flex:1"><b>Paying for “${esc(goalById(d.goalSpend).name)}”</b><span>The expense is recorded and taken from the envelope (${fmt(goalSaved(goalById(d.goalSpend)), goalById(d.goalSpend).currency)} in it). Pay all of it, or just a part.</span>
       <div class="gl-last"><span>This payment finishes the goal</span><label class="switch"><input type="checkbox" id="tx-goal-last" ${d.goalLast ? 'checked' : ''} aria-label="This payment finishes the goal"><i></i></label></div></div></div>` : ''}
     <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']], d.type)}</div>
+    ${!editing && !d.goalSpend ? `<div id="scan">${scanRow(d)}</div>` : ''}
     <div class="amount-box">
       <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount">
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
@@ -875,6 +876,9 @@ function saveTx() {
     UI.lastAcc[d.type] = d.account;
   }
   if (d.demo) rec.demo = true;
+  // From a screenshot: its receipt number (spots it if it's added again), and which account that card is.
+  if (d.ref && rec.type !== 'transfer') rec.ref = d.ref;
+  if (d.card && rec.type !== 'transfer') S.settings.cards = { ...(S.settings.cards || {}), [d.card]: rec.account };
   if (rec.type === 'in' && d.noSplit) rec.noSplit = true;
   if (rec.type === 'out' && !d.goalSpend && d.from && !(d.from.length === 1 && d.from[0] === 'free')) rec.from = [...d.from];
   const plan = splitPlan(rec); // (worked out while the entry's old version is still there)
