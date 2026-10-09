@@ -17,6 +17,16 @@ function topPeople(type) {
 const goalPaid = (g) => g.contribs.reduce((a, c) => a + (c.txId && c.amount < 0 ? -c.amount : 0), 0);
 function goalStats(g) {
   const saved = goalSaved(g), paid = goalPaid(g), covered = saved + paid, cur = g.currency;
+  // Saving with no set amount: what's in it, and what went in this month.
+  if (g.open) {
+    const [from, to] = ymRange(ymNow());
+    const month = g.contribs.reduce((a, c) => a + (c.amount > 0 && c.date >= from && c.date < to ? c.amount : 0), 0);
+    return {
+      open: true, saved, paid, covered: saved, left: 0, pct: 0, daysLeft: null, month,
+      pace: month > 0 ? `<b>+${fmtG(month, cur)}</b> went in this month` : 'Nothing went in this month yet',
+      status: ['good', 'No limit'],
+    };
+  }
   const left = Math.max(0, g.target - covered);
   const pct = g.target > 0 ? clamp((covered / g.target) * 100, 0, 100) : 0;
   const today = todayIso();
@@ -42,6 +52,7 @@ function goalStats(g) {
 }
 // The goal as one bar: already paid (darker) · in the envelope · still needed (empty), with a key.
 function goalBar(g, st, big) {
+  if (st.open) return `<div class="g3-leg open"><div><i style="background:${goalIcon(g).c}"></i>In the envelope<b class="num">${fmtG(st.saved, g.currency)}</b></div></div>`;
   const c = goalIcon(g).c, w = (v) => (g.target > 0 ? clamp((v / g.target) * 100, 0, 100) : 0).toFixed(2);
   const paidC = `color-mix(in srgb, ${c} 55%, var(--text))`;
   const rows = [];
@@ -51,9 +62,10 @@ function goalBar(g, st, big) {
   return `<div class="g3${big ? ' big' : ''}">${st.paid > 0 ? `<i style="width:${w(st.paid)}%;background:${paidC}"></i>` : ''}${st.saved > 0 ? `<i style="width:${w(st.saved)}%;background:${c}"></i>` : ''}</div>
     <div class="g3-leg">${rows.join('')}</div>`;
 }
+// dated goals still filling (soonest first) · savings with no set amount · full · paid
 const goalSort = (a, b) => {
-  const rank = (g) => (g.paid ? 2 : goalSaved(g) >= g.target ? 1 : 0);
-  return rank(a) - rank(b) || a.deadline.localeCompare(b.deadline);
+  const rank = (g) => (g.paid ? 3 : g.open ? 1 : goalSaved(g) >= g.target ? 2 : 0);
+  return rank(a) - rank(b) || (a.deadline || '').localeCompare(b.deadline || '');
 };
 
 // cur 'ALL' = both currencies together, in the chosen currency (at the dollar rate).
@@ -294,11 +306,11 @@ function renderHome() {
   h += `<div class="sec-head"><h2>Goals</h2>${S.goals.length ? '<button class="link" data-act="tab" data-tab="goals">See all</button>' : ''}</div>`;
   if (S.goals.length) {
     h += `<div class="strip">${[...S.goals].sort(goalSort).map((g) => {
-      const st = goalStats(g), gi = goalIcon(g);
+      const st = goalStats(g), gi = goalIcon(g), dc = dispCur(g.currency), short = (v) => compact(conv(v, g.currency, dc), dc);
       return `<button class="card goal-mini" data-act="goal" data-id="${g.id}">
-        ${ring(st.pct, 46, 5, `<span style="color:${gi.c}">${glyph(gi.id)}</span>`, st.pct >= 100)}
+        ${st.open ? `<div class="gm-open">${ic(gi.id, gi.c)}</div>` : ring(st.pct, 46, 5, `<span style="color:${gi.c}">${glyph(gi.id)}</span>`, st.pct >= 100)}
         <div class="gm-name">${esc(g.name)}</div>
-        <div class="gm-sub num">${Math.floor(st.pct)}% · ${compact(conv(st.covered, g.currency, dispCur(g.currency)), dispCur(g.currency))} of ${compact(conv(g.target, g.currency, dispCur(g.currency)), dispCur(g.currency))}</div>
+        <div class="gm-sub num">${st.open ? `${short(st.saved)} saved` : `${Math.floor(st.pct)}% · ${short(st.covered)} of ${short(g.target)}`}</div>
       </button>`;
     }).join('')}<button class="card goal-mini add" data-act="new-goal"><span class="icon-btn">${I.plus}</span><div class="gm-name">New goal</div></button></div>`;
   } else {
@@ -553,11 +565,11 @@ function renderGoals() {
     h += `<button class="card goal-card" data-act="goal" data-id="${g.id}">
       <div class="gc-top">
         ${ic(gi.id, gi.c)}
-        <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}</div></div>
+        <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${st.open ? 'No set amount — just saving' : `by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}`}</div></div>
         <span class="chip ${st.status[0]}">${st.status[1]}</span>
       </div>
       ${goalBar(g, st)}
-      <div class="gc-pace">${glyph('calendar')}<span>${st.pace}</span></div>
+      <div class="gc-pace">${glyph(st.open ? 'coins' : 'calendar')}<span>${st.pace}${st.open && g.auto > 0 ? ` · gets ${g.auto}% of money in` : ''}</span></div>
     </button>`;
   }
   return h + '</div>';
@@ -690,10 +702,11 @@ function openTx(id, preset = {}) {
     draft = {
       id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: to, toAmount: 0, toCurrency: cur,
       person: preset.person || '', category: preset.category || null, date: todayIso(), note: preset.note || '',
-      goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast,
+      goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast, from: preset.from || ['free'],
       groupId: preset.groupId || null, studentId: preset.studentId || null, forMonth: preset.forMonth || null,
     };
   }
+  draft.from = Array.isArray(draft.from) && draft.from.length ? [...draft.from] : ['free'];
   if (!S.accounts.some((a) => a.id === draft.account)) draft.account = S.accounts[0].id;
   if (!draft.toCurrency) draft.toCurrency = draft.currency;
   if (!draft.toAccount) draft.toAccount = (S.accounts.find((a) => a.id !== draft.account) || S.accounts[0]).id;
@@ -705,6 +718,7 @@ function openTx(id, preset = {}) {
 function reopenTx() { openSheet(txHtml(), mountTx); }
 function draftOk(d) {
   if (!(d.amount > 0)) return false;
+  if (d.type === 'out') { const p = takePlan(d); return !(p && p.blocked); }
   if (d.type !== 'transfer') return true;
   if (d.toCurrency !== d.currency) return d.toAmount > 0;
   return d.account !== d.toAccount;
@@ -765,6 +779,7 @@ function txHtml() {
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
     </div>
     ${!editing && d.type === 'out' && !d.goalSpend ? againRow(d) : ''}
+    ${d.type === 'out' && !d.goalSpend ? takeRow(d) : ''}
     ${d.type === 'in' && (splitGoals().length || (editing && S.goals.some((g) => g.contribs.some((c) => c.auto === d.id)))) ? splitBox(d) : ''}
     ${body}
     <div class="form-label">Details</div>
@@ -813,6 +828,7 @@ function mountTx(sh) {
     const rh = $('#rate-hint', sh);
     if (rh) rh.textContent = rateText(draft.amount, draft.currency, draft.toAmount, draft.toCurrency);
     syncSplitBox(sh);
+    syncTake(sh);
   };
   amt.addEventListener('input', () => { const r = typedAmount(amt.value, draft.currency); amt.value = r.shown; draft.amount = r.value; syncTx(); });
   const person = $('#person', sh);
@@ -860,7 +876,9 @@ function saveTx() {
   }
   if (d.demo) rec.demo = true;
   if (rec.type === 'in' && d.noSplit) rec.noSplit = true;
+  if (rec.type === 'out' && !d.goalSpend && d.from && !(d.from.length === 1 && d.from[0] === 'free')) rec.from = [...d.from];
   const plan = splitPlan(rec); // (worked out while the entry's old version is still there)
+  const take = rec.type === 'out' && !d.goalSpend ? takePlan({ ...rec, from: d.from }) : null;
   const old = S.tx.find((t) => t.id === rec.id);
   const tpl = d.fromRepeat ? S.tx.find((t) => t.id === d.fromRepeat) : null;
   if (d.fromRepeat) rec.fromRepeat = d.fromRepeat;
@@ -884,6 +902,7 @@ function saveTx() {
   if (i >= 0) S.tx[i] = rec; else S.tx.push(rec);
   const split = applySplit(rec, plan);
   const splitNote = split.n ? ` — ${fmt(split.sum, rec.currency)} went into ${split.n === 1 ? split.name : plural(split.n, 'goal')}` : '';
+  const takeNote = applyTake(rec, take);
   const spendGoal = i < 0 && rec.type === 'out' && d.goalSpend ? goalById(d.goalSpend) : null;
   // (paid in the other currency: taken from the envelope at the dollar rate)
   const paidIn = spendGoal ? roundCur(spendGoal.currency === rec.currency ? rec.amount : conv(rec.amount, rec.currency, spendGoal.currency), spendGoal.currency) : 0;
@@ -904,13 +923,13 @@ function saveTx() {
   buzz();
   txDone();
   render();
-  if (outCur && goalsShort(outCur)) toast(`Your goals now hold ${fmtG(-freeMoney(outCur), outCur)} more than you have`, { label: 'Fix', run: () => fixGoals(outCur) });
+  if (outCur && goalsShort(outCur)) toast(`Your goals now hold ${fmtG(-freeMoney(outCur), outCur)} more than you have`, { label: 'Fix', run: () => openFix(outCur) });
   else if (spendGoal) toast(spendGoal.paid ? `${spendGoal.name} — paid ✓` : `Paid ${fmt(rec.amount, rec.currency)} · ${fmtG(goalSaved(spendGoal), spendGoal.currency)} left in ${spendGoal.name}`);
-  else if (i >= 0) toast('Changes saved' + splitNote);
+  else if (i >= 0) toast('Changes saved' + splitNote + takeNote);
   else if (rec.type === 'transfer' && rec.toCurrency !== rec.currency) toast(`Exchanged ${fmt(rec.amount, rec.currency)} → ${fmt(rec.toAmount, rec.toCurrency)}`);
   else if (rec.type === 'transfer') toast(`Moved ${fmt(rec.amount, rec.currency)} · ${acc(rec.account).name} → ${acc(rec.toAccount).name}`);
   else if (rec.groupId) toast(`${rec.person || 'Payment'} · ${grp(rec.groupId).name} · ${fmt(rec.amount, rec.currency)}${splitNote}`);
-  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}${rec.repeat ? ' · every month' : ''}${splitNote}`);
+  else toast(`${rec.type === 'in' ? 'Money in' : 'Money out'} · ${fmt(rec.amount, rec.currency)}${rec.repeat ? ' · every month' : ''}${splitNote}${takeNote}`);
   if (rec.repeat && runRepeats()) render();
 }
 
@@ -941,6 +960,7 @@ function runRepeats() {
     while (t.repeatNext <= today && guard++ < 24) {
       const copy = { ...t, id: uid(), date: t.repeatNext, createdAt: Date.now(), fromRepeat: t.id };
       stopRepeat(copy);
+      delete copy.from; // (monthly copies come from free money; goals are only used when you choose them)
       const plan = splitPlan(copy);
       S.tx.push(copy);
       applySplit(copy, plan);
@@ -1152,10 +1172,31 @@ let gdraft = null;
 function openGoalForm(id) {
   const g = id ? S.goals.find((x) => x.id === id) : null;
   const now = new Date();
+  const later = iso(new Date(now.getFullYear(), now.getMonth() + 6, now.getDate()));
   gdraft = g
-    ? { id: g.id, name: g.name, icon: g.icon, target: g.target, currency: g.currency, deadline: g.deadline, initial: 0 }
-    : { id: null, name: '', icon: 'target', target: 0, currency: UI.cur, deadline: iso(new Date(now.getFullYear(), now.getMonth() + 6, now.getDate())), initial: 0 };
+    ? { id: g.id, name: g.name, icon: g.icon, target: g.target, currency: g.currency, deadline: g.deadline || later, initial: 0, open: !!g.open, auto: g.auto || 0, paid: !!g.paid }
+    : { id: null, name: '', icon: 'target', target: 0, currency: UI.cur, deadline: later, initial: 0, open: false, auto: 0 };
   openSheet(goalFormHtml(), mountGoalForm);
+}
+// Split money in, right in the goal: what % of every money in goes here (steps of 2.5), never more
+// than the other goals leave free.
+function goalAutoMax() {
+  const g = gdraft.id ? goalById(gdraft.id) : null;
+  return 100 - (splitTotal() - (g && !g.paid ? g.auto || 0 : 0));
+}
+function goalAutoHint(d) {
+  const ex = d.currency === 'USD' ? 100 : 1000000;
+  if (d.auto > 0) return `From every ${fmt(ex, d.currency)} that comes in, <b>${fmt((ex * d.auto) / 100, d.currency)}</b> goes here by itself.`;
+  return goalAutoMax() <= 0 ? 'All of every money in already goes into other goals.' : 'Nothing goes here by itself. Tap + to put a part of every money in here.';
+}
+function syncGoalAuto(sh) {
+  const st = $('#g-auto', sh);
+  if (!st) return;
+  const [minus, plus] = $$('button', st), b = $('b', st), v = `${gdraft.auto || 0}%`;
+  if (b.textContent !== v) { b.textContent = v; b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+  minus.disabled = !(gdraft.auto > 0);
+  plus.disabled = (gdraft.auto || 0) >= goalAutoMax();
+  $('#g-auto-hint', sh).innerHTML = goalAutoHint(gdraft);
 }
 function goalFormHtml() {
   const d = gdraft, editing = !!d.id;
@@ -1168,7 +1209,11 @@ function goalFormHtml() {
     <div class="form-label">What are you saving for?</div>
     <div class="group"><label class="field"><input id="g-name" style="text-align:left" placeholder="e.g. New phone, Trip, Laptop" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done"></label></div>
     <div class="form-label">How much do you need?</div>
-    <div class="card amount-box" style="padding:14px 12px 12px">
+    <div class="seg full" style="margin-bottom:10px">${segButtons('goal-kind', [['target', 'A set amount'], ['open', 'No limit']], d.open ? 'open' : 'target')}</div>
+    ${d.open ? `<div class="group plain">
+      <div class="row field"><span style="flex:1">Saved in</span><div class="seg sm">${segButtons('goal-cur', curItems, d.currency)}</div></div>
+      ${editing ? '' : `<label class="row field"><span>Put aside now</span><input id="g-init" inputmode="decimal" placeholder="0 (optional)" value="${shownAmount(d.initial, d.currency)}" autocomplete="off"></label>`}
+    </div>` : `<div class="card amount-box" style="padding:14px 12px 12px">
       <input class="amount-input num" id="g-target" inputmode="decimal" placeholder="0" value="${shownAmount(d.target, d.currency)}" autocomplete="off" style="font-size:38px" aria-label="Target amount">
       <div class="cur-pill"><div class="seg sm">${segButtons('goal-cur', curItems, d.currency)}</div></div>
     </div>
@@ -1176,9 +1221,12 @@ function goalFormHtml() {
     <div class="group plain">
       <label class="row field"><span>Date</span><input type="date" id="g-date" value="${d.deadline}"></label>
       ${editing ? '' : `<label class="row field"><span>Put aside now</span><input id="g-init" inputmode="decimal" placeholder="0 (optional)" value="${shownAmount(d.initial, d.currency)}" autocomplete="off"></label>`}
-    </div>
+    </div>`}
     ${editing ? '' : `<div class="quick" id="g-free-chip"></div><p class="hint" id="g-free"></p>`}
     <p class="hint" id="g-preview"></p>
+    ${d.paid ? '' : `<div class="form-label">Of every money in</div>
+    <div class="group plain"><div class="row field"><span style="flex:1">Goes here by itself</span><div class="stepper" id="g-auto"><button data-act="g-auto" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${d.auto || 0}%</b><button data-act="g-auto" data-v="2.5" aria-label="More">${glyph('plus')}</button></div></div></div>
+    <p class="hint" id="g-auto-hint">${goalAutoHint(d)}</p>`}
     <div class="actions">
       <button class="btn" data-act="save-goal">${editing ? 'Save changes' : 'Create goal'}</button>
       ${editing ? `<button class="btn danger" data-act="del-goal" data-id="${d.id}">Delete goal</button>` : ''}
@@ -1191,7 +1239,7 @@ function mountGoalForm(sh) {
     const d = gdraft;
     const free = Math.max(0, freeMoney(d.currency));
     const tooMuch = !d.id && d.initial > free + 0.004;
-    const ok = d.name.trim() && d.target > 0 && d.deadline && !tooMuch;
+    const ok = d.name.trim() && (d.open || (d.target > 0 && d.deadline)) && !tooMuch;
     sh.querySelectorAll('[data-act="save-goal"]').forEach((b) => { b.disabled = !ok; });
     const fh = $('#g-free', sh), fc = $('#g-free-chip', sh);
     if (fh) {
@@ -1201,30 +1249,37 @@ function mountGoalForm(sh) {
       fc.innerHTML = free > 0 ? `<button data-act="g-all-free">Put all my free money here · ${fmt(free, d.currency)}</button>` : '';
     }
     const p = $('#g-preview', sh);
-    if (d.target > 0 && d.deadline) {
+    if (d.open) p.textContent = 'No amount or date — it keeps collecting. Add to it any time, and take money out whenever you need it.';
+    else if (d.target > 0 && d.deadline) {
       const saved = d.id ? goalSaved(S.goals.find((g) => g.id === d.id)) : d.initial;
       const st = goalStats({ ...d, contribs: [{ amount: saved }], start: todayIso() });
       p.innerHTML = st.daysLeft > 0 && st.left > 0 ? `${st.pace} to reach it by ${medDate(d.deadline)}.` : st.left <= 0 ? '🎉 You already have enough for this goal.' : 'Pick a date in the future.';
     } else p.textContent = 'The app works out how much to put aside each month to reach your goal in time.';
   };
   name.addEventListener('input', () => { gdraft.name = name.value; sync(); });
-  target.addEventListener('input', () => { const r = typedAmount(target.value, gdraft.currency); target.value = r.shown; gdraft.target = r.value; sync(); });
-  date.addEventListener('change', () => { gdraft.deadline = date.value; sync(); });
+  if (target) target.addEventListener('input', () => { const r = typedAmount(target.value, gdraft.currency); target.value = r.shown; gdraft.target = r.value; sync(); });
+  if (date) date.addEventListener('change', () => { gdraft.deadline = date.value; sync(); });
   if (init) init.addEventListener('input', () => { const r = typedAmount(init.value, gdraft.currency); init.value = r.shown; gdraft.initial = r.value; sync(); });
   blurOnEnter(sh);
   sync();
+  syncGoalAuto(sh);
 }
 function saveGoal() {
   const d = gdraft;
-  if (!(d.name.trim() && d.target > 0 && d.deadline)) return;
+  if (!(d.name.trim() && (d.open || (d.target > 0 && d.deadline)))) return;
+  const kind = d.open ? { open: true, target: 0, deadline: '' } : { target: roundCur(d.target, d.currency), deadline: d.deadline };
+  const auto = clamp(Math.round((d.auto || 0) * 2) / 2, 0, goalAutoMax());
   if (d.id) {
     const g = S.goals.find((x) => x.id === d.id);
-    Object.assign(g, { name: d.name.trim(), icon: d.icon, target: roundCur(d.target, d.currency), currency: d.currency, deadline: d.deadline });
+    Object.assign(g, { name: d.name.trim(), icon: d.icon, currency: d.currency }, kind);
+    if (d.open) delete g.paid; else delete g.open;
+    if (!g.paid) { if (auto > 0) g.auto = auto; else delete g.auto; }
     save(); render();
     openGoal(g.id);
     toast('Goal updated');
   } else {
-    const g = { id: uid(), name: d.name.trim(), icon: d.icon, target: roundCur(d.target, d.currency), currency: d.currency, deadline: d.deadline, start: todayIso(), createdAt: Date.now(), contribs: [] };
+    const g = { id: uid(), name: d.name.trim(), icon: d.icon, currency: d.currency, ...kind, start: todayIso(), createdAt: Date.now(), contribs: [] };
+    if (auto > 0) g.auto = auto;
     const init = Math.min(roundCur(d.initial, d.currency), Math.max(0, freeMoney(d.currency)));
     if (init > 0) g.contribs.push({ id: uid(), amount: init, date: todayIso(), note: 'Added from free money' });
     S.goals.push(g);
@@ -1245,22 +1300,22 @@ function goalDetailHtml() {
     <div class="gd-hero">
       ${ic(gi.id, gi.c, 'xl')}
       <div class="gd-name">${esc(g.name)}</div>
-      <div class="gd-amt">Goal <b class="num">${fmtG(g.target, cur)}</b> · by ${medDate(g.deadline)}</div>
+      <div class="gd-amt">${g.open ? 'No set amount — just saving' : `Goal <b class="num">${fmtG(g.target, cur)}</b> · by ${medDate(g.deadline)}`}</div>
       <div style="margin-top:10px"><span class="chip ${st.status[0]}">${st.status[1]}</span></div>
     </div>
     <section class="card" style="margin-top:18px">
       ${goalBar(g, st, true)}
-      <div class="gc-pace">${glyph('calendar')}<span>${st.pace}${!g.paid && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
-      ${g.auto > 0 && !g.paid ? `<div class="gc-pace">${glyph('split')}<span>Gets <b>${g.auto}%</b> of every money in${st.left <= 0 ? ' (full now, takes nothing)' : ''} · <button class="link inl" data-act="split">Change</button></span></div>` : ''}
+      <div class="gc-pace">${glyph(g.open ? 'coins' : 'calendar')}<span>${st.pace}${!g.paid && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
+      ${g.auto > 0 && !g.paid ? `<div class="gc-pace">${glyph('split')}<span>Gets <b>${g.auto}%</b> of every money in${!g.open && st.left <= 0 ? ' (full now, takes nothing)' : ''} · <button class="link inl" data-act="split">Change</button></span></div>` : ''}
     </section>
-    ${!g.paid && st.left > 0 ? `<p class="hint">Free money you can add: <b class="num ${free > 0 ? 'in' : ''}">${fmtG(Math.max(0, free), cur)}</b></p>` : ''}
+    ${!g.paid && (st.left > 0 || g.open) ? `<p class="hint">Free money you can add: <b class="num ${free > 0 ? 'in' : ''}">${fmtG(Math.max(0, free), cur)}</b></p>` : ''}
     <div class="btn-row" style="margin-top:14px">
       <button class="btn" data-act="goal-move" data-v="1">＋ Add money</button>
       <button class="btn grey" data-act="goal-move" data-v="-1" ${st.saved > 0 ? '' : 'disabled'}>Take out</button>
     </div>
-    ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} I paid for it (all or part)</button>` : ''}
+    ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} ${g.open ? 'Spend from it' : 'I paid for it (all or part)'}</button>` : ''}
     <div class="form-label">History</div>
-    ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.txId ? (c.note || 'Paid').replace(/^Spent — /, 'Paid — ') : c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}${c.txId ? ' · also in History' : ''}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmtG(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
+    ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.txId ? (c.note || 'Paid').replace(/^Spent — /, 'Paid — ') : c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}${c.txId || c.spent ? ' · also in History' : ''}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmtG(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
       <p class="hint">Tap a line to undo it.</p>` : '<p class="hint">Nothing added yet. Use “Add money” whenever you put some aside.</p>'}
     <p class="hint" style="margin-top:16px">Goals only hold money you really have: your total balance is split into money in goals and free money. “I paid for it” records the expense and takes it from the envelope — all at once, or in parts like a fee paid in instalments.</p>
   </div>`;
@@ -1398,29 +1453,57 @@ function saveMove() {
     delete x.paid;
     msg = `${fmtG(amt, cur)} moved to ${x.name}`;
   }
-  const reached = mv.dir > 0 && goalSaved(g) >= g.target && snapshot.find((x) => x.id === g.id).contribs.reduce((a, c) => a + c.amount, 0) < g.target;
+  const reached = mv.dir > 0 && !g.open && goalSaved(g) >= g.target && snapshot.find((x) => x.id === g.id).contribs.reduce((a, c) => a + c.amount, 0) < g.target;
   save(); buzz(); render();
   openGoal(g.id);
   undoToast(reached ? `🎉 ${g.name} is fully saved!` : msg, () => { S.goals = snapshot; if (sheet && gid) refreshSheet(goalDetailHtml(), null); });
 }
-// When spending leaves goals holding more than you have, take the difference back from the
-// goals whose deadlines are furthest away (the least urgent ones).
-function fixGoals(cur) {
-  let short = roundCur(-freeMoney(cur), cur);
-  if (short <= 0) return;
-  const snapshot = JSON.parse(JSON.stringify(S.goals));
-  const list = S.goals.filter((g) => g.currency === cur && goalSaved(g) > 0).sort((a, b) => b.deadline.localeCompare(a.deadline));
-  const touched = [];
-  for (const g of list) {
-    if (short <= 0) break;
-    const t = roundCur(Math.min(goalSaved(g), short), cur);
-    g.contribs.push({ id: uid(), amount: -t, date: todayIso(), note: 'Taken back — the money was spent' });
-    touched.push(g.name);
-    short -= t;
+// When goals hold more than you have (goal money was spent, or a money in was deleted), you choose
+// the goals to take it back from: ticked in order, each gives what it holds until it's covered.
+let fx = null; // { cur, picks: [goal ids] }
+function openFix(cur) {
+  if (!goalsShort(cur)) return;
+  fx = { cur, picks: [] };
+  openSheet(fixHtml(), null);
+}
+function fixState() {
+  const cur = fx.cur, short = Math.max(0, roundCur(-freeMoney(cur), cur));
+  const goals = takeGoals(cur).filter((g) => goalSaved(g) > 0);
+  fx.picks = fx.picks.filter((id) => goals.some((g) => g.id === id));
+  let need = short;
+  const parts = fx.picks.map((id) => { const g = goalById(id), t = roundCur(Math.min(goalSaved(g), need), cur); need = roundCur(need - t, cur); return { g, t }; });
+  return { cur, short, goals, parts, need, ok: short > 0 && need <= 0 };
+}
+const fixHint = (s) => (!s.parts.length ? 'Tap the goals to use.'
+  : s.need > 0 ? `Pick goals holding at least ${fmtG(s.short, s.cur)} — ${fmtG(s.need, s.cur)} still to cover.`
+  : 'Takes ' + s.parts.filter((p) => p.t > 0).map((p) => `${fmtG(p.t, s.cur)} from ${esc(p.g.name)}`).join(' and ') + '.');
+function fixHtml() {
+  const s = fixState(), cur = s.cur;
+  return sheetHead('Goals hold too much', '<button data-act="close-sheet">Cancel</button>', `<button data-act="fix-save" ${s.ok ? '' : 'disabled'}>Done</button>`) + `
+  <div class="sheet-body">
+    <div class="blk-warn bad">${glyph('coins')}<div><b>Goals hold ${fmtG(s.short, cur)} more than you have</b><span>Some goal money was spent. Choose which goals to take it out of:</span></div></div>
+    <div class="group plain" style="margin-top:8px" id="fx-list">${s.goals.map((g) => `<button class="row field" data-act="fx-pick" data-v="${g.id}">${ic(goalIcon(g).id, goalIcon(g).c, 'sm')}<span style="flex:1;min-width:0">${esc(g.name)}<small class="muted" style="display:block;font-size:12px">has ${fmtG(goalSaved(g), cur)}</small></span><span class="tick ${fx.picks.includes(g.id) ? 'on' : ''}">${glyph('check')}</span></button>`).join('')}</div>
+    <p class="hint" id="fx-hint">${fixHint(s)}</p>
+    <div class="actions"><button class="btn" data-act="fix-save" ${s.ok ? '' : 'disabled'}>Take it out</button></div>
+  </div>`;
+}
+function syncFix(sh) {
+  const s = fixState();
+  $$('#fx-list [data-act="fx-pick"]', sh).forEach((b) => $('.tick', b).classList.toggle('on', fx.picks.includes(b.dataset.v)));
+  $('#fx-hint', sh).innerHTML = fixHint(s);
+  sh.querySelectorAll('[data-act="fix-save"]').forEach((b) => { b.disabled = !s.ok; });
+}
+function saveFix() {
+  const s = fixState();
+  if (!s.ok) return;
+  const snapshot = JSON.parse(JSON.stringify(S.goals)), touched = [];
+  for (const p of s.parts) {
+    if (!(p.t > 0)) continue;
+    p.g.contribs.push({ id: uid(), amount: -p.t, date: todayIso(), note: 'Taken back — the money was spent' });
+    touched.push(p.g.name);
   }
-  save(); render();
-  if (sheet && gid) refreshSheet(goalDetailHtml(), null);
-  undoToast(`Taken back from ${touched.join(', ')}`, () => { S.goals = snapshot; });
+  save(); buzz(); closeSheet(); render();
+  undoToast(`Taken out of ${touched.join(', ')}`, () => { S.goals = snapshot; });
 }
 // After money leaves your balance, warn if goals now hold more than you have.
 function goalsShort(cur) { return S.goals.some((g) => g.currency === cur && goalSaved(g) > 0) && freeMoney(cur) < -0.004; }
@@ -1433,7 +1516,7 @@ function allocCard() {
   const segs = S.goals.filter((g) => goalSaved(g) > 0)
     .map((g) => `<i style="--c:${goalIcon(g).c};width:${((conv(goalSaved(g), g.currency, cur) / denom) * 100).toFixed(2)}%"></i>`).join('')
     + (free > 0 ? `<i class="free" style="width:${((free / denom) * 100).toFixed(2)}%"></i>` : '');
-  const short = ['UZS', 'USD'].filter(goalsShort).map((c) => `<div class="blk-warn bad" style="margin-top:12px">${glyph('coins')}<div><b>Goals hold ${fmt(-freeMoney(c), c)} more than you have in ${c === 'UZS' ? "so'm" : 'dollars'}</b><span>That money was spent. Take it back from the goals with the latest dates?</span><button class="pill-btn" data-act="goals-fix" data-v="${c}" style="margin-top:8px">Fix it</button></div></div>`).join('');
+  const short = ['UZS', 'USD'].filter(goalsShort).map((c) => `<div class="blk-warn bad" style="margin-top:12px">${glyph('coins')}<div><b>Goals hold ${fmt(-freeMoney(c), c)} more than you have in ${c === 'UZS' ? "so'm" : 'dollars'}</b><span>Some goal money was spent. Choose which goals to take it out of.</span><button class="pill-btn" data-act="goals-fix" data-v="${c}" style="margin-top:8px">Fix it</button></div></div>`).join('');
   return `<section class="card alloc">
     <div class="label">All your money</div>
     <div class="al-total num">${fmt(total, cur)}</div>
@@ -1469,7 +1552,7 @@ function splitPlan(d) {
   return splitGoals().map((g) => {
     const cur = g.currency;
     const want = cur === d.currency ? roundCur((d.amount * g.auto) / 100, cur) : somRate() ? roundCur(conv((d.amount * g.auto) / 100, d.currency, cur), cur) : 0;
-    const left = Math.max(0, g.target - base.get(g) - goalPaid(g));
+    const left = g.open ? Infinity : Math.max(0, g.target - base.get(g) - goalPaid(g));
     const part = roundCur(Math.max(0, Math.min(want, left, free[cur])), cur);
     free[cur] -= part;
     // why it got less than its %: the goal is (now) full, or there was no more free money in its currency
@@ -1526,9 +1609,9 @@ function splitHtml() {
   const open = gs.filter((g) => !g.paid);
   const row = (g) => {
     const gi = goalIcon(g), st = goalStats(g);
-    const sub = g.paid ? 'Paid — takes nothing' : st.left <= 0 ? 'Full — takes nothing now' : `Goal ${fmtG(g.target, g.currency)}`;
+    const sub = g.paid ? 'Paid — takes nothing' : g.open ? 'No limit' : st.left <= 0 ? 'Full — takes nothing now' : `Goal ${fmtG(g.target, g.currency)}`;
     return `<div class="row${g.paid ? ' dim' : ''}">${ic(gi.id, gi.c, 'sm')}<div class="row-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${sub}</div></div>
-      ${g.paid ? '' : `<div class="stepper"><button data-act="split-step" data-id="${g.id}" data-v="-5" aria-label="Less">${glyph('minus')}</button><b class="num">${g.auto || 0}%</b><button data-act="split-step" data-id="${g.id}" data-v="5" aria-label="More">${glyph('plus')}</button></div>`}</div>`;
+      ${g.paid ? '' : `<div class="stepper"><button data-act="split-step" data-id="${g.id}" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${g.auto || 0}%</b><button data-act="split-step" data-id="${g.id}" data-v="2.5" aria-label="More">${glyph('plus')}</button></div>`}</div>`;
   };
   return head + `<div class="sheet-body">
     <p class="hint" style="margin:2px 4px 14px">Every time money comes in, these parts go into your goals by themselves. The rest stays free to spend.</p>
@@ -1573,6 +1656,76 @@ function splitStep(id, v) {
   buzz();
   syncSplit(sheet.sh);
   render();
+}
+
+// ================= Take it from =================
+// A "Money out" comes from free money unless you pick goals: d.from lists the places in the order
+// they were tapped ('free' = free money), and each gives what it can until the amount is covered.
+// What a goal gives is a goal line tied to the entry (contrib.spent = the entry's id), so editing or
+// deleting the entry changes it too. When the picked places can't cover it and a goal still holds
+// money, you choose which goal pays the rest — the app never picks one by itself.
+const takeGoals = (cur) => [...S.goals].sort(goalSort).filter((g) => g.currency === cur);
+function takePlan(d) {
+  if (d.type !== 'out' || d.goalSpend || !(d.amount > 0)) return null;
+  const cur = d.currency, old = d.id ? S.tx.find((t) => t.id === d.id) : null;
+  // (worked out as if the entry's old version, and what it took from goals, were gone)
+  let free = freeMoney(cur) - (old ? delta(old, cur) : 0);
+  const has = new Map();
+  for (const g of takeGoals(cur)) {
+    const mine = d.id ? g.contribs.reduce((a, c) => a + (c.spent === d.id ? c.amount : 0), 0) : 0;
+    free += mine;
+    has.set(g.id, Math.max(0, roundCur(goalSaved(g) - mine, cur)));
+  }
+  has.set('free', Math.max(0, roundCur(free, cur)));
+  const from = (d.from || []).filter((id) => has.has(id));
+  if (!from.length) from.push('free');
+  let need = roundCur(d.amount, cur);
+  const parts = from.map((id) => { const part = roundCur(Math.min(need, has.get(id)), cur); need = roundCur(need - part, cur); return { id, g: id === 'free' ? null : goalById(id), part }; });
+  const more = [...has.keys()].filter((id) => id !== 'free' && !from.includes(id) && has.get(id) > 0);
+  return { from, parts, has, short: need, blocked: need > 0 && more.length > 0 };
+}
+// Put the goal parts into the goals (taking out the entry's old ones first). Returns a note for the toast.
+function applyTake(rec, take) {
+  S.goals.forEach((g) => { if (g.contribs.some((c) => c.spent === rec.id)) g.contribs = g.contribs.filter((c) => c.spent !== rec.id); });
+  if (!take) return '';
+  const what = rec.person || cat('out', rec.category).name, used = [];
+  for (const p of take.parts) {
+    if (!p.g || !(p.part > 0)) continue;
+    p.g.contribs.push({ id: uid(), amount: -p.part, date: rec.date, note: `Spent — ${what}`, spent: rec.id });
+    used.push(`${fmt(p.part, rec.currency)} from ${p.g.name}`);
+  }
+  return used.length ? ` — ${used.join(', ')}` : '';
+}
+// The "Take it from" row in the Money out form: free money and the goals holding money.
+function takeRow(d) {
+  const goals = takeGoals(d.currency).filter((g) => goalSaved(g) > 0 || d.from.includes(g.id));
+  if (!goals.length) return '';
+  const p = takePlan(d), from = p ? p.from : d.from;
+  const has = (id) => (p ? p.has.get(id) : id === 'free' ? Math.max(0, freeMoney(d.currency)) : goalSaved(goalById(id)));
+  const chip = (id, name, c) => `<button class="${from.includes(id) ? 'on' : ''}" data-act="take" data-v="${id}" style="--c:${c}"><i></i>${esc(name)}<small class="num">${compact(has(id), d.currency)}</small></button>`;
+  return `<div class="form-label">Comes out of</div>
+    <div class="grp-pick take" id="take">${chip('free', 'Free money', 'var(--in)')}${goals.map((g) => chip(g.id, g.name, goalIcon(g).c)).join('')}</div>
+    <p class="hint take-hint" id="take-hint">${takeHint(d, p)}</p>`;
+}
+function takeHint(d, p) {
+  if (!p) return 'Free money unless you tap a goal.';
+  const cur = d.currency, name = (x) => (x.g ? esc(x.g.name) : 'free money');
+  const used = p.parts.filter((x) => x.part > 0);
+  if (p.blocked) {
+    const have = used.reduce((a, x) => a + x.part, 0);
+    const who = p.from.length === 1 ? `${p.from[0] === 'free' ? 'Free money' : esc(goalById(p.from[0]).name)} has` : 'These have';
+    return `<b class="warn-t">${who} only ${fmt(have, cur)}</b> — tap a goal to take the other ${fmt(p.short, cur)} from it.`;
+  }
+  if (p.short > 0) return `<b class="warn-t">That's ${fmt(p.short, cur)} more than you have.</b>`;
+  if (used.length === 1 && !used[0].g) return 'From free money.';
+  return 'Takes ' + used.map((x) => `${fmt(x.part, cur)} from ${name(x)}`).join(' and ') + '.';
+}
+function syncTake(sh) {
+  const box = $('#take', sh);
+  if (!box) return;
+  const p = takePlan(draft), from = p ? p.from : draft.from;
+  $$('button', box).forEach((b) => b.classList.toggle('on', from.includes(b.dataset.v)));
+  $('#take-hint', sh).innerHTML = takeHint(draft, p);
 }
 
 // ================= Monthly report =================
@@ -2060,7 +2213,8 @@ Object.assign(ACTIONS, {
     S.tx = S.tx.filter((t) => t.id !== removed.id);
     // Deleting a "paid for a goal" expense gives the goal its money back.
     // (and the parts Split money in put into goals from it go too)
-    S.goals.forEach((g) => { const paid = g.contribs.some((c) => c.txId === removed.id); g.contribs = g.contribs.filter((c) => c.txId !== removed.id && c.auto !== removed.id); if (paid) delete g.paid; });
+    // (and what it took from goals goes back into them)
+    S.goals.forEach((g) => { const paid = g.contribs.some((c) => c.txId === removed.id); g.contribs = g.contribs.filter((c) => c.txId !== removed.id && c.auto !== removed.id && c.spent !== removed.id); if (paid) delete g.paid; });
     save(); txDone(); render();
     const cur = removed.type === 'in' ? removed.currency : null;
     // (always Undo — when goals now hold too much, the Goals page offers “Fix it”)
@@ -2120,10 +2274,29 @@ Object.assign(ACTIONS, {
   'goal-spend': () => {
     const g = goalById(gid);
     if (!g) return;
+    if (g.open) { openTx(null, { type: 'out', currency: g.currency, from: [g.id], back: () => openGoal(g.id) }); return; }
     // Paying everything that's in the envelope finishes the goal when it covers the rest of it.
     openTx(null, { type: 'out', amount: goalSaved(g), currency: g.currency, note: g.name, goalSpend: g.id, goalLast: goalStats(g).left <= 0.004, back: () => openGoal(g.id) });
   },
-  'goals-fix': (a, v) => fixGoals(v),
+  'goals-fix': (a, v) => openFix(v),
+  'fx-pick': (a, v) => { fx.picks = fx.picks.includes(v) ? fx.picks.filter((x) => x !== v) : [...fx.picks, v]; buzz(); syncFix(sheet.sh); },
+  'fix-save': () => saveFix(),
+  'goal-kind': (a, v) => { gdraft.open = v === 'open'; refreshSheet(goalFormHtml(), mountGoalForm); },
+  'g-auto': (a, v) => {
+    const next = clamp((gdraft.auto || 0) + Number(v), 0, goalAutoMax());
+    if (next === (gdraft.auto || 0)) return;
+    gdraft.auto = next;
+    buzz();
+    syncGoalAuto(sheet.sh);
+  },
+  take: (a, v) => {
+    // tap = take it from here; when the picked places don't cover the amount, the tap adds a place
+    const p = takePlan(draft), from = p ? p.from : draft.from;
+    if (from.includes(v)) { if (from.length > 1) draft.from = from.filter((x) => x !== v); }
+    else draft.from = !p || p.short <= 0 ? [v] : [...from, v];
+    buzz();
+    syncTx();
+  },
   split: () => openSplit(),
   'split-step': (a, v, id) => splitStep(id, Number(v)),
   'g-all-free': () => {

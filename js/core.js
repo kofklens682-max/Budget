@@ -260,14 +260,19 @@ function normalize(d) {
     if (typeof r.fromRepeat !== 'string') delete r.fromRepeat;
     return r;
   });
-  const goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => g && g.id && g.name && CUR[g.currency]).map((g) => ({
-    ...g,
-    icon: G[g.icon] ? g.icon : EMOJI_TO_ICON[g.emoji] || 'target',
-    target: Number(g.target) > 0 ? Number(g.target) : 0,
-    deadline: /^\d{4}-\d{2}-\d{2}$/.test(g.deadline || '') ? g.deadline : iso(addDays(new Date(), 365)), // (a goal without a date would break the lists)
-    auto: clamp(Math.round(Number(g.auto)) || 0, 0, 100), // Split money in: % of every money in
-    contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)), // (one damaged line would turn every total into NaN)
-  }));
+  const goals = (Array.isArray(d.goals) ? d.goals : []).filter((g) => g && g.id && g.name && CUR[g.currency]).map((g) => {
+    // open: saving with no set amount or date — it keeps collecting until money is taken out
+    const open = g.open === true, r = {
+      ...g,
+      icon: G[g.icon] ? g.icon : EMOJI_TO_ICON[g.emoji] || 'target',
+      target: !open && Number(g.target) > 0 ? Number(g.target) : 0,
+      deadline: open ? '' : /^\d{4}-\d{2}-\d{2}$/.test(g.deadline || '') ? g.deadline : iso(addDays(new Date(), 365)), // (a dated goal without a date would break the lists)
+      auto: clamp(Math.round(Number(g.auto) * 2) / 2 || 0, 0, 100), // Split money in: % of every money in (steps of 2.5)
+      contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)), // (one damaged line would turn every total into NaN)
+    };
+    if (!open) delete r.open;
+    return r;
+  });
   const schedule = normSchedule(d.schedule);
   schedule.acts.forEach((a) => { if (a.groupId && !gids.has(a.groupId)) a.groupId = null; });
   return { v: APP_VERSION, rev: Math.max(0, Math.round(Number(d.rev)) || 0), accounts, cats: normCats(d.cats), groups, schedule, tx, goals, settings: Object.assign(defaultSettings(), d.settings || {}) };
