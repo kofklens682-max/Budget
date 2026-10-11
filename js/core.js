@@ -271,6 +271,7 @@ function normalize(d) {
       contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)), // (one damaged line would turn every total into NaN)
     };
     if (!open) delete r.open;
+    if (r.apart !== true) delete r.apart;
     return r;
   });
   const schedule = normSchedule(d.schedule);
@@ -404,6 +405,9 @@ const deltaIn = (t, cur = UI.cur) => conv(delta(t, 'UZS'), 'UZS', cur) + conv(de
 const balanceIn = (cur = UI.cur) => conv(balance('UZS'), 'UZS', cur) + conv(balance('USD'), 'USD', cur);
 const accBalanceIn = (id, cur = UI.cur) => conv(accBalance(id, 'UZS'), 'UZS', cur) + conv(accBalance(id, 'USD'), 'USD', cur);
 const savedInGoalsIn = (cur = UI.cur) => S.goals.reduce((a, g) => a + conv(goalSaved(g), g.currency, cur), 0);
+// Goals left out of the total (goal.apart): the money stays in the goal, but the big total on
+// Overview (and its chart) doesn't count it.
+const apartIn = (cur = UI.cur) => S.goals.reduce((a, g) => a + (g.apart ? conv(goalSaved(g), g.currency, cur) : 0), 0);
 // Both currencies in use but no rate to add them up with.
 const needsRate = () => !somRate() && usesCur('UZS') && usesCur('USD');
 const goalSaved = (g) => g.contribs.reduce((a, c) => a + c.amount, 0);

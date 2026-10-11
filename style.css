@@ -204,6 +204,8 @@ svg { display: block; }
 .hero small { font-size: 20px; font-weight: 600; color: var(--text-2); letter-spacing: -.01em; margin-left: 7px; }
 .hero-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--text-2); }
 .hero-meta b { color: var(--text); font-weight: 600; }
+.hero-meta .apart-note { display: inline-flex; align-items: center; gap: 5px; }
+.hero-meta .apart-note .gl { width: 14px; height: 14px; flex-shrink: 0; }
 .chart { position: relative; margin: 14px -4px 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .chart svg text { font: 500 11px var(--font); fill: var(--muted); font-variant-numeric: tabular-nums; }
 .chart svg text.cur { fill: var(--text); font-weight: 700; }

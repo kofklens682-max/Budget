@@ -83,18 +83,24 @@ function balanceSeries(cur, range) {
   const span = daysBetween(iso(start), iso(end));
   const step = span > 400 ? 7 : 1;
   let bal = cur === 'ALL' ? conv(openingTotal('UZS'), 'UZS') + conv(openingTotal('USD'), 'USD') : openingTotal(cur), i = 0;
+  // money in goals left out of the total, as it was on each day
+  const apart = S.goals.filter((g) => g.apart && (cur === 'ALL' || g.currency === cur))
+    .flatMap((g) => g.contribs.map((c) => ({ date: c.date, v: cur === 'ALL' ? conv(c.amount, g.currency) : c.amount })))
+    .sort(cmpDate);
+  let j = 0, off = 0;
+  const offTo = (d) => { while (j < apart.length && apart[j].date <= d) off += apart[j++].v; return off; };
   const s0 = iso(start);
   while (i < txs.length && txs[i].date < s0) bal += dv(txs[i++]);
   const pts = [];
   for (let k = 0; k <= span; k += step) {
     const di = iso(addDays(start, k));
     while (i < txs.length && txs[i].date <= di) bal += dv(txs[i++]);
-    pts.push({ date: di, v: bal });
+    pts.push({ date: di, v: bal - offTo(di) });
   }
   const endIso = iso(end);
   if (pts[pts.length - 1].date !== endIso) {
     while (i < txs.length && txs[i].date <= endIso) bal += dv(txs[i++]);
-    pts.push({ date: endIso, v: bal });
+    pts.push({ date: endIso, v: bal - offTo(endIso) });
   }
   return pts;
 }
@@ -243,14 +249,16 @@ function renderHome() {
     h += emptyWelcome();
   } else {
     // One total: so'm and dollars added together in the chosen currency, at the dollar rate.
-    const rate = somRate(), bal = balanceIn(cur);
+    const rate = somRate(), apart = apartIn(cur), bal = balanceIn(cur) - apart;
     const meta = [];
     if (usesCur('UZS') && usesCur('USD')) {
       if (rate) meta.push(`<span><b class="num">${fmt(balance('UZS'), 'UZS')}</b> + <b class="num">${fmt(balance('USD'), 'USD')}</b> · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
       else meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(balance(other), other)} — set the dollar rate in Settings to count it in</button>`);
     } else if (usesCur(other) && rate) meta.push(`<span>${fmt(balance(other), other)} · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
+    const apartGoals = S.goals.filter((g) => g.apart && goalSaved(g) > 0 && (g.currency === cur || rate));
+    if (apartGoals.length) meta.push(`<span class="apart-note">${glyph('shield')}Not counted: ${apartGoals.map((g) => esc(g.name)).join(', ')} · <b class="num">${fmt(apart, cur)}</b></span>`);
     // How it's split: money free to spend, and what each goal's envelope holds.
-    const envs = S.goals.filter((g) => !g.paid && goalSaved(g) > 0 && (g.currency === cur || rate))
+    const envs = S.goals.filter((g) => !g.paid && !g.apart && goalSaved(g) > 0 && (g.currency === cur || rate))
       .map((g) => ({ name: g.name, v: conv(goalSaved(g), g.currency, cur), c: goalIcon(g).c, env: true }));
     let split = '';
     if (envs.length) {
@@ -565,7 +573,7 @@ function renderGoals() {
     h += `<button class="card goal-card" data-act="goal" data-id="${g.id}">
       <div class="gc-top">
         ${ic(gi.id, gi.c)}
-        <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${st.open ? 'No set amount — just saving' : `by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}`}</div></div>
+        <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${st.open ? 'No set amount — just saving' : `by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}`}${g.apart ? ' · not in total' : ''}</div></div>
         <span class="chip ${st.status[0]}">${st.status[1]}</span>
       </div>
       ${goalBar(g, st)}
@@ -1225,7 +1233,9 @@ function goalFormHtml() {
       <label class="row field"><span>Date</span><input type="date" id="g-date" value="${d.deadline}"></label>
       ${editing ? '' : `<label class="row field"><span>Put aside now</span><input id="g-init" inputmode="decimal" placeholder="0 (optional)" value="${shownAmount(d.initial, d.currency)}" autocomplete="off"></label>`}
     </div>`}
-    ${editing ? '' : `<div class="quick" id="g-free-chip"></div><p class="hint" id="g-free"></p>`}
+    ${editing ? '' : `<div class="quick" id="g-free-chip"></div><p class="hint" id="g-free"></p>
+    <div class="group plain" style="margin-top:12px"><div class="row field"><span style="flex:1">Leave out of my total</span><label class="switch"><input type="checkbox" id="g-apart-new" ${d.apart ? 'checked' : ''} aria-label="Leave this goal out of my total balance"><i></i></label></div></div>
+    <p class="hint">On: the money stays in this goal, but your total balance on Overview doesn't count it.</p>`}
     <p class="hint" id="g-preview"></p>
     ${d.paid ? '' : `<div class="form-label">Of every money in</div>
     <div class="group plain"><div class="row field"><span style="flex:1">Goes here by itself</span><div class="stepper" id="g-auto"><button data-act="g-auto" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${d.auto || 0}%</b><button data-act="g-auto" data-v="2.5" aria-label="More">${glyph('plus')}</button></div></div></div>
@@ -1263,6 +1273,8 @@ function mountGoalForm(sh) {
   if (target) target.addEventListener('input', () => { const r = typedAmount(target.value, gdraft.currency); target.value = r.shown; gdraft.target = r.value; sync(); });
   if (date) date.addEventListener('change', () => { gdraft.deadline = date.value; sync(); });
   if (init) init.addEventListener('input', () => { const r = typedAmount(init.value, gdraft.currency); init.value = r.shown; gdraft.initial = r.value; sync(); });
+  const ap = $('#g-apart-new', sh);
+  if (ap) ap.addEventListener('change', () => { gdraft.apart = ap.checked; });
   blurOnEnter(sh);
   sync();
   syncGoalAuto(sh);
@@ -1283,6 +1295,7 @@ function saveGoal() {
   } else {
     const g = { id: uid(), name: d.name.trim(), icon: d.icon, currency: d.currency, ...kind, start: todayIso(), createdAt: Date.now(), contribs: [] };
     if (auto > 0) g.auto = auto;
+    if (d.apart) g.apart = true;
     const init = Math.min(roundCur(d.initial, d.currency), Math.max(0, freeMoney(d.currency)));
     if (init > 0) g.contribs.push({ id: uid(), amount: init, date: todayIso(), note: 'Added from free money' });
     S.goals.push(g);
@@ -1291,6 +1304,9 @@ function saveGoal() {
   }
 }
 let gid = null;
+const apartHint = (g) => (g.apart
+  ? `Your total balance on Overview doesn't count the <b class="num">${fmtG(goalSaved(g), g.currency)}</b> in this goal.`
+  : 'The money in this goal is counted in your total balance.');
 function openGoal(id) { gid = id; openSheet(goalDetailHtml(), null); }
 function goalDetailHtml() {
   const g = S.goals.find((x) => x.id === gid);
@@ -1317,6 +1333,8 @@ function goalDetailHtml() {
       <button class="btn grey" data-act="goal-move" data-v="-1" ${st.saved > 0 ? '' : 'disabled'}>Take out</button>
     </div>
     ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} ${g.open ? 'Spend from it' : 'I paid for it (all or part)'}</button>` : ''}
+    <div class="group plain" style="margin-top:14px"><div class="row field"><span style="flex:1">Leave out of my total</span><label class="switch"><input type="checkbox" id="g-apart" data-act="goal-apart" ${g.apart ? 'checked' : ''} aria-label="Leave this goal out of my total balance"><i></i></label></div></div>
+    <p class="hint" id="g-apart-hint">${apartHint(g)}</p>
     <div class="form-label">History</div>
     ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.txId ? (c.note || 'Paid').replace(/^Spent — /, 'Paid — ') : c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}${c.txId || c.spent ? ' · also in History' : ''}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmtG(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
       <p class="hint">Tap a line to undo it.</p>` : '<p class="hint">Nothing added yet. Use “Add money” whenever you put some aside.</p>'}
@@ -2256,6 +2274,15 @@ Object.assign(ACTIONS, {
   'new-goal': () => openGoalForm(),
   goal: (a, v, id) => openGoal(id),
   'edit-goal': (a, v, id) => openGoalForm(id),
+  'goal-apart': (a) => {
+    const g = goalById(gid);
+    if (!g) return;
+    if (a.checked) g.apart = true; else delete g.apart;
+    save(); render();
+    const hint = $('#g-apart-hint');
+    if (hint) hint.innerHTML = apartHint(g);
+    toast(a.checked ? 'Left out of your total' : 'Counted in your total again');
+  },
   'pick-icon': (a, v) => { gdraft.icon = v; pick(a, '.emojis'); },
   'goal-cur': (a, v) => {
     gdraft.currency = v;
