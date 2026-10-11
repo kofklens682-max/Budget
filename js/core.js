@@ -427,7 +427,7 @@ const HIST_PAGE = 60; // History draws this many entries at a time
 const UI = {
   tab: 'home', cur: S.settings.currency, range: '3M',
   hView: 'entries', hType: 'all', hCur: 'all', hAcc: 'all', hGroup: 'all', q: '', hLimit: HIST_PAGE,
-  calYm: ymNow(), calDay: todayIso(),
+  calYm: ymNow(), calDay: todayIso(), calYear: null, calFade: false,
   period: 'month', offset: 0, gMonth: ymNow(),
   sView: S.settings.schedView === 'week' ? 'week' : 'day', sDay: todayIdx(), sDir: 0, lastAct: null,
   lastType: 'in', lastAcc: { in: null, out: null },

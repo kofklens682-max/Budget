@@ -353,7 +353,7 @@ function renderHistory() {
   let h = `<header class="lt"><h1>History</h1></header>
     <div class="seg full seg-lg">${segButtons('hview', [['entries', 'Entries'], ['cal', 'Calendar'], ['groups', 'Groups']], UI.hView)}</div>`;
   if (UI.hView === 'groups') return h + renderGroupsList();
-  if (UI.hView === 'cal') return h + `<div class="pager" id="calpg">${calBody(UI.calYm, UI.calDay)}</div>`;
+  if (UI.hView === 'cal') return h + `<div class="pager" id="calpg">${UI.calYear != null ? yearBody(UI.calYear) : calBody(UI.calYm, UI.calDay)}</div>`;
   const chip = (act, v, label, on, dot) => `<button class="fchip ${on ? 'on' : ''}" data-act="${act}" data-v="${v}">${dot ? `<i style="--c:${dot}"></i>` : ''}${label}</button>`;
   return h + `
     <div class="search" style="margin-top:12px">${glyph('search')}<input id="q" type="search" placeholder="Search names, notes, amounts" value="${esc(UI.q)}" autocomplete="off" enterkeyhint="search"></div>
@@ -393,43 +393,99 @@ function histList() {
   return html;
 }
 // ================= History → Calendar =================
-// A month as a calendar: what went out each day (a green dot when money came in). Tap a day for its
-// entries; swipe sideways — or use ‹ › — for another month. Amounts are in the chosen currency.
+// A real calendar for any month, past or future, with two looks (Settings keeps the choice):
+// Calendar = plain dates (dots: money out / in, holidays in red); Money = each day tinted by what
+// went out that day (the darker, the more). Tap the month name for the whole year; swipe sideways
+// for another month (or year); tap a day for its entries. Amounts are in the chosen currency.
 const calPick = (ym) => (ym === ymNow() ? todayIso() : null); // a month opens on today, others on nothing
-function calBody(ym, sel) {
-  const [y, m] = ym.split('-').map(Number);
-  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, days = new Date(y, m, 0).getDate(), today = todayIso();
-  const [from, to] = ymRange(ym), t = totals(UI.cur, from, to), byDay = {};
+const calMoney = () => S.settings.calMode !== 'cal';
+// Days off in Uzbekistan. The two Hayit days follow the moon: their dates are the expected ones.
+const HOL_FIXED = { '01-01': 'New Year', '03-08': "Women's Day", '03-21': 'Navruz', '05-09': 'Remembrance Day',
+  '09-01': 'Independence Day', '10-01': "Teachers' Day", '12-08': 'Constitution Day' };
+const HOL_MOON = { 2024: ['04-10', '06-16'], 2025: ['03-30', '06-06'], 2026: ['03-20', '05-27'], 2027: ['03-10', '05-16'],
+  2028: ['02-27', '05-05'], 2029: ['02-15', '04-24'], 2030: ['02-05', '04-13'] };
+function holiday(di) {
+  const md = di.slice(5), moon = HOL_MOON[di.slice(0, 4)];
+  if (HOL_FIXED[md]) return HOL_FIXED[md];
+  if (moon && moon[0] === md) return 'Ramadan Hayit';
+  if (moon && moon[1] === md) return 'Qurbon Hayit';
+  return '';
+}
+const CAL_MIN = '1990-01', CAL_MAX = '2099-12';
+const calChev = '<svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function calSpent(from, to) {
+  const byDay = {};
   for (const x of txBetween(from, to)) {
     if (x.date < from || x.date >= to || x.type === 'transfer') continue;
     const d = byDay[x.date] || (byDay[x.date] = { out: 0, in: false });
     if (x.type === 'out') d.out += conv(x.amount, x.currency); else d.in = true;
   }
-  let cells = WK.map((w) => `<div class="cal-h">${w.slice(0, 2)}</div>`).join('') + '<i class="cal-b"></i>'.repeat(lead);
+  return byDay;
+}
+function calBody(ym, sel) {
+  const [y, m] = ym.split('-').map(Number);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, days = new Date(y, m, 0).getDate(), today = todayIso();
+  const [from, to] = ymRange(ym), t = totals(UI.cur, from, to), byDay = calSpent(from, to), money = calMoney();
+  const max = Math.max(0, ...Object.values(byDay).map((v) => v.out));
+  let cells = WK.map((w, i) => `<div class="cal-h${i > 4 ? ' we' : ''}">${w.slice(0, 2)}</div>`).join('') + '<i class="cal-b"></i>'.repeat(lead);
   for (let d = 1; d <= days; d++) {
-    const di = `${ym}-${pad2(d)}`, v = byDay[di];
-    cells += `<button class="cal-d${di === sel ? ' sel' : ''}${di === today ? ' today' : ''}${di > today ? ' fut' : ''}" data-act="cal-day" data-v="${di}"><b>${d}</b>${v && v.out ? `<small class="num">−${compact(v.out, UI.cur)}</small>` : ''}${v && v.in ? '<span class="cal-in"></span>' : ''}</button>`;
+    const di = `${ym}-${pad2(d)}`, v = byDay[di], hol = holiday(di), we = (lead + d - 1) % 7 > 4;
+    let cls = 'cal-d' + (di === sel ? ' sel' : '') + (di === today ? ' today' : '') + (di > today ? ' fut' : '') + (we ? ' we' : '') + (hol ? ' hol' : '');
+    if (money) {
+      const h = v && v.out && max > 0 ? Math.max(0.14, Math.sqrt(v.out / max)) : 0;
+      if (h > 0.6) cls += ' hot';
+      cells += `<button class="${cls}" style="--h:${h.toFixed(2)}" data-act="cal-day" data-v="${di}"><b>${d}</b>${v && v.out ? `<small class="num">${compact(v.out, UI.cur)}</small>` : ''}${v && v.in ? '<span class="cal-in"></span>' : ''}</button>`;
+    } else {
+      cells += `<button class="${cls}" data-act="cal-day" data-v="${di}"><b>${d}</b><span class="cal-dots">${v && v.out ? '<i class="o"></i>' : ''}${v && v.in ? '<i class="g"></i>' : ''}</span></button>`;
+    }
   }
-  let h = `<div class="period-nav cal-nav">
-      <button class="icon-btn" data-act="cal-month" data-v="-1" aria-label="Previous month">${I.left}</button>
-      <div class="cal-t"><div class="pn-title">${ymLabel(ym)}</div><div class="card-sub num">In ${compactU(t.in, UI.cur)} · Out ${compactU(t.out, UI.cur)}</div></div>
-      <button class="icon-btn" data-act="cal-month" data-v="1" aria-label="Next month" ${ym < ymNow() ? '' : 'disabled'}>${I.right}</button>
+  const fade = UI.calFade ? ' cal-fade' : '';
+  let h = `<div class="cal-top">
+      <button class="cal-title" data-act="cal-year" data-v="${y}" aria-label="See the whole year">${MONTHS[m - 1]} <span>${y}</span>${calChev}</button>
+      ${ym !== ymNow() ? '<button class="cal-today" data-act="cal-today">Today</button>' : ''}
+      <div class="seg sm cal-mode">${segButtons('cal-mode', [['cal', 'Calendar'], ['money', 'Money']], money ? 'money' : 'cal')}</div>
     </div>
-    <div class="cal">${cells}</div>
-    <p class="hint cal-key"><span class="cal-k-out">−120K</span> spent that day · <span class="cal-in"></span> money came in</p>`;
+    <div class="cal-sum num">In <b>${compactU(t.in, UI.cur)}</b> · Out <b>${compactU(t.out, UI.cur)}</b></div>
+    <div class="cal ${money ? 'money' : 'plain'}${fade}">${cells}</div>
+    ${money
+      ? '<p class="hint cal-key cal-heat">less <i></i> more spent · swipe for other months</p>'
+      : '<p class="hint cal-key"><span><i class="o"></i>spent</span><span><i class="g"></i>money came in</span><span><i class="r"></i>holiday</span></p>'}`;
   if (!sel || !sel.startsWith(ym)) return h + '<p class="hint cal-none">Tap a day to see what happened.</p>';
+  const hol = holiday(sel);
+  if (hol) h += `<div class="cal-hol">🎉<span><b>${hol}</b> · day off${/Hayit/.test(hol) && Number(sel.slice(0, 4)) > 2026 ? ' (expected date — it can move by a day)' : ''}</span></div>`;
   const list = S.tx.filter((x) => x.date === sel).sort(sortTx);
   if (!list.length) return h + `<div class="day-head"><span>${dayLabel(sel)}</span></div><p class="hint cal-none">Nothing on this day.</p>`;
   const nv = list.reduce((a, x) => a + deltaIn(x), 0), net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
   return h + `<div class="day-head"><span>${dayLabel(sel)}</span><span class="num">${net}</span></div><div class="group">${list.map((x) => txRow(x, false)).join('')}</div>`;
 }
+// The whole year: twelve small months (today ringed, holidays red, what went out each month); tap one to open it.
+function yearBody(y) {
+  const today = todayIso(), ty = Number(today.slice(0, 4));
+  let h = `<div class="cal-top">
+      <span class="yr-title num">${y}</span>
+      ${y !== ty ? '<button class="cal-today" data-act="cal-today">Today</button>' : ''}
+      <span class="yr-arrows"><button class="icon-btn" data-act="cal-yshift" data-v="-1" aria-label="Previous year" ${y > 1990 ? '' : 'disabled'}>${I.left}</button><button class="icon-btn" data-act="cal-yshift" data-v="1" aria-label="Next year" ${y < 2099 ? '' : 'disabled'}>${I.right}</button></span>
+    </div>
+    <div class="cal-sum">Tap a month to open it · red = days off</div>
+    <div class="yr${UI.calFade ? ' cal-zoom-out' : ''}">`;
+  for (let m = 1; m <= 12; m++) {
+    const ym = `${y}-${pad2(m)}`, [from, to] = ymRange(ym), out = totals(UI.cur, from, to).out;
+    const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, n = new Date(y, m, 0).getDate();
+    let g = '<i></i>'.repeat(lead);
+    for (let d = 1; d <= n; d++) { const di = `${ym}-${pad2(d)}`; g += `<b class="${di === today ? 't' : holiday(di) ? 'h' : ''}">${d}</b>`; }
+    h += `<button class="yr-m${ym === ymNow() ? ' now' : ''}${ym < ymNow() ? ' past' : ''}" data-act="cal-open" data-v="${ym}"><span class="yr-n">${MON[m - 1]}</span><span class="yr-o num">${out > 0 ? '−' + compact(out, UI.cur) : ''}</span><span class="yr-g">${g}</span></button>`;
+  }
+  return h + '</div>';
+}
 function bindCalPager() {
-  const first = S.tx.reduce((m, t) => (t.date < m ? t.date : m), todayIso()).slice(0, 7);
+  const yv = UI.calYear != null;
   bindPager($('#calpg'), {
-    has: (dir) => (dir > 0 ? UI.calYm < ymNow() : UI.calYm > first),
-    page: (dir) => { const ym = ymShift(UI.calYm, dir); return calBody(ym, calPick(ym)); },
-    go: (dir) => { UI.calYm = ymShift(UI.calYm, dir); UI.calDay = calPick(UI.calYm); render(); },
+    has: (dir) => (yv ? (dir > 0 ? UI.calYear < 2099 : UI.calYear > 1990) : (dir > 0 ? UI.calYm < CAL_MAX : UI.calYm > CAL_MIN)),
+    page: (dir) => { if (yv) return yearBody(UI.calYear + dir); const ym = ymShift(UI.calYm, dir); return calBody(ym, calPick(ym)); },
+    go: (dir) => { if (yv) UI.calYear += dir; else { UI.calYm = ymShift(UI.calYm, dir); UI.calDay = calPick(UI.calYm); } render(); },
+    skip: (t) => !!t.closest('.seg'),
   });
+  UI.calFade = false;
 }
 function afterHistory() {
   if (UI.hView === 'cal') { bindCalPager(); return; }
@@ -2163,7 +2219,15 @@ Object.assign(ACTIONS, {
   range: (a, v) => { UI.range = v; render(); },
   hview: (a, v) => { const d = segDir(a); UI.hView = v; renderSub(a, d); },
   'cal-day': (a, v) => { UI.calDay = v; render(); },
-  'cal-month': (a, v) => { const ym = ymShift(UI.calYm, Number(v)); if (ym > ymNow()) return; UI.calYm = ym; UI.calDay = calPick(ym); render(); pagerIn(Number(v)); },
+  'cal-month': (a, v) => { const ym = ymShift(UI.calYm, Number(v)); UI.calYm = ym; UI.calDay = calPick(ym); render(); pagerIn(Number(v)); },
+  'cal-mode': (a, v) => { if ((S.settings.calMode || 'money') === v) return; S.settings.calMode = v; save(); UI.calFade = true; render(); },
+  'cal-year': (a, v) => { UI.calYear = Number(v); UI.calFade = true; render(); },
+  'cal-yshift': (a, v) => { const y = UI.calYear + Number(v); if (y < 1990 || y > 2099) return; UI.calYear = y; render(); pagerIn(Number(v)); },
+  'cal-open': (a, v) => { UI.calYear = null; UI.calYm = v; UI.calDay = calPick(v); render(); const p = $('#calpg .cal'); if (p && !reduceMotion()) p.classList.add('cal-zoom-in'); },
+  'cal-today': () => {
+    const dir = UI.calYear != null ? Math.sign(new Date().getFullYear() - UI.calYear) : (UI.calYm < ymNow() ? 1 : -1);
+    UI.calYear = null; UI.calYm = ymNow(); UI.calDay = todayIso(); render(); pagerIn(dir);
+  },
   again: (a, v, id) => {
     const t = S.tx.find((x) => x.id === id);
     if (!t) return;
