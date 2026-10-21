@@ -1060,3 +1060,8 @@ button.leg-row:active { opacity: .6; }
 button.row, .row.tap, .drow, .wli, .wdh, .icon-btn, .tbtn, .goal-card, .yr-m, .cal-d { transition: transform .2s cubic-bezier(.3, 1.2, .5, 1), background .25s, opacity .2s; }
 button.row:active, .row.tap:active, .drow:active, .wli:active, .wdh:active { transform: scale(.985); }
 .icon-btn:active { transform: scale(.9); }
+
+/* Set-aside pages take no space and no graphics memory (a phone dropped the tab bar while several tall fixed layers existed) */
+.view.parked { display: none; }
+.tabbar { will-change: transform; transform: translate3d(-50%, 0, 0); }
+.view.ghost { contain: paint; }
