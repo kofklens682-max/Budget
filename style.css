@@ -1069,3 +1069,87 @@ button.row:active, .row.tap:active, .drow:active, .wli:active, .wdh:active { tra
 /* Tab change: a screen-sized cover fades away over the new page (one light layer; the tall page itself isn't animated) */
 .tab-veil { position: fixed; inset: 0; z-index: 25; background: var(--bg); pointer-events: none; animation: veil .24s ease-out forwards; }
 @keyframes veil { from { opacity: 1; } to { opacity: 0; } }
+
+/* ---------- Glass look (Settings → Appearance → Look): only the effect; the app's colours stay ---------- */
+html.glass, html.glass body { background: transparent !important; }
+html.glass { background:
+  radial-gradient(300px 280px at 100% 4%, rgba(255,222,120,.55) 0, transparent 72%),
+  radial-gradient(340px 320px at -8% 34%, rgba(140,225,190,.50) 0, transparent 72%),
+  radial-gradient(320px 300px at 106% 62%, rgba(140,215,208,.42) 0, transparent 72%),
+  radial-gradient(360px 320px at 24% 100%, rgba(255,222,120,.45) 0, transparent 72%),
+  #FBF8F1 !important; background-attachment: fixed; }
+html.glass .topbar { background: rgba(251,248,241,.6) !important; -webkit-backdrop-filter: blur(16px) saturate(170%); backdrop-filter: blur(16px) saturate(170%); }
+html.glass .overlay { background: rgba(70,62,40,.2); }
+
+/* every box is glass: see-through, frosted, bright rim, soft light from the top-left */
+html.glass .card, html.glass .banner, html.glass .mon-card, html.glass .goal-card, html.glass .group, html.glass .acc-card, html.glass .goal-mini {
+  position: relative; border: 1px solid rgba(255,255,255,.75);
+  background-color: rgba(255,255,255,.46) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(170%); backdrop-filter: blur(16px) saturate(170%);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.95), inset 1.5px 0 2px -1px rgba(255,255,255,.9), inset 0 -10px 22px -8px rgba(255,255,255,.35), 0 14px 28px -16px rgba(70,60,20,.30) !important; }
+html.glass .card.hero-card { background-color: rgba(255,255,255,.4) !important; }
+html.glass .card::after { pointer-events: none; }
+html.glass .card:not(.acc-card):not(.goal-mini):not(.hero-card)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(150deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.08) 34%, transparent 55%); }
+html.glass .hero-card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(150deg, rgba(255,255,255,.5) 0%, rgba(255,255,255,.08) 34%, transparent 55%); pointer-events: none; z-index: 0; }
+html.glass .card > * { position: relative; z-index: 1; }
+html.glass .row, html.glass .group .row { background: transparent !important; }
+
+/* glass tab bar, + button, and every control */
+html.glass .tabs { background: rgba(255,255,255,.34) !important; -webkit-backdrop-filter: blur(18px) saturate(200%) brightness(1.06); backdrop-filter: blur(18px) saturate(200%) brightness(1.06);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), inset 0 2px 1px -1px rgba(255,255,255,1), inset 1.5px 2px 3px -1px rgba(255,255,255,.9), inset -1.5px -2px 3px -1px rgba(255,255,255,.5), 0 16px 30px -12px rgba(70,60,20,.32) !important; }
+html.glass .tab-ind { background: rgba(15,157,102,.16) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.8), inset 0 0 0 1px rgba(255,255,255,.4); }
+html.glass .fab { border: 1px solid rgba(255,255,255,.65);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.65), inset 0 -8px 14px rgba(0,60,30,.18), 0 0 0 5px rgba(246,196,69,.45), 0 12px 24px -8px rgba(15,157,102,.6) !important; }
+html.glass .seg { background: rgba(255,255,255,.34) !important; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), inset 0 1px 0 rgba(255,255,255,.9) !important; }
+html.glass .seg-thumb { background: rgba(255,255,255,.88) !important; box-shadow: inset 0 1px 0 #fff, 0 4px 10px -4px rgba(70,60,20,.3) !important; }
+html.glass .icon-btn { background: rgba(255,255,255,.5) !important; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.6), 0 6px 12px -6px rgba(70,60,20,.3) !important; }
+html.glass .fchip, html.glass .quick button, html.glass .acc-pick button, html.glass .grp-pick button, html.glass .pill-btn, html.glass .cat, html.glass .emojis button, html.glass .search {
+  background: rgba(255,255,255,.5) !important; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(255,255,255,.6), 0 6px 12px -8px rgba(70,60,20,.28) !important; }
+html.glass .fchip.on, html.glass .quick button.on, html.glass .acc-pick button.on, html.glass .grp-pick button.on { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 2px var(--accent), 0 6px 12px -8px rgba(15,157,102,.5) !important; }
+html.glass .btn { box-shadow: inset 0 2px 0 rgba(255,255,255,.5), 0 10px 18px -8px rgba(15,157,102,.55); }
+html.glass .sheet { background: rgba(251,249,243,.72) !important; -webkit-backdrop-filter: blur(28px) saturate(190%); backdrop-filter: blur(28px) saturate(190%); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.95), 0 -12px 40px rgba(60,50,20,.2) !important; }
+html.glass .dlg-box, html.glass .toast { background: rgba(255,253,248,.7) !important; -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 20px 40px -12px rgba(60,50,20,.35) !important; }
+html.glass .banner { background-color: rgba(15,157,102,.16) !important; }
+
+/* dark */
+html.glass[data-theme="dark"] { background:
+  radial-gradient(300px 280px at 100% 4%, rgba(255,200,61,.20) 0, transparent 72%),
+  radial-gradient(340px 320px at -8% 34%, rgba(47,191,132,.24) 0, transparent 72%),
+  radial-gradient(320px 300px at 106% 62%, rgba(26,156,146,.22) 0, transparent 72%),
+  radial-gradient(360px 320px at 24% 100%, rgba(255,200,61,.16) 0, transparent 72%),
+  #13120F !important; background-attachment: fixed; }
+html.glass[data-theme="dark"] .topbar { background: rgba(19,18,15,.6) !important; }
+html.glass[data-theme="dark"] .overlay { background: rgba(0,0,0,.45); }
+html.glass[data-theme="dark"] .card, html.glass[data-theme="dark"] .banner, html.glass[data-theme="dark"] .mon-card, html.glass[data-theme="dark"] .goal-card, html.glass[data-theme="dark"] .group, html.glass[data-theme="dark"] .acc-card, html.glass[data-theme="dark"] .goal-mini { border-color: rgba(255,255,255,.14); background-color: rgba(255,255,255,.07) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), inset 1.5px 0 2px -1px rgba(255,255,255,.14), 0 14px 28px -16px rgba(0,0,0,.6) !important; }
+html.glass[data-theme="dark"] .banner { background-color: rgba(47,191,132,.16) !important; }
+html.glass[data-theme="dark"] .card:not(.acc-card):not(.goal-mini):not(.hero-card)::after, html.glass[data-theme="dark"] .hero-card::after { background: linear-gradient(150deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 34%, transparent 55%); }
+html.glass[data-theme="dark"] .tabs { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), inset 0 2px 1px -1px rgba(255,255,255,.3), 0 16px 30px -12px rgba(0,0,0,.6) !important; }
+html.glass[data-theme="dark"] .tab-ind { background: rgba(47,191,132,.22) !important; }
+html.glass[data-theme="dark"] .seg { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 1px 0 rgba(255,255,255,.2) !important; }
+html.glass[data-theme="dark"] .seg-thumb { background: rgba(255,255,255,.2) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.3) !important; }
+html.glass[data-theme="dark"] .icon-btn, html.glass[data-theme="dark"] .fchip, html.glass[data-theme="dark"] .quick button, html.glass[data-theme="dark"] .acc-pick button, html.glass[data-theme="dark"] .grp-pick button, html.glass[data-theme="dark"] .pill-btn, html.glass[data-theme="dark"] .cat, html.glass[data-theme="dark"] .emojis button, html.glass[data-theme="dark"] .search { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.12) !important; }
+html.glass[data-theme="dark"] .sheet { background: rgba(31,29,24,.66) !important; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), 0 -12px 40px rgba(0,0,0,.5) !important; }
+html.glass[data-theme="dark"] .dlg-box, html.glass[data-theme="dark"] .toast { background: rgba(40,37,31,.72) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 20px 40px -12px rgba(0,0,0,.6) !important; }
+@media (prefers-color-scheme: dark) {
+
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) { background:
+  radial-gradient(300px 280px at 100% 4%, rgba(255,200,61,.20) 0, transparent 72%),
+  radial-gradient(340px 320px at -8% 34%, rgba(47,191,132,.24) 0, transparent 72%),
+  radial-gradient(320px 300px at 106% 62%, rgba(26,156,146,.22) 0, transparent 72%),
+  radial-gradient(360px 320px at 24% 100%, rgba(255,200,61,.16) 0, transparent 72%),
+  #13120F !important; background-attachment: fixed; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .topbar { background: rgba(19,18,15,.6) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .overlay { background: rgba(0,0,0,.45); }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .card, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .banner, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .mon-card, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .goal-card, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .group, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .acc-card, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .goal-mini { border-color: rgba(255,255,255,.14); background-color: rgba(255,255,255,.07) !important;
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), inset 1.5px 0 2px -1px rgba(255,255,255,.14), 0 14px 28px -16px rgba(0,0,0,.6) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .banner { background-color: rgba(47,191,132,.16) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .card:not(.acc-card):not(.goal-mini):not(.hero-card)::after, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .hero-card::after { background: linear-gradient(150deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.02) 34%, transparent 55%); }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .tabs { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16), inset 0 2px 1px -1px rgba(255,255,255,.3), 0 16px 30px -12px rgba(0,0,0,.6) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .tab-ind { background: rgba(47,191,132,.22) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .seg { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14), inset 0 1px 0 rgba(255,255,255,.2) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .seg-thumb { background: rgba(255,255,255,.2) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.3) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .icon-btn, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .fchip, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .quick button, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .acc-pick button, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .grp-pick button, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .pill-btn, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .cat, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .emojis button, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .search { background: rgba(255,255,255,.09) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(255,255,255,.12) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .sheet { background: rgba(31,29,24,.66) !important; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), 0 -12px 40px rgba(0,0,0,.5) !important; }
+html.glass:not([data-theme="light"]):not([data-theme="dark"]) .dlg-box, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .toast { background: rgba(40,37,31,.72) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 20px 40px -12px rgba(0,0,0,.6) !important; }
+}

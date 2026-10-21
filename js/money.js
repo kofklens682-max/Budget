@@ -2022,6 +2022,8 @@ function settingsHtml() {
 
     <div class="form-label">Appearance</div>
     <div class="seg full">${segButtons('set-theme', [['system', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']], s.theme)}</div>
+    <div class="form-label">Look</div>
+    <div class="seg full">${segButtons('set-look', [['normal', 'Normal'], ['glass', 'Glass']], lookGet())}</div>
 
     <div class="form-label">Privacy</div>
     <div class="group plain">
@@ -2065,6 +2067,9 @@ function mountSettings(sh) {
     }).catch(() => {});
   }
 }
+// Normal or Glass look: kept on this phone only (a choice about the screen, not about the money)
+function lookGet() { try { return localStorage.getItem('budget-look') === 'glass' ? 'glass' : 'normal'; } catch (e) { return 'normal'; } }
+function applyLook() { document.documentElement.classList.toggle('glass', lookGet() === 'glass'); }
 function applyTheme() {
   const t = S.settings.theme;
   if (t === 'system') document.documentElement.removeAttribute('data-theme');
@@ -2422,6 +2427,7 @@ Object.assign(ACTIONS, {
 
   // settings
   'set-cur': (a, v) => { S.settings.currency = v; UI.cur = v; save(); render(); refreshSheet(settingsHtml(), mountSettings); },
+  'set-look': (a, v) => { try { localStorage.setItem('budget-look', v === 'glass' ? 'glass' : 'normal'); } catch (e) { /* not needed */ } applyLook(); refreshSheet(settingsHtml(), mountSettings); },
   'set-theme': (a, v) => { S.settings.theme = v; save(); applyTheme(); refreshSheet(settingsHtml(), mountSettings); drawCharts(false); },
   'change-pin': () => setPinFlow((ok) => { if (ok) toast('Passcode changed'); }),
   export: () => exportBackup(),
