@@ -163,7 +163,7 @@ function fillDay() {
   if (!dd) return;
   dd.style.minHeight = '';
   const pb = parseFloat(getComputedStyle($('#view')).paddingBottom) || 0;
-  dd.style.minHeight = Math.max(0, Math.floor(window.innerHeight - pb - (dd.getBoundingClientRect().top + window.scrollY))) + 'px';
+  dd.style.minHeight = Math.max(0, Math.floor(window.innerHeight - pb - (dd.getBoundingClientRect().top - $('#view').getBoundingClientRect().top))) + 'px';
 }
 // Swipe the day sideways (see bindPager): the next or previous day comes in from the side and the
 // circle in the week row glides along. Monday and Sunday are the ends of the week.

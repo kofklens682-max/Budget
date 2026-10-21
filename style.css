@@ -1050,3 +1050,13 @@ button.leg-row:active { opacity: .6; }
 .strip > .card:nth-child(3n) { --geo-c: var(--geo-t2); }
 .acc-card.add::after, .goal-mini.add::after { display: none; }
 .fab { box-shadow: 0 0 0 5px var(--geo-ring), 0 10px 26px color-mix(in srgb, var(--accent) 40%, transparent), 0 2px 4px rgba(0, 0, 0, .1); }
+
+/* Pages set aside (js/core.js): a hidden fixed layer that keeps its layout, so coming back needs no work */
+.view.building, .view.parked { position: fixed; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; }
+
+.view.parked * { animation-play-state: paused; }
+
+/* Every tappable row answers the finger with a small press, like the Teacher app */
+button.row, .row.tap, .drow, .wli, .wdh, .icon-btn, .tbtn, .goal-card, .yr-m, .cal-d { transition: transform .2s cubic-bezier(.3, 1.2, .5, 1), background .25s, opacity .2s; }
+button.row:active, .row.tap:active, .drow:active, .wli:active, .wdh:active { transform: scale(.985); }
+.icon-btn:active { transform: scale(.9); }

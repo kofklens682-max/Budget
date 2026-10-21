@@ -801,7 +801,7 @@ function animateChange(root, change) {
 function draw(animate, dir, keep, fromTab) {
   const v = $('#view');
   const page = PAGES[UI.tab];
-  if (!fromTab) { kept = {}; keepEpoch++; soonPrewarm(); } // something changed: pages kept from before are out of date
+  if (!fromTab) { dropKept(); keepEpoch++; soonPrewarm(); } // something changed: pages kept from before are out of date
   memo = {}; // totals are worked out once for this draw (see sums())
   let html;
   try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
@@ -846,70 +846,85 @@ const KEEP_MS = { schedule: 60000 }; // the schedule shows the time now; other p
 // (Not tied to every save: background saves, like the daily safety copy, change nothing on a page.
 // Every change you can see redraws the page you're on, and that makes keepEpoch go up.)
 const keptFresh = (k, tab) => !!k && k.epoch === keepEpoch && k.day === todayIso() && Date.now() - k.t < (KEEP_MS[tab] || 600000);
-function keepPage(tab, nodes, y, built) {
-  if (!built || built.tab !== tab || !keptFresh(built, tab)) return;
-  const frag = document.createDocumentFragment();
-  frag.append(...nodes);
-  frag.querySelectorAll('[data-kid]').forEach((el) => { el.id = el.dataset.kid; el.removeAttribute('data-kid'); });
-  kept[tab] = { nodes: frag, y, rev: built.rev, day: built.day, t: built.t, epoch: built.epoch, shown: true };
+// Pages stay where they are: a tab you leave is not taken apart, only set aside (a hidden, fixed
+// layer), so coming back is a class change and a slide, with no page being moved or laid out again.
+const stashIds = (el) => el.querySelectorAll('[id]').forEach((x) => { x.dataset.kid = x.id; x.removeAttribute('id'); });
+const unstashIds = (el) => el.querySelectorAll('[data-kid]').forEach((x) => { x.id = x.dataset.kid; x.removeAttribute('data-kid'); });
+function dropKept() { Object.values(kept).forEach((k) => k && k.el && k.el.remove()); kept = {}; }
+function park(el) {
+  el.classList.remove('ghost', 'building');
+  el.classList.add('parked');
+  el.style.top = '';
+  el.style.removeProperty('--dir');
+  el.inert = true;
+  el.setAttribute('aria-hidden', 'true');
+}
+// A page that has slid away: set aside for coming back, or thrown out when it is already out of date.
+function retire(el, tab, y, built) {
+  if (!built || built.tab !== tab || !keptFresh(built, tab) || kept[tab]) { el.remove(); return; }
+  park(el);
+  kept[tab] = { el, y, rev: built.rev, day: built.day, t: built.t, epoch: built.epoch, shown: true };
 }
 // Show a kept page again. Returns false when there's none (or it's out of date).
 function restorePage(tab, dir) {
   const k = kept[tab];
   delete kept[tab];
-  if (!keptFresh(k, tab)) return false;
-  const v = $('#view');
-  v.replaceChildren(k.nodes);
-  v._built = { tab, rev: k.rev, day: k.day, t: k.t, epoch: k.epoch };
-  v.classList.remove('enter', 'slide');
-  // A page that was on the screen before comes back as it was: its charts don't grow again.
-  v.classList.toggle('settled', !!k.shown);
+  if (!keptFresh(k, tab)) { if (k) k.el.remove(); return false; }
+  const old = $('#view'), el = k.el;
+  if (old && old !== el) { old.removeAttribute('id'); }
+  unstashIds(el);
+  el.id = 'view';
+  el.classList.remove('parked', 'enter', 'slide');
+  el.inert = false;
+  el.removeAttribute('aria-hidden');
+  el.classList.toggle('settled', !!k.shown); // a page that was on the screen before comes back as it was: its charts don't grow again
   window.scrollTo(0, k.y);
   if (dir && !reduceMotion()) {
-    v.style.setProperty('--dir', dir);
-    void v.offsetWidth;
-    v.classList.add('slide');
+    el.style.setProperty('--dir', dir);
+    void el.offsetWidth;
+    el.classList.add('slide');
   }
   pageChrome();
   return true;
 }
-// Build the tabs not opened yet, one per quiet moment. All in one step, so nothing on the screen
-// moves: the page you're on steps aside, the other one is drawn and put away, yours comes back.
+// Build the tabs not opened yet, one per quiet moment, off the screen and set aside, so even the
+// first visit opens at once. The page you're on is not touched.
 function prewarmPages() {
   const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
   const next = TAB_ORDER.find((t) => t !== UI.tab && !keptFresh(kept[t], t));
   if (!next) return;
   idle(() => {
     if (sheet || locked || document.hidden || keptFresh(kept[next], next) || next === UI.tab || Date.now() - lastTouch < 1500) { setTimeout(prewarmPages, 1500); return; }
-    const v = $('#view'), mine = document.createDocumentFragment(), y = window.scrollY, tab = UI.tab, built = v._built;
-    const classes = v.className, dirVar = v.style.getPropertyValue('--dir');
-    mine.append(...v.childNodes);
+    const v = $('#view'), tab = UI.tab, nv = document.createElement('main');
+    nv.className = 'view building';
+    v.after(nv);
+    stashIds(v); // the same ids can't be on two pages while the new one is drawn
+    v.removeAttribute('id');
+    nv.id = 'view';
+    let ok = false;
     UI.tab = next;
     try {
       memo = {};
       let html;
       try { html = PAGES[next].render(); } catch (err) { html = null; }
       if (html != null) {
-        v.innerHTML = html;
+        nv.innerHTML = html;
         if (PAGES[next].after) { try { PAGES[next].after(false); } catch (err) { console.error(err); } }
-        void v.offsetHeight; // lay it out now, while nothing else is happening
-        const nodes = [...v.childNodes];
-        kept[next] = null;
-        const frag = document.createDocumentFragment();
-        frag.append(...nodes);
-        kept[next] = { nodes: frag, y: 0, rev: S.rev, day: todayIso(), t: Date.now(), epoch: keepEpoch };
+        void nv.offsetHeight; // lay it out now, while nothing else is happening
+        ok = true;
       }
     } finally {
       memo = null;
       UI.tab = tab;
-      v.replaceChildren(mine);
-      v.className = classes;
-      // Put back, the page must not play its grow animations again (it looked like the app reloading).
-      v.classList.add('settled');
-      if (dirVar) v.style.setProperty('--dir', dirVar);
-      v._built = built;
-      window.scrollTo(0, y);
+      nv.removeAttribute('id');
+      stashIds(nv);
+      v.id = 'view';
+      unstashIds(v);
     }
+    if (ok) {
+      park(nv);
+      kept[next] = { el: nv, y: 0, rev: S.rev, day: todayIso(), t: Date.now(), epoch: keepEpoch, shown: false };
+    } else nv.remove();
     setTimeout(prewarmPages, 300);
   }, { timeout: 3000 });
 }
@@ -917,7 +932,7 @@ let lastTouch = 0, prewarmT = 0;
 // After a change, build the other pages again a little later (when you've stopped tapping).
 function soonPrewarm() { clearTimeout(prewarmT); prewarmT = setTimeout(prewarmPages, 2000); }
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => window.addEventListener(t, () => { lastTouch = Date.now(); }, { passive: true, capture: true }));
-window.addEventListener('resize', () => { kept = {}; }); // kept charts were drawn for the old width
+window.addEventListener('resize', () => { dropKept(); }); // kept charts were drawn for the old width
 // Re-render after a choice in a segmented control (or the ‹ › arrows next to it): what's above
 // stays put, what's below slides in from the side of the new choice.
 function renderSub(el, dir) {
@@ -1057,22 +1072,25 @@ function showTab(tab) {
   const from = UI.tab, y = window.scrollY;
   UI.tab = tab;
   const v = $('#view'), built = v._built;
-  $$('.view.ghost').forEach((g) => { if (g._done) g._done(); g.remove(); });
+  $$('.view.ghost').forEach((g) => { if (g._done) g._done(); else g.remove(); });
+  // The page you leave slides out where it is (a fixed layer); afterwards it is set aside for coming back.
+  v.removeAttribute('id');
+  stashIds(v);
+  v.inert = true;
+  v.setAttribute('aria-hidden', 'true');
+  v.classList.remove('enter', 'slide');
   if (!reduceMotion() && v.firstChild) {
-    // The old page slides out inside a "ghost" layer; afterwards it's kept for coming back.
-    const g = document.createElement('div');
-    g.className = 'view ghost settled';
-    g.setAttribute('aria-hidden', 'true');
-    g.inert = true;
-    g.style.top = `${-y}px`;
-    g.style.setProperty('--dir', dir);
-    g.append(...v.childNodes);
-    g.querySelectorAll('[id]').forEach((el) => { el.dataset.kid = el.id; el.removeAttribute('id'); });
-    v.after(g);
-    g._done = () => { g._done = null; if (UI.tab !== from) keepPage(from, [...g.childNodes], y, built); };
-    setTimeout(() => { if (g._done) g._done(); g.remove(); }, 450);
-  } else if (v.firstChild) keepPage(from, [...v.childNodes], y, built);
+    v.classList.add('ghost', 'settled');
+    v.style.top = `${-y}px`;
+    v.style.setProperty('--dir', dir);
+    v._done = () => { v._done = null; retire(v, from, y, built); };
+    setTimeout(() => { if (v._done) v._done(); }, 450);
+  } else retire(v, from, y, built);
   if (restorePage(tab, dir)) return;
+  const nv = document.createElement('main');
+  nv.id = 'view';
+  nv.className = 'view';
+  v.after(nv);
   window.scrollTo(0, 0);
   render(true, dir, 0, true);
 }
