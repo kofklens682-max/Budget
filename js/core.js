@@ -813,7 +813,7 @@ function draw(animate, dir, keep, fromTab) {
     else {
       if (!dir) [...v.children].forEach((c, i) => c.style.setProperty('--i', Math.min(i, 9)));
       void v.offsetWidth;
-      v.classList.add(dir ? 'slide' : 'enter');
+      if (dir && fromTab) tabVeil(); else v.classList.add(dir ? 'slide' : 'enter');
     }
   }
   pageChrome();
@@ -850,6 +850,16 @@ const keptFresh = (k, tab) => !!k && k.epoch === keepEpoch && k.day === todayIso
 // layer), so coming back is a class change and a slide, with no page being moved or laid out again.
 const stashIds = (el) => el.querySelectorAll('[id]').forEach((x) => { x.dataset.kid = x.id; x.removeAttribute('id'); });
 const unstashIds = (el) => el.querySelectorAll('[data-kid]').forEach((x) => { x.id = x.dataset.kid; x.removeAttribute('data-kid'); });
+// A tab change: the new page is simply there, and a screen-sized cover the colour of the background fades away
+// over it. Only that one light layer is animated, never the whole (tall) page.
+function tabVeil() {
+  $$('.tab-veil').forEach((x) => x.remove());
+  const el = document.createElement('div');
+  el.className = 'tab-veil';
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+  setTimeout(() => el.remove(), 500);
+}
 function dropKept() { Object.values(kept).forEach((k) => k && k.el && k.el.remove()); kept = {}; }
 function park(el) {
   el.classList.remove('ghost', 'building');
@@ -879,11 +889,7 @@ function restorePage(tab, dir) {
   el.removeAttribute('aria-hidden');
   el.classList.toggle('settled', !!k.shown); // a page that was on the screen before comes back as it was: its charts don't grow again
   window.scrollTo(0, k.y);
-  if (dir && !reduceMotion()) {
-    el.style.setProperty('--dir', dir);
-    void el.offsetWidth;
-    el.classList.add('slide');
-  }
+  if (dir && !reduceMotion()) tabVeil();
   pageChrome();
   return true;
 }
@@ -1073,19 +1079,11 @@ function showTab(tab) {
   UI.tab = tab;
   const v = $('#view'), built = v._built;
   $$('.view.ghost').forEach((g) => { if (g._done) g._done(); else g.remove(); });
-  // The page you leave slides out where it is (a fixed layer); afterwards it is set aside for coming back.
+  // The page you leave is set aside at once (no big layer is animated: that is what a phone struggles with).
   v.removeAttribute('id');
   stashIds(v);
-  v.inert = true;
-  v.setAttribute('aria-hidden', 'true');
   v.classList.remove('enter', 'slide');
-  if (!reduceMotion() && v.firstChild) {
-    v.classList.add('ghost', 'settled');
-    v.style.top = `${-y}px`;
-    v.style.setProperty('--dir', dir);
-    v._done = () => { v._done = null; retire(v, from, y, built); };
-    setTimeout(() => { if (v._done) v._done(); }, 450);
-  } else retire(v, from, y, built);
+  retire(v, from, y, built);
   if (restorePage(tab, dir)) return;
   const nv = document.createElement('main');
   nv.id = 'view';

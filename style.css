@@ -1065,3 +1065,7 @@ button.row:active, .row.tap:active, .drow:active, .wli:active, .wdh:active { tra
 .view.parked { display: none; }
 .tabbar { will-change: transform; transform: translate3d(-50%, 0, 0); }
 .view.ghost { contain: paint; }
+
+/* Tab change: a screen-sized cover fades away over the new page (one light layer; the tall page itself isn't animated) */
+.tab-veil { position: fixed; inset: 0; z-index: 25; background: var(--bg); pointer-events: none; animation: veil .24s ease-out forwards; }
+@keyframes veil { from { opacity: 1; } to { opacity: 0; } }
