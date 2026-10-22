@@ -852,6 +852,8 @@ const stashIds = (el) => el.querySelectorAll('[id]').forEach((x) => { x.dataset.
 const unstashIds = (el) => el.querySelectorAll('[data-kid]').forEach((x) => { x.id = x.dataset.kid; x.removeAttribute('data-kid'); });
 // A tab change: the new page is simply there, and a screen-sized cover the colour of the background fades away
 // over it. Only that one light layer is animated, never the whole (tall) page.
+// The small title at the top shows only when the page is scrolled; set it at once for the page that arrives.
+function syncTopbar() { $('#topbar').classList.toggle('show', window.scrollY > 44); }
 function tabVeil() {
   $$('.tab-veil').forEach((x) => x.remove());
   const el = document.createElement('div');
@@ -889,6 +891,7 @@ function restorePage(tab, dir) {
   el.removeAttribute('aria-hidden');
   el.classList.toggle('settled', !!k.shown); // a page that was on the screen before comes back as it was: its charts don't grow again
   window.scrollTo(0, k.y);
+  syncTopbar();
   if (dir && !reduceMotion()) tabVeil();
   pageChrome();
   return true;
@@ -1090,6 +1093,7 @@ function showTab(tab) {
   nv.className = 'view';
   v.after(nv);
   window.scrollTo(0, 0);
+  syncTopbar();
   render(true, dir, 0, true);
 }
 window.addEventListener('popstate', (e) => {
