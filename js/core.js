@@ -1083,15 +1083,17 @@ function showTab(tab) {
   const v = $('#view'), built = v._built;
   $$('.view.ghost').forEach((g) => { if (g._done) g._done(); else g.remove(); });
   // The page you leave is set aside at once (no big layer is animated: that is what a phone struggles with).
+  // The spot for a new page is taken BEFORE the old one is set aside: when the old page is thrown out
+  // instead, there would be nothing left to put the new one next to (and the screen stayed blank).
+  const nv = document.createElement('main');
+  nv.className = 'view';
+  v.after(nv);
   v.removeAttribute('id');
   stashIds(v);
   v.classList.remove('enter', 'slide');
   retire(v, from, y, built);
-  if (restorePage(tab, dir)) return;
-  const nv = document.createElement('main');
+  if (restorePage(tab, dir)) { nv.remove(); return; }
   nv.id = 'view';
-  nv.className = 'view';
-  v.after(nv);
   window.scrollTo(0, 0);
   syncTopbar();
   render(true, dir, 0, true);
