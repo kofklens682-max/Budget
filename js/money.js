@@ -765,7 +765,7 @@ function openTx(id, preset = {}) {
     const cur = preset.currency || UI.cur;
     draft = {
       id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: to, toAmount: 0, toCurrency: cur,
-      person: preset.person || '', category: preset.category || null, date: todayIso(), note: preset.note || '',
+      person: preset.person || '', category: preset.category || null, date: /^\d{4}-\d\d-\d\d$/.test(preset.date || '') && preset.date <= todayIso() ? preset.date : todayIso(), note: preset.note || '',
       goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast, from: preset.from || ['free'], pic: preset.pic || null,
       groupId: preset.groupId || null, studentId: preset.studentId || null, forMonth: preset.forMonth || null,
     };

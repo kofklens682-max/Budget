@@ -39,7 +39,7 @@ function tbClick(e) {
   const st = g && g.students.find((x) => x.name.trim().toLowerCase() === String(p.person).trim().toLowerCase());
   document.getElementById('tb-banner').remove();
   tbOpen = { p, n: tbCount(p) };
-  openTx(null, { type: 'in', amount: p.amount, currency: 'UZS', person: p.person, category: lessonCat(), note: `${p.group} · ${ymLabel(p.ym)} fee`, groupId: g ? g.id : null, studentId: st ? st.id : null, forMonth: p.ym });
+  openTx(null, { type: 'in', amount: p.amount, currency: 'UZS', person: p.person, category: lessonCat(), note: `${p.group} · ${ymLabel(p.ym)} fee${p.by ? ' · by ' + String(p.by).toLowerCase() : ''}`, date: p.date, groupId: g ? g.id : null, studentId: st ? st.id : null, forMonth: p.ym });
 }
 whenOpen(() => setTimeout(tbShow, 600));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { tbLater = false; whenOpen(() => setTimeout(tbShow, 400)); } });
