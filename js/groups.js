@@ -128,8 +128,9 @@ function groupHtml() {
       right = `<span class="pay-st paid">${glyph('check')}</span>`;
       act = 'edit-tx'; id = last.id;
     } else if (r.status === 'part') {
-      sub = `Paid ${fmt(r.paid, m.cur)} · ${fmt(due - r.paid, m.cur)} left`;
-      right = `<span class="pay-st part" style="--p:${Math.round((r.paid / due) * 100)}%"></span>`;
+      const dd = r.due != null ? r.due : due;
+      sub = `Paid ${fmt(r.paid, m.cur)} · ${fmt(dd - r.paid, m.cur)} left`;
+      right = `<span class="pay-st part" style="--p:${Math.round((r.paid / (dd || 1)) * 100)}%"></span>`;
       act = 'pay-student'; id = r.s.id;
     } else {
       sub = 'Not paid yet';
@@ -170,7 +171,7 @@ function payStudent(sid) {
   const s = g && g.students.find((x) => x.id === sid);
   if (!s) return;
   const r = groupMonth(g, gOpen.ym).rows.find((x) => x.s.id === sid);
-  const remaining = g.fee ? Math.max(0, g.fee.amount - (r ? r.paid : 0)) : 0;
+  const remaining = Math.max(0, (r && r.due != null ? r.due : g.fee ? g.fee.amount : 0) - (r ? r.paid : 0));
   openTx(null, {
     type: 'in', groupId: g.id, studentId: s.id, person: s.name, forMonth: gOpen.ym,
     amount: remaining, currency: g.fee ? g.fee.currency : UI.cur, category: lessonCat(), back: backToGroup(),

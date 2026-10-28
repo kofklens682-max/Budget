@@ -1,0 +1,65 @@
+/* ===== Liquid glass tab bar (draft, both apps) =====
+   The bar is clear glass. The round highlight is a glass bubble BEHIND the real icons. Press or slide: the bubble swells and the
+   real icon under it grows in place (no second copy of it anywhere). */
+html .tp-tabs, html .tabs {
+  background: color-mix(in srgb, var(--bar, #fff) 52%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.9) brightness(1.04); backdrop-filter: blur(16px) saturate(1.9) brightness(1.04);
+  box-shadow: inset 0 0 0 .6px rgba(255,255,255,.75), inset 0 1.5px 1px -.5px rgba(255,255,255,.95), inset 0 -1.5px 2px -1px rgba(255,255,255,.35),
+    0 12px 30px rgba(20,25,60,.15), 0 1.5px 3px rgba(20,25,60,.08) !important;
+}
+html .tp-ind, html .tab-ind {
+  z-index: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.45) 60%, rgba(255,255,255,.65)) !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.9), inset 2px 2.5px 3px -1px #fff, inset -2px -2.5px 4px -1px rgba(255,255,255,.7), 0 4px 12px rgba(20,25,60,.14), 0 1px 2px rgba(20,25,60,.1) !important;
+  transition: transform .5s cubic-bezier(.3,1.25,.45,1), box-shadow .3s !important;
+}
+html .tp-tabs.sliding .tp-ind, html .tabs.sliding .tab-ind { transition: box-shadow .3s !important; }
+html .tp-tabs.press .tp-ind, html .tabs.press .tab-ind {
+  box-shadow: inset 0 0 0 1px #fff, inset 2px 2.5px 4px -1px #fff, inset -2px -2.5px 5px -1px rgba(255,255,255,.8), 0 10px 24px rgba(20,25,60,.24), 0 2px 5px rgba(20,25,60,.14) !important;
+}
+/* the real icon and label grow where they are */
+.tp-tabs button svg, .tabs button svg, .tp-tabs button > span, .tabs button > span { transition: transform .35s cubic-bezier(.3,1.5,.5,1), color .25s !important; transform-origin: 50% 60%; }
+.tp-tabs.press button.on svg, .tabs.press button.on svg, .tabs.press button.over svg { transform: translateY(-2px) scale(1.32) !important; }
+.tp-tabs.press button.on > span, .tabs.press button.on > span, .tabs.press button.over > span { transform: translateY(1px) scale(1.1); }
+.tabs.sliding button.on:not(.over) svg { transform: none !important; }
+.tabs.sliding button.on:not(.over) > span { transform: none; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .tp-tabs, html:not([data-theme="light"]) .tabs { box-shadow: inset 0 0 0 .6px rgba(255,255,255,.16), inset 0 1.5px 1px -.5px rgba(255,255,255,.3), 0 12px 30px rgba(0,0,0,.4) !important; }
+  html:not([data-theme="light"]) .tp-ind, html:not([data-theme="light"]) .tab-ind { background: linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.1) 60%, rgba(255,255,255,.18)) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25), inset 2px 2.5px 3px -1px rgba(255,255,255,.4), 0 4px 12px rgba(0,0,0,.4) !important; }
+}
+/* The top bar of a sheet (Cancel / title / Save) stays in view while the form scrolls */
+.tp-sheet .panel > .tp-sh-h:first-child { position: sticky; top: 0; z-index: 8; background: var(--bg); margin: 0 -18px; padding: 8px 18px 10px; box-shadow: 0 1px 0 rgba(14,19,37,.06); }
+/* Instant taps: no 300 ms wait, no grey flash */
+html, button, a, [data-act], [data-tab], [data-sheet], [data-push] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: reduce) { html .tp-ind, html .tab-ind { transition-duration: .01s !important; } }
+
+/* ===== The same glass for every sliding highlight: segmented controls and the week strip ===== */
+html .seg-thumb, html .tp-seg2.slide .seg-thumb { background: none !important; box-shadow: none !important; }
+html .seg-thumb::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--seg-on, #fff) 96%, transparent), color-mix(in srgb, var(--seg-on, #fff) 62%, transparent) 62%, color-mix(in srgb, var(--seg-on, #fff) 80%, transparent));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.85), inset 1.5px 2px 2px -1px #fff, inset -1.5px -2px 3px -1px rgba(255,255,255,.6), 0 2px 6px rgba(20,25,60,.14), 0 1px 1px rgba(20,25,60,.08);
+  transition: transform .3s cubic-bezier(.3,1.5,.5,1), box-shadow .3s;
+}
+html .seg.press .seg-thumb::before, html .seg.sliding .seg-thumb::before, html .tp-seg2.slide.press .seg-thumb::before, html .tp-seg2.slide.sliding .seg-thumb::before {
+  transform: scale(1.1, 1.22);
+  box-shadow: inset 0 0 0 1px #fff, inset 1.5px 2px 3px -1px #fff, inset -1.5px -2px 4px -1px rgba(255,255,255,.75), 0 8px 18px rgba(20,25,60,.22), 0 2px 4px rgba(20,25,60,.12);
+}
+/* the real label grows in place (one picture, never two) */
+.seg button, .tp-seg2.slide button { transition: color .2s, opacity .2s, transform .3s cubic-bezier(.3,1.5,.5,1) !important; }
+.seg.press button.on, .seg.sliding button.over, .tp-seg2.slide.press button.on, .tp-seg2.slide.sliding button.on { transform: scale(1.12); }
+.seg.sliding button.on:not(.over) { transform: none; }
+/* the week strip's circle */
+html .ws-ind::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 68%, #fff) 0%, var(--accent) 72%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), inset 1.5px 2px 3px -1px rgba(255,255,255,.9), inset -1px -2px 3px -1px rgba(255,255,255,.3), 0 4px 10px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform .3s cubic-bezier(.3,1.5,.5,1), box-shadow .25s;
+}
+html .wstrip.press .ws-ind::before, html .wstrip.moving .ws-ind::before {
+  transform: scale(1.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.7), inset 1.5px 2px 4px -1px #fff, inset -1px -2px 4px -1px rgba(255,255,255,.4), 0 10px 20px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.wstrip b { transition: color .2s, transform .3s cubic-bezier(.3,1.5,.5,1); }
+.wstrip.press button.sel b, .wstrip.moving button.lit b { transform: scale(1.2) !important; }
+.wstrip.moving button.sel:not(.lit) b { transform: none !important; }

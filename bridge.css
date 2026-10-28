@@ -1,0 +1,45 @@
+/* Student fee part of the entry form (bridge draft) */
+.br-line { background: var(--card); border-radius: 16px; padding: 12px 12px 10px; margin: 0 0 10px; box-shadow: var(--shadow); min-width: 0; max-width: 100%; overflow: hidden; }
+.br-pick { min-width: 0; max-width: 100%; }
+.br-lh { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.br-lh .tx { flex: 1; min-width: 0; }
+.br-lh b { display: block; font-size: 16px; font-weight: 700; }
+.br-lh small, .br-st small { display: block; color: var(--text-2); font-size: 12.5px; margin-top: 1px; }
+.br-x { width: 30px; height: 30px; border-radius: 50%; background: var(--fill); color: var(--text-2); font-size: 13px; flex: none; }
+.br-ml { font-size: 12.5px; font-weight: 600; color: var(--text-2); margin: 10px 2px 6px; }
+.br-ml small { font-weight: 500; opacity: .8; }
+.br-months { display: flex; gap: 6px; overflow-x: auto; margin: 0 -12px; padding: 2px 12px 4px; scrollbar-width: none; scroll-behavior: smooth; contain: inline-size; overscroll-behavior-x: contain; }
+.br-months::-webkit-scrollbar { display: none; }
+.br-m { flex: none; min-width: 54px; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; font-weight: 600; background: var(--fill); color: var(--text); position: relative; }
+.br-m.auto { background: var(--accent-soft); color: var(--accent); }
+.br-m.owe { box-shadow: inset 0 0 0 1.5px rgba(255, 59, 48, .55); }
+.br-m.part { box-shadow: inset 0 0 0 1.5px rgba(255, 149, 0, .7); }
+.br-m.done { color: var(--in-text); background: rgba(27, 175, 122, .13); }
+.br-m.done::after { content: '✓'; margin-left: 3px; font-size: 11px; }
+.br-m.fut { color: var(--text-2); }
+.br-m.cur:not(.on) { text-decoration: underline; text-underline-offset: 3px; }
+.br-m.on { background: var(--accent); color: #fff; box-shadow: none; }
+.br-m.on::after { color: #fff; }
+.br-pv { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-size: 13.5px; line-height: 1.45; }
+.br-pv .ok { color: var(--in-text); flex: none; margin-top: 1px; }
+.br-pv .ok svg { width: 16px; height: 16px; }
+.br-pv b { font-weight: 700; }
+.br-pv em { font-style: normal; font-size: 12.5px; }
+.br-pv em.warn { color: var(--warn); font-weight: 600; }
+.br-pv em.info { color: var(--text-2); }
+.br-add { width: 100%; padding: 13px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 15px; margin: 2px 0 4px; }
+.br-pick { margin-bottom: 6px; }
+.br-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.br-list { max-height: 232px; overflow-y: auto; overscroll-behavior: contain; margin-top: 10px; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 2px 0; -webkit-overflow-scrolling: touch; }
+.br-st { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; text-align: left; border-bottom: .5px solid var(--sep); }
+.br-st:last-child { border-bottom: 0; }
+.br-st .tx { flex: 1; min-width: 0; }
+.br-st b { display: block; font-size: 15px; font-weight: 600; }
+.br-st .plus { color: var(--accent); font-weight: 800; font-size: 18px; }
+.br-st:active { background: var(--fill-2); }
+/* one-time "link old groups" */
+#br-banner { position: fixed; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 10px); z-index: 9998; }
+#br-banner button { display: block; width: 100%; max-width: 520px; margin: 0 auto; text-align: left; padding: 12px 14px; border-radius: 18px; background: var(--card); color: var(--text); box-shadow: 0 12px 34px rgba(0,0,0,.18), 0 0 0 1.5px var(--warn); }
+#br-banner b { display: block; font-size: 15px; }
+#br-banner span { display: block; font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
+.br-sel { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 0; background: var(--fill); color: var(--text); margin-bottom: 6px; }

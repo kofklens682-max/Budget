@@ -756,7 +756,7 @@ function drawColumns(el, anim, offset = UI.offset) {
 let draft = null;
 let syncTx = () => {};
 function openTx(id, preset = {}) {
-  const t = id ? S.tx.find((x) => x.id === id) : null;
+  const t = id ? S.tx.find((x) => x.id === id) || (S.records || []).find((x) => x.id === id) : null;
   if (t) draft = { ...t };
   else {
     const type = preset.type || UI.lastType;
@@ -775,12 +775,14 @@ function openTx(id, preset = {}) {
   if (!draft.toCurrency) draft.toCurrency = draft.currency;
   if (!draft.toAccount) draft.toAccount = (S.accounts.find((a) => a.id !== draft.account) || S.accounts[0]).id;
   draft.back = preset.back || null;
+  BR.fromDraft(draft, preset);
   const tpl = repeatTemplate(draft);
   draft.repeatOn = !!(tpl && tpl.repeat);
   openSheet(txHtml(), mountTx);
 }
 function reopenTx() { openSheet(txHtml(), mountTx); }
 function draftOk(d) {
+  if (d.type === 'in' && d.lesson && BR.on()) return BR.ok(d);
   if (!(d.amount > 0)) return false;
   if (d.type === 'out') { const p = takePlan(d); return !(p && p.blocked); }
   if (d.type !== 'transfer') return true;
@@ -802,7 +804,8 @@ function txHtml() {
   if (!isTr) {
     const g = isIn ? grp(d.groupId) : null;
     let who;
-    if (g) {
+    if (isIn && BR.on()) who = BR.who(d); // student fees: pick the student, the months, a brother or sister (bridge.js)
+    if (isIn && BR.on() && d.lesson) { /* done above */ } else if (g) {
       who = `<div class="form-label">Student</div>
         <div class="group"><label class="field"><input id="person" style="text-align:left" placeholder="Student's name" value="${esc(d.person)}" autocomplete="off" enterkeyhint="done"></label></div>
         ${g.students.length ? `<div class="quick">${g.students.map((s) => `<button data-act="pick-student" data-id="${s.id}" class="${d.studentId === s.id ? 'on' : ''}">${esc(s.name)}</button>`).join('')}</div>` : '<p class="hint">Add students to this group to pick them with one tap.</p>'}
@@ -810,14 +813,14 @@ function txHtml() {
         <div class="seg full">${segButtons('pick-month', monthChoices(d), d.forMonth || d.date.slice(0, 7))}</div>`;
     } else {
       const people = topPeople(d.type);
-      who = `<div class="form-label">${isIn ? 'Who gave it' : 'Paid to'}</div>
+      who = (isIn && BR.on() ? who : '') + `<div class="form-label">${isIn ? 'Who gave it' : 'Paid to'}</div>
         <div class="group"><label class="field"><input id="person" style="text-align:left" placeholder="${isIn ? 'e.g. Mom, Employer' : 'e.g. Supermarket, Taxi (optional)'}" value="${esc(d.person)}" autocomplete="off" enterkeyhint="done"></label></div>
         ${people.length ? `<div class="quick">${people.map((p) => `<button data-act="pick-person" data-v="${esc(p)}" class="${p === d.person ? 'on' : ''}">${esc(p)}</button>`).join('')}</div>` : ''}`;
     }
     body = `
     <div class="form-label">${isIn ? 'Money went to' : 'Paid from'}</div>
     ${accPicker('pick-acc', d.account)}
-    ${isIn && S.groups.length ? `<div class="form-label">Group</div>
+    ${isIn && S.groups.length && !BR.on() ? `<div class="form-label">Group</div>
       <div class="grp-pick"><button class="${!d.groupId ? 'on' : ''}" data-act="pick-group" data-v="">No group</button>${S.groups.map((x) => `<button class="${d.groupId === x.id ? 'on' : ''}" data-act="pick-group" data-v="${x.id}" style="--c:${x.color}"><i></i>${esc(x.name)}</button>`).join('')}</div>` : ''}
     ${who}
     <div class="form-label">Category</div>
@@ -839,7 +842,7 @@ function txHtml() {
       <div class="gl-last"><span>This payment finishes the goal</span><label class="switch"><input type="checkbox" id="tx-goal-last" ${d.goalLast ? 'checked' : ''} aria-label="This payment finishes the goal"><i></i></label></div></div></div>` : ''}
     <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']], d.type)}</div>
     <div class="amount-box">
-      <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount">
+      <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount" ${d.lesson && d.lines && d.lines.length > 1 ? 'readonly' : ''}>
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
     </div>
     ${!editing && d.type === 'out' && !d.goalSpend ? againRow(d) : ''}
@@ -894,7 +897,9 @@ function mountTx(sh) {
     if (rh) rh.textContent = rateText(draft.amount, draft.currency, draft.toAmount, draft.toCurrency);
     syncSplitBox(sh);
     syncTake(sh);
+    if (draft.lesson && BR.on()) BR.refresh(sh);
   };
+  BR.mount(sh);
   amt.addEventListener('input', () => { const r = typedAmount(amt.value, draft.currency); amt.value = r.shown; draft.amount = r.value; syncTx(); });
   const person = $('#person', sh);
   if (person) person.addEventListener('input', () => {
@@ -925,6 +930,7 @@ function txDone() { if (draft && draft.back) draft.back(); else closeSheet(); }
 function saveTx() {
   const d = draft;
   if (!draftOk(d)) return;
+  if (d.type === 'in' && d.lesson && BR.on()) return BR.save(); // student fee: one entry per child, with the months it pays for
   const base = { id: d.id || uid(), type: d.type, amount: roundCur(d.amount, d.currency), currency: d.currency, account: d.account, date: d.date || todayIso(), note: (d.note || '').trim(), createdAt: d.createdAt || Date.now() };
   let rec;
   if (d.type === 'transfer') {
@@ -1003,7 +1009,7 @@ function saveTx() {
 // ================= Every month =================
 // An entry marked "Every month" adds a copy of itself on the same day each month (from the next
 // month on; months before today are not back-filled). Copies carry fromRepeat, so their switch stops the series.
-const canRepeat = (d) => d.type !== 'transfer' && !(d.type === 'in' && grp(d.groupId));
+const canRepeat = (d) => d.type !== 'transfer' && !d.lesson && !(d.type === 'in' && grp(d.groupId));
 const repeatTemplate = (d) => (d.fromRepeat ? S.tx.find((t) => t.id === d.fromRepeat) || null : d.id ? S.tx.find((t) => t.id === d.id) || null : null);
 const ordinal = (n) => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 function monthAfter(date, day) {
@@ -2262,7 +2268,7 @@ Object.assign(ACTIONS, {
     if (draft.type === v) return;
     draft.type = v;
     draft.category = null;
-    if (v !== 'in') { draft.groupId = null; draft.studentId = null; }
+    if (v !== 'in') { draft.groupId = null; draft.studentId = null; draft.lesson = false; }
     if (v === 'transfer' && draft.toAccount === draft.account) draft.toAccount = (S.accounts.find((x) => x.id !== draft.account) || S.accounts[0]).id;
     refreshSheet(txHtml(), mountTx);
   },
@@ -2301,6 +2307,7 @@ Object.assign(ACTIONS, {
   'new-cat-inline': () => openCatForm(draft.type, null, reopenTx),
   'save-tx': () => saveTx(),
   'del-tx': () => {
+    if (draft.record && BR.delRecord()) return;
     const removed = S.tx.find((t) => t.id === draft.id);
     if (!removed) return;
     const goalsBefore = JSON.parse(JSON.stringify(S.goals));

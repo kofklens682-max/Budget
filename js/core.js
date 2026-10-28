@@ -186,7 +186,9 @@ const defaultAccounts = () => [
 const FREE_ACT = () => ({ id: 'free', name: 'Free', color: '#8E8E93', kind: 'free', groupId: null });
 const emptySchedule = () => ({ acts: [FREE_ACT()], days: Array.from({ length: 7 }, () => ({ start: 660, blocks: [] })) });
 const defaultSettings = () => ({ currency: 'UZS', rate: null, theme: 'system', pin: null, lastBackup: null, reportSeen: null, schedView: 'day' });
-const blank = () => ({ v: APP_VERSION, rev: 0, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], goals: [], settings: defaultSettings() });
+const blank = () => ({ v: APP_VERSION, rev: 0, accounts: defaultAccounts(), cats: normCats(null), groups: [], schedule: emptySchedule(), tx: [], records: [], goals: [], settings: defaultSettings() });
+// "Records": student payments that were already counted in your balance. They say who paid for which months, and never touch any total (bridge.js).
+const normRecords = (rs) => (Array.isArray(rs) ? rs : []).filter((r) => r && r.id && typeof r.amount === 'number' && r.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && r.studentId).map((r) => ({ ...r, currency: 'UZS' }));
 
 const validTx = (t) => t && t.id && typeof t.amount === 'number' && t.amount > 0 && CUR[t.currency] && /^\d{4}-\d{2}-\d{2}$/.test(t.date)
   && (t.type === 'in' || t.type === 'out' || (t.type === 'transfer' && CUR[t.toCurrency] && typeof t.toAmount === 'number'));
@@ -217,8 +219,9 @@ function normGroups(gs) {
     name: String(g.name).slice(0, 30),
     color: HEX.test(g.color) ? g.color : '#007AFF',
     fee: g.fee && Number(g.fee.amount) > 0 && CUR[g.fee.currency] ? { amount: Number(g.fee.amount), currency: g.fee.currency } : null,
-    students: (Array.isArray(g.students) ? g.students : []).filter((s) => s && s.id && s.name).map((s) => ({ id: String(s.id), name: String(s.name).slice(0, 40) })),
+    students: (Array.isArray(g.students) ? g.students : []).filter((s) => s && s.id && s.name).map((s) => ({ id: String(s.id), name: String(s.name).slice(0, 40), ...(s.tid ? { tid: String(s.tid) } : {}), ...(s.gone ? { gone: true } : {}), ...(s.orphan ? { orphan: true } : {}), ...(s.orphanOk ? { orphanOk: true } : {}) })),
     createdAt: g.createdAt || Date.now(),
+    ...(g.tid ? { tid: String(g.tid) } : {}), ...(g.gone ? { gone: true } : {}), ...(g.orphan ? { orphan: true } : {}), ...(g.orphanOk ? { orphanOk: true } : {}), // link to the Teacher app's group (bridge.js)
   }));
 }
 function normSchedule(s) {
@@ -276,7 +279,7 @@ function normalize(d) {
   });
   const schedule = normSchedule(d.schedule);
   schedule.acts.forEach((a) => { if (a.groupId && !gids.has(a.groupId)) a.groupId = null; });
-  return { v: APP_VERSION, rev: Math.max(0, Math.round(Number(d.rev)) || 0), accounts, cats: normCats(d.cats), groups, schedule, tx, goals, settings: Object.assign(defaultSettings(), d.settings || {}) };
+  return { v: APP_VERSION, rev: Math.max(0, Math.round(Number(d.rev)) || 0), accounts, cats: normCats(d.cats), groups, schedule, tx, records: normRecords(d.records), goals, settings: Object.assign(defaultSettings(), d.settings || {}) };
 }
 // Opens from the quick copy (localStorage); main.js then checks the second copy (keep.js).
 let hadQuick = false;
@@ -537,6 +540,8 @@ function bindSheetGestures(sh, ov) {
     const body = $('.sheet-body', sh);
     const inBody = body && body.contains(target);
     if (inBody && body.scrollTop > 2) return; // content is scrolled: let it scroll back up first
+    const ae = document.activeElement;
+    if (inBody && ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && body.contains(ae)) return; // typing: only the top bar closes the sheet
     x0 = x; y0 = y; t0 = performance.now(); dy = 0; mode = null;
   };
   const follow = (x, y, e) => {
@@ -1128,7 +1133,7 @@ function bindTabSlide(tabs, go) {
     }
     const bs = btns(), r = tabs.getBoundingClientRect(), w = (r.width - 10) / bs.length;
     const x = clamp(e.clientX - r.left - 5 - w / 2, 0, w * (bs.length - 1));
-    ind.style.transform = `translateX(${x.toFixed(1)}px) scale(1.06)`;
+    ind.style.transform = `translateX(${x.toFixed(1)}px)`;
     const over = clamp(Math.round(x / w), 0, bs.length - 1);
     if (over !== st.over) {
       if (st.over >= 0) tick();
