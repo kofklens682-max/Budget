@@ -27,6 +27,34 @@ const BR = (() => {
   const stuOf = (g) => g.students.filter((s) => s.tid && !s.gone);
   const findStu = (sid) => { for (const g of S.groups) { const s = g.students.find((x) => x.id === sid); if (s) return { g, s }; } return null; };
   const findTid = (tid) => { for (const g of S.groups) { const s = g.students.find((x) => x.tid === tid); if (s) return { g, s }; } return null; };
+  // Every student payment, sorted by Teacher student, worked out once and kept until the next save.
+  // (The student list used to go through all your entries for every student shown, on every letter typed: that was the lag.)
+  let gen = 0, ix = null, ixKey = '';
+  function index() {
+    const key = gen + '|' + S.tx.length + '|' + (S.records || []).length + '|' + S.groups.length;
+    if (ix && ix.tx === S.tx && ix.rec === S.records && key === ixKey) return ix;
+    const stu = new Map(), by = new Map(), sid = new Map(), add = (m, k, t) => { if (!m.has(k)) m.set(k, []); m.get(k).push(t); };
+    S.groups.forEach((g) => g.students.forEach((s) => stu.set(s.id, { g, s })));
+    const all = payTx();
+    all.forEach((t) => {
+      if (t.studentId) add(sid, t.studentId, t);
+      if (t.currency !== 'UZS') return; const f = stu.get(t.studentId); if (!f || !f.s.tid) return; add(by, f.s.tid, t);
+    });
+    ix = { tx: S.tx, rec: S.records, stu, by, sid, all }; ixKey = key;
+    return ix;
+  }
+  // A payment in a linked group that has no student: Teacher cannot count it until you say whose it is.
+  const looseTx = () => { const I = index(); return S.tx.filter((t) => t.type === 'in' && t.groupId && t.currency === 'UZS' && !t.noStudent && !(I.stu.get(t.studentId) || {}).s && (grp(t.groupId) || {}).tid); };
+  // The safe part done by itself: the payment already carries the student's exact name, and only one student in that group has it.
+  function autoLink() {
+    let n = 0; gen++;
+    looseTx().forEach((t) => {
+      const g = grp(t.groupId), nm = low(t.person || ''); if (!g || !nm) return;
+      const hit = g.students.filter((s) => s.tid && !s.gone && low(s.name) === nm);
+      if (hit.length === 1) { t.studentId = hit[0].id; n++; }
+    });
+    return n;
+  }
 
   /* ----- Teacher -> Budget: mirror the roster ----- */
   function sync() {
@@ -51,6 +79,7 @@ const BR = (() => {
     const rids = new Set(r.groups.map((g) => g.id));
     S.groups.forEach((g) => { if (g.tid && !rids.has(g.tid) && !g.gone) { g.gone = true; ch = true; } else if (!g.tid && !g.orphan) { g.orphan = true; ch = true; } });
     Object.defineProperty(S, '_rs', { value: rjson, writable: true, configurable: true, enumerable: false });
+    if (autoLink()) ch = true;
     if (ch) save();
     return ch;
   }
@@ -58,9 +87,10 @@ const BR = (() => {
   /* ----- Budget -> Teacher: publish the payments ----- */
   function publish() {
     try {
-      const pays = []; let loose = 0;
-      payTx().forEach((t) => {
-        const f = t.studentId && findStu(t.studentId), g0 = grp(t.groupId);
+      const pays = [], I = index(); let loose = 0;
+      I.all.forEach((t) => {
+        if (t.noStudent) return; // you said: not a student's fee
+        const f = I.stu.get(t.studentId), g0 = grp(t.groupId);
         if (!f || !f.s.tid || !f.g.tid || t.currency !== 'UZS') { if (g0 && g0.tid) loose++; return; } // a group payment with no student: shown to you, never guessed
         pays.push({ id: t.id, sid: f.s.tid, gid: f.g.tid, date: t.date, amount: t.amount, by: t.by || '', alloc: allocOf(t), batch: t.batch || '', acc: t.account });
       });
@@ -72,11 +102,7 @@ const BR = (() => {
   const charge = (tid, m) => { const c = roster && roster.charges[tid]; return c && c[m] != null ? c[m] : null; };
   function paidMap(tid, except) {
     const m = {};
-    payTx().forEach((t) => {
-      if (t.id === except || t.currency !== 'UZS') return;
-      const f = findStu(t.studentId); if (!f || f.s.tid !== tid) return;
-      allocOf(t).forEach((a) => { m[a.m] = (m[a.m] || 0) + a.amount; });
-    });
+    (index().by.get(tid) || []).forEach((t) => { if (t.id !== except) allocOf(t).forEach((a) => { m[a.m] = (m[a.m] || 0) + a.amount; }); });
     return m;
   }
   const monthList = () => { const out = []; if (!roster) return out; for (let m = roster.start; m <= ymShift(ymNow(), 24); m = ymShift(m, 1)) out.push(m); return out; };
@@ -114,7 +140,7 @@ const BR = (() => {
     }
     let sid = preset.lessonStudent && preset.lessonStudent.sid, gid = preset.lessonStudent && preset.lessonStudent.gid;
     if (!sid && preset.studentId) { const f = findStu(preset.studentId); if (f) { sid = f.s.id; gid = f.g.id; } }
-    d.lesson = !!sid || !!(preset.groupId && grp(preset.groupId) && grp(preset.groupId).tid);
+    d.lesson = !!sid || !!preset.pickStudent || !!(preset.groupId && grp(preset.groupId) && grp(preset.groupId).tid);
     if (sid) d.lines = [{ gid, sid, amount: preset.amount || 0, months: preset.forMonth && !preset.lessonStudent ? [preset.forMonth] : [] }];
     if (d.lesson) d.currency = 'UZS';
   }
@@ -234,9 +260,9 @@ const BR = (() => {
   const _gm = groupMonth;
   groupMonth = function (g, ym) {
     if (!on() || !g.tid) return _gm(g, ym);
-    const cur = 'UZS', used = new Set(), pays = [];
+    const cur = 'UZS', used = new Set(), pays = [], I = index();
     const rows = g.students.filter((s) => !s.gone).map((s) => {
-      const ps = payTx().filter((t) => t.studentId === s.id && allocOf(t).some((a) => a.m === ym)).sort(sortTx);
+      const ps = (I.sid.get(s.id) || []).filter((t) => allocOf(t).some((a) => a.m === ym)).sort(sortTx);
       ps.forEach((t) => { used.add(t.id); pays.push({ ...t, amount: allocOf(t).filter((a) => a.m === ym).reduce((q, a) => q + a.amount, 0) }); });
       const paid = ps.reduce((q, t) => q + allocOf(t).filter((a) => a.m === ym).reduce((x, a) => x + a.amount, 0), 0), due = s.tid ? charge(s.tid, ym) : null;
       const status = ps.length ? (due == null || due === 0 || paid >= due ? 'paid' : 'part') : 'none';
@@ -254,7 +280,10 @@ const BR = (() => {
       const j = localStorage.getItem(OPEN); if (!j) return;
       const o = JSON.parse(j); localStorage.removeItem(OPEN);
       if (!o || Date.now() - (+o.at || 0) > 6 * 3600e3) return;
-      sync(); const f = findTid(o.sid); if (!f) { toast('That student is not in Budget yet. Open the Teacher app once, then try again.'); return; }
+      sync();
+      if (o.mode === 'fix') { if (looseTx().length) ACTIONS['br-fix'](); return; } // "Needs attention" in the Teacher app
+      if (!o.sid) { openTx(null, { type: 'in', category: lessonCat(), currency: 'UZS', pickStudent: true }); return; } // "Record a payment": choose the student here
+      const f = findTid(o.sid); if (!f) { toast('That student is not in Budget yet. Open the Teacher app once, then try again.'); return; }
       const ow = owed(f.s.tid), amt = ow.total || charge(f.s.tid, o.ym) || 0;
       openTx(null, { type: 'in', category: lessonCat(), currency: 'UZS', amount: amt, lessonStudent: { gid: f.g.id, sid: f.s.id } });
     } catch (e) { /* nothing to hand over */ }
@@ -309,15 +338,43 @@ const BR = (() => {
     sh.querySelectorAll('[data-ls]').forEach((el) => { const f = findStu(el.dataset.ls); if (!f) return; if (el.value) linkStudent(f.g, f.s, el.value); else f.s.orphanOk = true; });
     S._rs = ''; sync(); save(); closeSheet(); render(); toast('Linked. Old payments now show in the Teacher app.');
   };
+  /* ----- payments in a linked group with no student: say whose each one is, once ----- */
+  function fixHtml() {
+    const list = looseTx().sort(sortTx), gs = activeGroups();
+    const opts = (t) => {
+      const g = grp(t.groupId), first = low(t.person || '').split(/\s+/)[0];
+      const same = first ? stuOf(g).filter((s) => low(s.name).split(/\s+/)[0] === first) : [], guess = same.length === 1 ? same[0].id : '';
+      const og = (x) => `<optgroup label="${esc(x.name)}">${stuOf(x).map((s) => `<option value="${s.id}" ${s.id === guess ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</optgroup>`;
+      return `<option value="">Decide later</option>${og(g)}${gs.filter((x) => x !== g).map(og).join('')}<option value="none">Not a student's fee</option>`;
+    };
+    const rows = list.map((t) => { const g = grp(t.groupId);
+      return `<div class="br-line"><div class="br-lh">${letterTile(g.name, g.color)}<div class="tx"><b>${money(t.amount)} so'm · ${shortDate(t.date)}</b><small>${esc(g.name)}${t.person ? ' · ' + esc(t.person) : ''}${t.note ? ' · ' + esc(t.note) : ''}</small></div></div>
+        <select class="br-sel" data-fx="${t.id}">${opts(t)}</select></div>`; }).join('');
+    return sheetHead('Choose the students', '<button data-act="close-sheet">Later</button>', '<button data-act="br-fix-save">Save</button>') + `<div class="sheet-body">
+      <p class="hint" style="margin-top:0">These payments are in a group but have no student, so the Teacher app cannot count them. Choose whose each one is. Where the first name matched, the student is already chosen: check it, then Save. The amounts and your balance do not change.</p>${rows || '<p class="hint">Nothing left to choose.</p>'}</div>`;
+  }
+  ACTIONS['br-fix'] = () => { const b = document.getElementById('br-banner'); if (b) b.remove(); openSheet(fixHtml(), null); };
+  ACTIONS['br-fix-save'] = () => {
+    const sh = document.querySelector('.sheet') || document; let n = 0;
+    sh.querySelectorAll('[data-fx]').forEach((el) => {
+      const t = S.tx.find((x) => x.id === el.dataset.fx); if (!t || !el.value) return;
+      if (el.value === 'none') { t.noStudent = true; n++; return; }
+      const f = findStu(el.value); if (!f) return;
+      t.studentId = f.s.id; t.groupId = f.g.id; n++;
+    });
+    save(); closeSheet(); render(); toast(n ? `${n} payment${n === 1 ? '' : 's'} sorted. The Teacher app shows them now.` : 'Nothing changed');
+  };
   function banner() {
-    let el = document.getElementById('br-banner'); const n = pending().length;
-    if (!n || (typeof sheet !== 'undefined' && sheet)) { if (el) el.remove(); return; }
+    let el = document.getElementById('br-banner'); const n = pending().length, m = n ? 0 : looseTx().length;
+    if (!(n || m) || (typeof sheet !== 'undefined' && sheet)) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement('div'); el.id = 'br-banner'; document.body.appendChild(el); }
-    el.innerHTML = `<button data-act="br-link"><b>Link ${n} old group${n === 1 ? '' : 's'} to the Teacher app</b><span>Their payments are not shown in the Teacher app yet. Tap to link.</span></button>`;
+    const html = n ? `<button data-act="br-link"><b>Link ${n} old group${n === 1 ? '' : 's'} to the Teacher app</b><span>Their payments are not shown in the Teacher app yet. Tap to link.</span></button>`
+      : `<button data-act="br-fix"><b>Choose the students for ${m} payment${m === 1 ? '' : 's'}</b><span>They have no student, so the Teacher app cannot count them. Tap to choose.</span></button>`;
+    if (el._h !== html) { el._h = html; el.innerHTML = html; } // redrawn only when it changes
   }
 
   /* ----- start ----- */
-  { const _save = save; save = function () { _save(); publish(); }; }
+  { const _save = save; save = function () { gen++; _save(); publish(); }; }
   { const _render = render; render = function (...a) { if (typeof sheet === 'undefined' || !sheet) sync(); const r = _render(...a); setTimeout(banner, 0); return r; }; }
   setInterval(banner, 2000);
   window.addEventListener('storage', (e) => { if (e.key === RS) { sync(); render(); } });
