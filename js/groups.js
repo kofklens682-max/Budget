@@ -36,7 +36,8 @@ function groupsMonthSummary(ym) {
   const uzs = S.groups.filter((g) => !g.fee || g.fee.currency === 'UZS').length;
   const cur = usd > uzs ? 'USD' : 'UZS';
   let students = 0, paid = 0, collected = 0, expected = 0;
-  for (const g of S.groups) {
+  for (const g of (typeof BR !== 'undefined' ? BR.lessonGroups() : S.groups)) { // with the Teacher app: its groups only, its numbers
+    if (g.tid && groupMonth(g, ym).teacher) { const m = groupMonth(g, ym); students += m.n; paid += m.paidCount; collected += m.collected; expected += m.expected; continue; }
     const m = groupMonth(g, ym);
     students += m.n; paid += m.paidCount;
     collected += m.pays.filter((p) => p.currency === cur).reduce((a, p) => a + p.amount, 0);
@@ -61,7 +62,7 @@ function groupsHomeCard() {
       </div>
       ${s.students ? ring(pct, 62, 6, `<span class="les-ring num">${s.paid}/${s.students}</span>`, s.paid === s.students) : ''}
     </div>
-    <div class="les-groups">${S.groups.map((g) => {
+    <div class="les-groups">${(typeof BR !== 'undefined' ? BR.lessonGroups() : S.groups).map((g) => {
       const m = groupMonth(g, ym);
       return `<span class="les-chip" style="--c:${g.color}"><i></i>${esc(g.name)}<b class="num">${m.n ? `${m.paidCount}/${m.n}` : compact(m.collected, m.cur)}</b></span>`;
     }).join('')}</div>
@@ -123,7 +124,11 @@ function groupHtml() {
   const rows = m.rows.map((r) => {
     const last = r.ps[0];
     let sub, right, act, id;
-    if (r.status === 'paid') {
+    if (r.status === 'paid' && !last) { // marked in the Teacher app as already counted: no Budget entry to open
+      sub = `${fmt(r.paid, m.cur)} · marked in the Teacher app`;
+      right = `<span class="pay-st paid">${glyph('check')}</span>`;
+      act = 'pay-student'; id = r.s.id;
+    } else if (r.status === 'paid') {
       sub = `${fmt(r.paid || last.amount, r.paid ? m.cur : last.currency)} · ${shortDate(last.date)}${r.ps.length > 1 ? ` · ${r.ps.length} payments` : ''}`;
       right = `<span class="pay-st paid">${glyph('check')}</span>`;
       act = 'edit-tx'; id = last.id;
@@ -134,7 +139,7 @@ function groupHtml() {
       act = 'pay-student'; id = r.s.id;
     } else {
       sub = 'Not paid yet';
-      right = '<span class="pay-btn">Record</span>';
+      right = m.teacher ? '<span class="pay-btn">Not paid</span>' : '<span class="pay-btn">Record</span>';
       act = 'pay-student'; id = r.s.id;
     }
     return `<button class="row ${r.status}" data-act="${act}" data-id="${id}">${letterTile(r.s.name, g.color)}<div class="row-main"><div class="row-title">${esc(r.s.name)}</div><div class="row-sub">${esc(sub)}</div></div>${right}</button>`;
@@ -158,7 +163,7 @@ function groupHtml() {
       ${m.n ? `<div class="meter tint" style="--mc:${g.color}"><i style="width:${((m.paidCount / m.n) * 100).toFixed(1)}%"></i></div><div class="card-sub">${m.paidCount} of ${m.n} paid${m.n - m.paidCount ? ` · ${m.n - m.paidCount} still to pay` : ' · everyone paid 🎉'}</div>` : ''}
     </section>
     <div class="btn-row" style="margin-top:12px">
-      <button class="btn" data-act="group-pay">＋ Record payment</button>
+      ${m.teacher ? '' : '<button class="btn" data-act="group-pay">＋ Record payment</button>'}
       <button class="btn grey" data-act="group-edit">Students</button>
     </div>
     ${m.n ? `<div class="form-label">Students</div><div class="group roster">${rows}</div>` : '<p class="hint" style="margin-top:16px">Add your students (tap “Students”) to see who has paid and who hasn\'t.</p>'}

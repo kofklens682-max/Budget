@@ -805,7 +805,10 @@ function txHtml() {
     const g = isIn ? grp(d.groupId) : null;
     let who;
     if (isIn && BR.on()) who = BR.who(d); // student fees: pick the student, the months, a brother or sister (bridge.js)
-    if (isIn && BR.on() && d.lesson) { /* done above */ } else if (g) {
+    if (isIn && BR.on() && d.lesson) { /* done above */ } else if (d.tpid) { // marked in the Teacher app: who and which month belong to it
+      who = `<div class="form-label">Student fee</div><div class="card br-from"><b>${esc(d.person || '')} · ${esc(g ? g.name : '')} · ${esc(ymLabel(d.forMonth || d.date.slice(0, 7)))}</b>
+        <p class="hint" style="margin:4px 0 0">Marked in the Teacher app. To change the student, the month or whether it was paid, change it there. Here you can change cash or card, the date and the note.</p></div>`;
+    } else if (g) {
       who = `<div class="form-label">Student</div>
         <div class="group"><label class="field"><input id="person" style="text-align:left" placeholder="Student's name" value="${esc(d.person)}" autocomplete="off" enterkeyhint="done"></label></div>
         ${g.students.length ? `<div class="quick">${g.students.map((s) => `<button data-act="pick-student" data-id="${s.id}" class="${d.studentId === s.id ? 'on' : ''}">${esc(s.name)}</button>`).join('')}</div>` : '<p class="hint">Add students to this group to pick them with one tap.</p>'}
@@ -931,6 +934,7 @@ function saveTx() {
   const d = draft;
   if (!draftOk(d)) return;
   if (d.type === 'in' && d.lesson && BR.on()) return BR.save(); // student fee: one entry per child, with the months it pays for
+  const was = d.id ? S.tx.find((t) => t.id === d.id) : null;
   const base = { id: d.id || uid(), type: d.type, amount: roundCur(d.amount, d.currency), currency: d.currency, account: d.account, date: d.date || todayIso(), note: (d.note || '').trim(), createdAt: d.createdAt || Date.now() };
   let rec;
   if (d.type === 'transfer') {
@@ -945,6 +949,10 @@ function saveTx() {
     }
     UI.lastType = d.type;
     UI.lastAcc[d.type] = d.account;
+  }
+  if (was && was.tpid) { // a payment from the Teacher app keeps its link, its student and its month (only cash or card, date and note change here)
+    Object.assign(rec, { tpid: was.tpid, groupId: was.groupId, studentId: was.studentId, forMonth: was.forMonth, person: was.person, alloc: [{ m: was.forMonth, amount: rec.amount }] });
+    if (!rec.groupId) delete rec.groupId; if (!rec.studentId) delete rec.studentId;
   }
   if (d.demo) rec.demo = true;
   if (d.pic) rec.pic = d.pic; // a screenshot kept with the entry (pics.js)

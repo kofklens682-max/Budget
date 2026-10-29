@@ -265,19 +265,35 @@ const BR = (() => {
   const _gm = groupMonth;
   groupMonth = function (g, ym) {
     if (!on() || !g.tid) return _gm(g, ym);
-    const cur = 'UZS', used = new Set(), pays = [], I = index();
-    const rows = g.students.filter((s) => !s.gone).map((s) => {
+    const cur = 'UZS', used = new Set(), pays = [], I = index(), r0 = read(), T2 = r0 && r0.v >= 2 && r0.cov; // v2: the Teacher app's own answer
+    let rows = g.students.filter((s) => !s.gone && (!T2 || s.tid)).map((s) => {
       const ps = (I.sid.get(s.id) || []).filter((t) => allocOf(t).some((a) => a.m === ym)).sort(sortTx);
       ps.forEach((t) => { used.add(t.id); pays.push({ ...t, amount: allocOf(t).filter((a) => a.m === ym).reduce((q, a) => q + a.amount, 0) }); });
-      const paid = ps.reduce((q, t) => q + allocOf(t).filter((a) => a.m === ym).reduce((x, a) => x + a.amount, 0), 0), due = s.tid ? charge(s.tid, ym) : null;
+      const due = s.tid ? charge(s.tid, ym) : null;
+      if (T2) { // who paid = exactly what the Teacher app says (ticks marked "already counted" included)
+        const paid = (r0.cov[s.tid] || {})[ym] || 0, marked = (r0.paid[s.tid] || {})[ym] || 0, ts = r0.st && (r0.st[s.tid] || {})[ym];
+        const status = ts ? ({ paid: 'paid', credit: 'paid', prepaid: 'paid', part: 'part', unpaid: 'none', free: 'free' })[ts] || 'none'
+          : due == null ? 'none' : paid >= due && due > 0 ? 'paid' : paid > 0 ? 'part' : due === 0 ? 'free' : 'none';
+        return { s, ps, paid, due, marked, status };
+      }
+      const paid = ps.reduce((q, t) => q + allocOf(t).filter((a) => a.m === ym).reduce((x, a) => x + a.amount, 0), 0);
       const status = ps.length ? (due == null || due === 0 || paid >= due ? 'paid' : 'part') : 'none';
       return { s, ps, paid, due, status };
     });
+    if (T2) { // the same students the Teacher app counts: no fee or nothing to pay this month = not counted
+      rows = rows.filter((r) => r.due != null && r.status !== 'free');
+      const collected = rows.reduce((a, r) => a + (r.marked || 0), 0);
+      return { pays, rows, cur, collected, otherCollected: 0, others: [], expected: rows.reduce((a, r) => a + (r.due || 0), 0), paidCount: rows.filter((r) => r.status === 'paid').length, n: rows.length, teacher: true };
+    }
     const others = S.tx.filter((t) => t.type === 'in' && t.groupId === g.id && !t.studentId && (t.forMonth || t.date.slice(0, 7)) === ym).sort(sortTx);
     others.forEach((t) => pays.push(t));
     const collected = pays.filter((p) => p.currency === cur).reduce((a, p) => a + p.amount, 0);
     return { pays, rows, cur, collected, otherCollected: 0, others, expected: rows.reduce((a, r) => a + (r.due || 0), 0), paidCount: rows.filter((r) => r.status === 'paid').length, n: rows.length };
   };
+
+  const lessonGroups = () => (on() ? S.groups.filter((g) => g.tid && !g.gone && groupMonth(g, ymNow()).n) : S.groups);
+  // payments are marked in the Teacher app now: Budget's "Record" in a linked group explains that instead of opening a form
+  ['pay-student', 'group-pay'].forEach((k) => { const f = ACTIONS[k]; ACTIONS[k] = (...a) => { const g = typeof gOpen !== 'undefined' && gOpen && grp(gOpen.id); if (on() && g && g.tid) return toast('Mark who paid in the Teacher app. Budget asks to add the money when you open it.'); return f && f(...a); }; });
 
   /* ----- hand-over from the Teacher app: "Record a payment in Budget" ----- */
   function handoff() {
@@ -431,5 +447,5 @@ const BR = (() => {
     undoToast('Record deleted', () => { S.records.push(r); });
     return true;
   }
-  return { on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read() };
+  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read() };
 })();
