@@ -1151,3 +1151,8 @@ html.glass:not([data-theme="light"]):not([data-theme="dark"]) .icon-btn, html.gl
 html.glass:not([data-theme="light"]):not([data-theme="dark"]) .sheet { background: rgba(31,29,24,.66) !important; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.22), 0 -12px 40px rgba(0,0,0,.5) !important; }
 html.glass:not([data-theme="light"]):not([data-theme="dark"]) .dlg-box, html.glass:not([data-theme="light"]):not([data-theme="dark"]) .toast { background: rgba(40,37,31,.72) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 20px 40px -12px rgba(0,0,0,.6) !important; }
 }
+
+/* Glass: a chosen chip and a solid button keep their color (30 Oct 2026). The see-through glass above painted them white,
+   so their white text and icons disappeared: the chosen "Cash", the "+" on Goals, the chosen filter and period chips. */
+html.glass .fchip.on, html.glass .quick button.on, html.glass .pill-btn.on, html.glass .icon-btn.solid { background: var(--accent) !important; color: #fff !important; }
+html.glass .fchip.on i { background: #fff; }

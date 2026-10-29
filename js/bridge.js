@@ -384,8 +384,8 @@ const BR = (() => {
     return sheetHead('From the Teacher app', '<button data-act="close-sheet">Later</button>', '') + `<div class="sheet-body">
       <p class="hint" style="margin-top:0">You marked these payments in the Teacher app. Add the new money to your balance. If the money is already in Budget, tap Already counted: nothing is added.</p>
       ${adds.length ? `<div class="form-label">Put the money in</div><div class="quick">${accs.map((x) => `<button data-act="tb-acc" data-v="${x.id}" class="${x.id === a ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : ''}
-      ${l.map(row).join('') || '<p class="hint">Nothing is waiting.</p>'}
-      ${adds.length > 1 ? `<div class="br-two" style="margin-top:6px"><button class="br-yes" data-act="tb-addall">Add all ${adds.length} · ${money(adds.reduce((q, x) => q + x.amount, 0))}</button><button data-act="tb-skipall">All already counted</button></div>` : ''}</div>`;
+      ${adds.length > 1 ? `<div class="br-two" style="margin:0 0 14px"><button class="br-yes" data-act="tb-addall">Add all ${adds.length} · ${money(adds.reduce((q, x) => q + x.amount, 0))}</button><button data-act="tb-skipall">All already counted</button></div>` : ''}
+      ${l.map(row).join('') || '<p class="hint">Nothing is waiting.</p>'}</div>`;
   }
   function tbAdd(x) {
     const f = x.sid ? findTid(x.sid) : null, a = inAcc || UI.lastAcc.in || S.accounts[0].id;
