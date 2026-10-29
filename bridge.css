@@ -43,3 +43,9 @@
 #br-banner b { display: block; font-size: 15px; }
 #br-banner span { display: block; font-size: 12.5px; color: var(--text-2); margin-top: 2px; }
 .br-sel { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 12px; border: 0; background: var(--fill); color: var(--text); margin-bottom: 6px; }
+/* the inbox: payments from the Teacher app (30 Oct 2026) */
+.br-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.br-two button { padding: 11px 10px; border-radius: 13px; font-weight: 700; font-size: 13.5px; background: rgba(120,120,128,.14); color: var(--text); }
+.br-two .br-yes { background: #34C759; color: #fff; }
+.br-two .br-no { background: #FF3B30; color: #fff; }
+.br-line.del .tx b { color: #D70015; }

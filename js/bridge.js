@@ -8,6 +8,10 @@
    Nothing is ever deleted by the sync: a student or group that leaves the Teacher app is only marked gone, so old payments keep their owner. */
 
 const BR = (() => {
+  /* 30 Oct 2026 (user): student fees are now marked in the Teacher app. Budget no longer has its own "Student fee" form
+     (FORM = false: new income is plain income); each payment marked in Teacher pops up here to add to the balance
+     or skip ("teacher-to-budget", see the inbox below). Old records made with the form can still be opened and changed. */
+  const FORM = false, TB = 'teacher-to-budget';
   const RS = 'teacher-roster', BP = 'budget-payments', OPEN = 'teacher-open-budget';
   let roster = null, rjson = '', pend = null;
   const low = (x) => String(x).trim().toLowerCase();
@@ -132,6 +136,7 @@ const BR = (() => {
   }
   function fromDraft(d, preset) {
     d.by = d.by || preset.by || ''; d.lines = []; d.record = !!(d.id && isRec(d.id)); d.wasRecord = d.record;
+    if (!FORM && !d.record) { d.lesson = false; return; }
     if (d.type !== 'in' && !d.record || !on()) { d.lesson = false; return; }
     if (d.id) {
       const f = d.studentId && findStu(d.studentId);
@@ -188,7 +193,7 @@ const BR = (() => {
     return `<span class="ok">${glyph('check')}</span><span>${parts}${left > 0 ? `<br><em class="warn">Part payment: ${money(left)} still owed for ${shortM(last.m)}</em>` : ''}${extra ? '<br><em class="info">More than the fee: the extra stays as credit</em>' : ''}</span>`;
   }
   function who(d) {
-    if (!on()) return '';
+    if (!on() || (!FORM && !d.record)) return '';
     const mode = `<div class="form-label">What is it?</div><div class="seg full">${segButtons('br-mode', [['student', 'Student fee'], ['other', 'Something else']], d.lesson ? 'student' : 'other')}</div>`;
     if (!d.lesson) return mode;
     norm(d);
@@ -364,13 +369,53 @@ const BR = (() => {
     });
     save(); closeSheet(); render(); toast(n ? `${n} payment${n === 1 ? '' : 's'} sorted. The Teacher app shows them now.` : 'Nothing changed');
   };
+  /* ----- the inbox: payments marked in the Teacher app, waiting to be added to the balance ----- */
+  const tbList = () => { try { const l = JSON.parse(localStorage.getItem(TB) || '[]'); return Array.isArray(l) ? l.filter((x) => x && x.op && x.id && +x.amount > 0) : []; } catch (e) { return []; } };
+  const tbSet = (l) => { try { if (l.length) localStorage.setItem(TB, JSON.stringify(l)); else localStorage.removeItem(TB); } catch (e) { /* full */ } };
+  let inAcc = null;
+  const mName = (m) => ymLabel(m);
+  function inboxHtml() {
+    const l = tbList(), accs = S.accounts, a = inAcc || UI.lastAcc.in || accs[0].id, adds = l.filter((x) => x.op === 'add');
+    const row = (x) => x.op === 'add'
+      ? `<div class="br-line"><div class="br-lh">${letterTile(x.person || '?', '#12B76A')}<div class="tx"><b>${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))} · marked ${shortDate(x.date)}</small></div></div>
+         <div class="br-two"><button class="br-yes" data-act="tb-add" data-v="${esc(x.id)}">Add to my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Already counted</button></div></div>`
+      : `<div class="br-line del"><div class="br-lh">${letterTile(x.person || '?', '#F04438')}<div class="tx"><b>Removed in Teacher: ${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))}</small></div></div>
+         <div class="br-two"><button class="br-no" data-act="tb-take" data-v="${esc(x.id)}">Take it out of my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Keep it</button></div></div>`;
+    return sheetHead('From the Teacher app', '<button data-act="close-sheet">Later</button>', '') + `<div class="sheet-body">
+      <p class="hint" style="margin-top:0">You marked these payments in the Teacher app. Add the new money to your balance. If the money is already in Budget, tap Already counted: nothing is added.</p>
+      ${adds.length ? `<div class="form-label">Put the money in</div><div class="quick">${accs.map((x) => `<button data-act="tb-acc" data-v="${x.id}" class="${x.id === a ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : ''}
+      ${l.map(row).join('') || '<p class="hint">Nothing is waiting.</p>'}
+      ${adds.length > 1 ? `<div class="br-two" style="margin-top:6px"><button class="br-yes" data-act="tb-addall">Add all ${adds.length} · ${money(adds.reduce((q, x) => q + x.amount, 0))}</button><button data-act="tb-skipall">All already counted</button></div>` : ''}</div>`;
+  }
+  function tbAdd(x) {
+    const f = x.sid ? findTid(x.sid) : null, a = inAcc || UI.lastAcc.in || S.accounts[0].id;
+    if (S.tx.some((t) => t.tpid === x.id)) return; // never twice
+    S.tx.push({ id: uid(), tpid: x.id, type: 'in', amount: Math.round(+x.amount), currency: 'UZS', account: a, date: /^\d{4}-\d\d-\d\d$/.test(x.date || '') ? x.date : todayIso(), note: `${x.group} · ${mName(x.m)} fee`, createdAt: Date.now(),
+      person: x.person || '', category: lessonCat() || OTHER_CAT.in, groupId: f ? f.g.id : null, studentId: f ? f.s.id : null, forMonth: x.m, alloc: [{ m: x.m, amount: Math.round(+x.amount) }] });
+    UI.lastAcc.in = a;
+  }
+  function tbDone(ids, msg) {
+    tbSet(tbList().filter((x) => !ids.includes(x.id))); save(); render();
+    if (tbList().length) refreshSheet(inboxHtml(), null); else { closeSheet(); toast(msg); }
+  }
+  Object.assign(ACTIONS, {
+    'tb-open': () => { const b = document.getElementById('br-banner'); if (b) b.remove(); openSheet(inboxHtml(), null); },
+    'tb-acc': (a, v) => { inAcc = v; refreshSheet(inboxHtml(), null); },
+    'tb-add': (a, v) => { const x = tbList().find((y) => y.id === v); if (x) tbAdd(x); tbDone([v], 'Added to your balance'); },
+    'tb-skip': (a, v) => tbDone([v], 'Nothing added'),
+    'tb-take': (a, v) => { S.tx = S.tx.filter((t) => t.tpid !== v); tbDone([v], 'Taken out of your balance'); },
+    'tb-addall': () => { const l = tbList().filter((x) => x.op === 'add'); l.forEach(tbAdd); tbDone(l.map((x) => x.id), `${l.length} payments added`); },
+    'tb-skipall': () => tbDone(tbList().filter((x) => x.op === 'add').map((x) => x.id), 'Nothing added'),
+  });
+  // a removal Budget never added (it was "already counted", or never seen) needs no question
+  function tbTidy() { const l = tbList(), keep = l.filter((x) => x.op !== 'del' || S.tx.some((t) => t.tpid === x.id)); if (keep.length !== l.length) tbSet(keep); return keep; }
   function banner() {
-    let el = document.getElementById('br-banner'); const n = pending().length, m = n ? 0 : looseTx().length;
-    if (!(n || m) || (typeof sheet !== 'undefined' && sheet)) { if (el) el.remove(); return; }
+    let el = document.getElementById('br-banner'); const l = tbTidy();
+    if (!l.length || (typeof sheet !== 'undefined' && sheet)) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement('div'); el.id = 'br-banner'; document.body.appendChild(el); }
-    const html = n ? `<button data-act="br-link"><b>Link ${n} old group${n === 1 ? '' : 's'} to the Teacher app</b><span>Their payments are not shown in the Teacher app yet. Tap to link.</span></button>`
-      : `<button data-act="br-fix"><b>Choose the students for ${m} payment${m === 1 ? '' : 's'}</b><span>They have no student, so the Teacher app cannot count them. Tap to choose.</span></button>`;
-    if (el._h !== html) { el._h = html; el.innerHTML = html; } // redrawn only when it changes
+    const adds = l.filter((x) => x.op === 'add'), dels = l.length - adds.length;
+    const html = `<button data-act="tb-open"><b>${adds.length ? `${adds.length} payment${adds.length === 1 ? '' : 's'} from the Teacher app · ${money(adds.reduce((q, x) => q + x.amount, 0))} so'm` : `${dels} payment${dels === 1 ? '' : 's'} removed in the Teacher app`}</b><span>${adds.length ? `Tap to add ${adds.length === 1 ? 'it' : 'them'} to your balance, or skip.` : 'Tap to take it out of your balance, or keep it.'}</span></button>`;
+    if (el._h !== html) { el._h = html; el.innerHTML = html; }
   }
 
   /* ----- start ----- */
