@@ -17,6 +17,7 @@ function dayPlan(di) {
   return d.blocks.map((b) => { const r = { ...b, from: t, to: t + b.dur, a: actView(b.act) }; t += b.dur; return r; });
 }
 const dayEnd = (di) => S.schedule.days[di].start + S.schedule.days[di].blocks.reduce((a, b) => a + b.dur, 0);
+const isT = (id) => typeof BR !== 'undefined' && BR.isT && BR.isT(id);
 const hasSchedule = () => S.schedule.days.some((d) => d.blocks.length);
 function mergeFree(di) {
   const blocks = S.schedule.days[di].blocks;
@@ -238,25 +239,13 @@ PAGES.schedule = { title: 'Schedule', render: renderSchedule, after: afterSchedu
 let bdraft = null;
 const sameTime = (b, p) => b.act === p.act && b.from === p.from && b.to === p.to;
 function defaultAct() {
-  const ok = (id) => id && id !== 'free' && S.schedule.acts.some((a) => a.id === id && a.kind !== 'lesson');
+  const ok = (id) => id && id !== 'free' && S.schedule.acts.some((a) => a.id === id);
   if (ok(UI.lastAct)) return UI.lastAct;
-  const a = S.schedule.acts.find((x) => x.id !== 'free' && x.kind !== 'lesson');
+  const a = S.schedule.acts.find((x) => x.id !== 'free');
   return a ? a.id : 'free';
-}
-// A lesson from the Teacher app: shown, not changed here (30 Oct 2026, user).
-const lockedLesson = (act) => typeof BR !== 'undefined' && BR.isT && BR.isT(act);
-function lessonSheet(p) {
-  const g = p.a.group, m = g ? groupMonth(g, ymNow()) : null;
-  return sheetHead('Lesson', '<button data-act="close-sheet">Close</button>', '') + `
-  <div class="sheet-body">
-    <div class="blk-preview lesson" style="--c:${p.a.color}"><div class="bp-time num">${clock(p.from)} – ${clock(p.to)} · ${durText(p.dur)}</div><div class="bp-title">${esc(p.a.name)}</div><div class="bp-sub">${m && m.n ? `${m.paidCount} of ${m.n} paid` : 'Lesson'}</div></div>
-    <p class="hint" style="margin:14px 4px">This lesson comes from the Teacher app. Its days and times are changed there, in the group's Edit group; your schedule follows by itself.</p>
-    <div class="actions"><a class="btn" href="../Teacher/">Open Teacher</a>${g ? `<button class="btn grey" data-act="group" data-id="${g.id}">See who paid</button>` : ''}</div>
-  </div>`;
 }
 function openBlock(di, id) {
   const p = id ? dayPlan(di).find((x) => x.id === id) : null;
-  if (p && lockedLesson(p.act)) { openSheet(lessonSheet(p), null); return; }
   if (p && p.act !== 'free') {
     const sibs = {};
     WEEK.forEach((_, j) => { const s = j !== di && dayPlan(j).find((b) => sameTime(b, p)); if (s) sibs[j] = s.id; });
@@ -309,7 +298,7 @@ function blockHtml() {
     <div class="blk-preview ${a.kind}" id="blk-preview" style="--c:${a.color}">${blockPreview()}</div>
     ${gq}
     <div class="form-label">What</div>
-    <div class="act-pick">${S.schedule.acts.filter((x) => x.id !== 'free' && x.kind !== 'lesson').map((x) => { const v = actView(x.id); return `<button class="${d.act === x.id ? 'on' : ''} ${v.kind}" style="--c:${v.color}" data-act="blk-act" data-v="${x.id}"><i></i>${esc(v.name)}</button>`; }).join('')}<button class="add" data-act="act-new">${glyph('plus')}New</button></div>
+    <div class="act-pick">${S.schedule.acts.filter((x) => x.id !== 'free').map((x) => { const v = actView(x.id); return `<button class="${d.act === x.id ? 'on' : ''} ${v.kind}" style="--c:${v.color}" data-act="blk-act" data-v="${x.id}"><i></i>${esc(v.name)}</button>`; }).join('')}<button class="add" data-act="act-new">${glyph('plus')}New</button></div>
     <div class="form-label">Days</div>
     <div class="blk-days">${WK.map((n, i) => `<button class="${d.days.has(i) ? 'on' : ''} ${d.sibs[i] ? 'sib' : ''}" style="--dc:${DAY_COLORS[i]}" data-act="blk-day" data-v="${i}">${n}</button>`).join('')}</div>
     <p class="hint" id="blk-days-hint">${daysHint()}</p>
@@ -373,8 +362,7 @@ function syncBlock(sh) {
   $('#blk-conflict', sh).innerHTML = c.length
     ? `<div class="blk-warn">${glyph('clock')}<div><b>Overlaps ${[...new Set(c.map((x) => esc(x.b.a.name)))].join(' and ')}</b><span>${c.map((x) => `${WK[x.j]}: ${esc(x.b.a.name)} ${clock(x.b.from)}–${clock(x.b.to)} will be ${x.whole ? 'replaced' : 'shortened'}`).join(' · ')}</span></div></div>`
     : '';
-  const onLesson = c.filter((x) => lockedLesson(x.b.act)); // a lesson from Teacher cannot be covered
-  if (onLesson.length) $('#blk-conflict', sh).innerHTML = `<div class="blk-warn">${glyph('clock')}<div><b>That is lesson time</b><span>${onLesson.map((x) => `${WK[x.j]}: ${esc(x.b.a.name)} ${clock(x.b.from)}–${clock(x.b.to)}`).join(' · ')}. Lessons are changed in the Teacher app; choose another time here.</span></div></div>`;
+  const onLesson = [];
   $$('[data-act="blk-save"]', sh).forEach((b) => { b.disabled = !d.days.size || onLesson.length > 0; });
 }
 // Days in the block sheet: tap one, or press on a day and slide across the others to tick (or
@@ -483,7 +471,7 @@ let actDraft = null;
 function openActForm(id, back) {
   const a = id ? S.schedule.acts.find((x) => x.id === id) : null;
   if (a) { const v = actView(a.id); actDraft = { id: a.id, name: v.name, color: v.color, kind: a.kind, groupId: a.groupId, back }; }
-  else actDraft = { id: null, name: '', color: PALETTE[3], kind: 'other', groupId: null, back }; // lessons come from the Teacher app
+  else actDraft = { id: null, name: '', color: PALETTE[3], kind: 'other', groupId: null, back };
   openSheet(actFormHtml(), mountActForm);
 }
 function actFormHtml() {
@@ -494,9 +482,10 @@ function actFormHtml() {
     <div class="blk-preview ${d.kind}" id="act-preview" style="--c:${d.color}"><div class="bp-title">${esc(d.name || 'Name')}</div><div class="bp-sub">${d.kind === 'lesson' ? 'Lesson' : 'Other activity'}</div></div>
     <div class="form-label">Name</div>
     <div class="group"><label class="field"><input id="act-name" style="text-align:left" placeholder="e.g. University, Gym, Travel, Home" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done" maxlength="30"></label></div>
-    <div class="form-label">Colour</div>
-    ${swatches('act-color', d.color)}
-    <p class="hint">Lessons are not made here: they come from your groups in the Teacher app.</p>
+    ${isT(d.id) ? '' : `<div class="form-label">Colour</div>
+    ${swatches('act-color', d.color)}`}
+    ${editing ? '' : `<div class="form-label">Kind</div><div class="seg full">${segButtons('act-kind', [['lesson', 'Work group'], ['other', 'Something else']], d.kind)}</div>`}
+    <p class="hint">${d.kind === 'lesson' ? 'A work group is shared with the Teacher app: its days and times are the same in both, and it appears there at once (add the students there).' : 'A personal activity: it stays in Budget only.'}</p>
     <div class="actions">
       <button class="btn" data-act="act-save">${editing ? 'Save changes' : 'Create'}</button>
       ${editing ? `<button class="btn danger" data-act="act-del">Delete “${esc(d.name)}”${uses ? ` · ${plural(uses, 'block')} become free` : ''}</button>` : ''}
@@ -520,7 +509,7 @@ function saveAct() {
   let a = d.id ? S.schedule.acts.find((x) => x.id === d.id) : null;
   const groupId = d.kind === 'lesson' && grp(d.groupId) ? d.groupId : null;
   if (a) Object.assign(a, { name: d.name.trim(), color: d.color, kind: d.kind, groupId });
-  else { a = { id: 'a' + uid(), name: d.name.trim(), color: d.color, kind: d.kind, groupId }; S.schedule.acts.push(a); }
+  else { a = { id: (d.kind === 'lesson' ? 'Tb' : 'a') + uid(), name: d.name.trim(), color: d.color, kind: d.kind, groupId }; S.schedule.acts.push(a); }
   const g = grp(groupId);
   if (g) { g.name = a.name; g.color = a.color; }
   save(); buzz(); render();
@@ -529,7 +518,7 @@ function saveAct() {
 }
 async function deleteAct() {
   const d = actDraft;
-  const ok = await ask({ title: `Delete “${d.name}”?`, msg: 'Its blocks become free time. Your groups and payments are not touched.', ok: 'Delete', destructive: true });
+  const ok = await ask({ title: `Delete “${d.name}”?`, msg: isT(d.id) ? 'Its lessons become free time and the group has no lesson days in Teacher. Students and payments are not touched (a group with no students is removed there).' : 'Its blocks become free time. Your groups and payments are not touched.', ok: 'Delete', destructive: true });
   if (!ok) return;
   S.schedule.days.forEach((day, i) => { day.blocks.forEach((b) => { if (b.act === d.id) b.act = 'free'; }); mergeFree(i); });
   S.schedule.acts = S.schedule.acts.filter((x) => x.id !== d.id);
@@ -592,7 +581,6 @@ Object.assign(ACTIONS, {
     const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
     copyTargets.forEach((i) => { S.schedule.days[i] = { start: src.start, blocks: src.blocks.map((b) => ({ ...b, id: uid() })) }; });
     const n = copyTargets.size;
-    if (typeof BR !== 'undefined' && BR.syncLessons) BR.syncLessons(); // each day keeps its own lessons from Teacher
     save(); closeSheet(); render();
     undoToast(`Copied to ${plural(n, 'day')}`, () => { S.schedule.days = snapshot; });
   },

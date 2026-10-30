@@ -102,53 +102,78 @@ const BR = (() => {
     } catch (e) { /* storage full: Budget itself still has everything */ }
   }
 
-  /* ----- Teacher -> Budget: the lessons (30 Oct 2026, user) -----
-     Teacher owns the groups and every lesson time (each day can have its own time). Each Teacher group with lesson days
-     becomes a locked activity "T<Teacher group id>" whose blocks are painted into the schedule here; they are changed only
-     in Teacher. Everything else in the schedule (University, Travel, Home...) stays yours. Lesson activities you made here
-     earlier: the ones that match a Teacher group give way to Teacher's lessons, the others become "something else"
-     (nothing is deleted). */
+  /* ----- the lessons: ONE record for both apps (31 Oct 2026, user) -----
+     localStorage "lesson-sync" = { g: { <group id>: { name, slots: [{d, from, len}], at, by, gone? } } } holds every work group's
+     name, days, times and lengths. Teacher and Budget both read and write it; the newer change wins. Here each group is an
+     activity "T<group id>" whose blocks are the lesson days, so moving a block in the schedule changes the lesson in Teacher,
+     and a new lesson group made here appears in Teacher (students are added there). Everything else in the schedule stays here.
+     "budget-lsm" remembers, per group, the last state both sides agreed on, so only real changes are sent. */
   const isT = (id) => /^T./.test(id || '');
-  const HEXC = /^#[0-9a-f]{6}$/i;
-  function syncLessons() {
-    const r = read(); if (!r || !S.schedule || typeof paintBlock !== 'function') return false;
-    const want = r.groups.filter((rg) => Array.isArray(rg.slots) && rg.slots.length), wid = new Set(want.map((rg) => 'T' + rg.id));
-    const sched = S.schedule, low2 = (x) => String(x || '').trim().toLowerCase(), notes = [];
+  const HEXC = /^#[0-9a-f]{6}$/i, LS = 'lesson-sync', LSM = 'budget-lsm';
+  const lsRead = () => { try { const o = JSON.parse(localStorage.getItem(LS) || ''); return o && o.g && typeof o.g === 'object' ? o : { v: 1, g: {} }; } catch (e) { return { v: 1, g: {} }; } };
+  const lsMem = () => { try { const o = JSON.parse(localStorage.getItem(LSM) || ''); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+  const slotsIn = (tid) => { const out = []; S.schedule.days.forEach((_, di) => { const b = dayPlan(di).find((x) => x.act === tid); if (b) out.push({ d: di, from: b.from, len: b.dur }); }); return out; };
+  const sigOf = (name, slots) => JSON.stringify([name, slots]);
+  const NONE = 'none';
+  const csOf = (tid) => { const a = S.schedule.acts.find((x) => x.id === tid); return a ? sigOf(a.name, slotsIn(tid)) : NONE; };
+  const dropAct = (tid) => { const sched = S.schedule; sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === tid).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x.id !== tid); };
+  function pushLessons() { // Budget -> Teacher: what you changed in the schedule
+    if (!S.schedule || typeof dayPlan !== 'function') return;
+    const L = lsRead(), M = lsMem(); let wrote = false;
+    const ids = new Set([...S.schedule.acts.filter((a) => isT(a.id)).map((a) => a.id.slice(1)), ...Object.keys(M)]);
+    ids.forEach((id) => {
+      const tid = 'T' + id, cs = csOf(tid), m = M[id] || { at: 0, sig: '' }; if (cs === m.sig) return;
+      const act = S.schedule.acts.find((x) => x.id === tid), now = Date.now();
+      if (act) L.g[id] = { name: act.name, slots: slotsIn(tid), at: now, by: 'B' };
+      else if (m.sig && m.sig !== NONE) L.g[id] = { name: (L.g[id] && L.g[id].name) || '', slots: [], gone: true, at: now, by: 'B' };
+      else return;
+      M[id] = { at: now, sig: cs }; wrote = true;
+    });
+    try { if (wrote) { localStorage.setItem(LS, JSON.stringify(L)); localStorage.setItem(LSM, JSON.stringify(M)); } } catch (e) { /* the schedule itself is kept */ }
+  }
+  function syncLessons() { // Teacher -> Budget: what changed in Teacher; then send what changed here
+    const r = read(), sched = S.schedule; if (!sched || typeof paintBlock !== 'function') return false;
+    const L = lsRead(), M = lsMem(), notes = [], low2 = (x) => String(x || '').trim().toLowerCase(), groups = r ? r.groups : [];
     let ch = false;
-    // 1. lesson activities made here before
+    // 1. lesson activities made here before this update: the ones that match a group become that group's lessons
     sched.acts.filter((a) => a.kind === 'lesson' && !isT(a.id)).forEach((a) => {
-      const g = grp(a.groupId), mine = want.find((rg) => (g && g.tid === rg.id) || low2(rg.name) === low2(a.name));
+      const g = grp(a.groupId), mine = groups.find((rg) => (g && g.tid === rg.id) || low2(rg.name) === low2(a.name));
       if (mine) { sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === a.id).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x !== a); }
       else { a.kind = 'other'; a.groupId = null; notes.push(a.name); }
       ch = true;
     });
-    // 2. one locked activity per Teacher group (its name and colour follow Teacher)
-    want.forEach((rg) => {
-      const id = 'T' + rg.id, g = S.groups.find((x) => x.tid === rg.id), color = HEXC.test(rg.color) ? rg.color : '#007AFF';
-      let a = sched.acts.find((x) => x.id === id);
-      if (!a) { a = { id, name: rg.name, color, kind: 'lesson', groupId: g ? g.id : null }; sched.acts.push(a); ch = true; }
-      else if (a.name !== rg.name || a.color !== color || a.kind !== 'lesson' || a.groupId !== (g ? g.id : null)) { Object.assign(a, { name: rg.name, color, kind: 'lesson', groupId: g ? g.id : null }); ch = true; }
+    // 2. what Teacher says is newer than what we agreed on: pull it
+    const ids = new Set([...Object.keys(L.g), ...groups.filter((rg) => Array.isArray(rg.slots) && rg.slots.length).map((rg) => rg.id)]), pulled = [];
+    ids.forEach((id) => {
+      const tid = 'T' + id, rg = groups.find((x) => x.id === id), m = M[id];
+      let E = L.g[id]; if (!E && rg && !m) E = { name: rg.name, slots: rg.slots, at: 1 }; // Teacher without the new record yet
+      if (!E || E.at <= (m ? m.at : 0)) return;
+      let act = sched.acts.find((x) => x.id === tid);
+      const slots = (E.slots || []).filter((sl) => sl.d >= 0 && sl.d <= 6 && sl.len > 0 && sl.from >= 0), name = E.name || (rg && rg.name) || (act && act.name) || 'Group';
+      if (E.gone || !slots.length) { if (act) { dropAct(tid); ch = true; } pulled.push([id, E.at]); return; }
+      const color = rg && HEXC.test(rg.color) ? rg.color : act ? act.color : PALETTE[3], g = S.groups.find((x) => x.tid === id);
+      if (!act) { act = { id: tid, name, color, kind: 'lesson', groupId: g ? g.id : null }; sched.acts.push(act); ch = true; }
+      else if (act.name !== name || act.color !== color || act.kind !== 'lesson' || act.groupId !== (g ? g.id : null)) { Object.assign(act, { name, color, kind: 'lesson', groupId: g ? g.id : null }); ch = true; }
+      if (sigOf(name, slotsIn(tid)) !== sigOf(name, slots)) {
+        sched.days.forEach((_, di) => dayPlan(di).forEach((b) => { if (b.act === tid) freeUp(di, b.id); }));
+        slots.sort((x, y) => x.d - y.d).forEach((sl) => {
+          dayPlan(sl.d).forEach((b) => { if (b.a.kind !== 'free' && b.act !== tid && b.from < sl.from + sl.len && b.to > sl.from) notes.push(`${b.a.name} on ${WK[sl.d]}`); });
+          paintBlock(sl.d, sl.from, sl.from + sl.len, tid);
+        });
+        ch = true;
+      }
+      pulled.push([id, E.at]);
     });
-    // 3. the lesson blocks: what Teacher says vs what the schedule has
-    const key = (act, d, from, len) => `${act}|${d}|${from}|${len}`;
-    const wantK = new Set(), haveK = new Set();
-    want.forEach((rg) => rg.slots.forEach((sl) => { if (sl.d >= 0 && sl.d <= 6 && sl.len > 0) wantK.add(key('T' + rg.id, sl.d, sl.from, sl.len)); }));
-    sched.days.forEach((_, di) => dayPlan(di).forEach((b) => { if (isT(b.act)) haveK.add(key(b.act, di, b.from, b.dur)); }));
-    const same = wantK.size === haveK.size && [...wantK].every((k) => haveK.has(k));
-    if (!same) {
-      sched.days.forEach((d, di) => dayPlan(di).forEach((b) => { if (isT(b.act)) freeUp(di, b.id); }));
-      const cut = new Set();
-      [...wantK].map((k) => k.split('|')).sort((x, y) => +x[1] - +y[1] || +x[2] - +y[2]).forEach(([act, d, from, len]) => {
-        const di = +d, f = +from, t = f + +len;
-        dayPlan(di).forEach((b) => { if (b.a.kind !== 'free' && !isT(b.act) && b.from < t && b.to > f) cut.add(`${b.a.name} on ${WK[di]}`); });
-        paintBlock(di, f, t, act);
-      });
-      if (cut.size) notes.push(...[...cut].map((x) => 'lesson time over ' + x));
-      ch = true;
-    }
-    // 4. activities of Teacher groups that have no lessons any more
-    sched.acts.filter((a) => isT(a.id) && !wid.has(a.id)).forEach((a) => { sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === a.id).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x !== a); ch = true; });
-    if (ch) { save(); if (notes.length) toast('Lessons from Teacher are in your schedule · ' + notes.slice(0, 3).join(' · ')); }
+    pulled.forEach(([id, at]) => { M[id] = { at, sig: csOf('T' + id) }; });
+    // 3. colour and the payment link of each lesson group follow Teacher
+    sched.acts.filter((a) => isT(a.id)).forEach((a) => {
+      const rg = groups.find((x) => 'T' + x.id === a.id), g = rg && S.groups.find((x) => x.tid === rg.id), color = rg && HEXC.test(rg.color) ? rg.color : a.color;
+      if (rg && (a.color !== color || a.groupId !== (g ? g.id : null))) { a.color = color; a.groupId = g ? g.id : null; ch = true; }
+    });
+    try { localStorage.setItem(LSM, JSON.stringify(M)); } catch (e) { /* Budget still works */ }
+    if (ch) save(); // save sends anything new to Teacher too
+    else pushLessons();
+    if (ch && notes.length) toast('Lessons from Teacher are in your schedule · shortened: ' + [...new Set(notes)].slice(0, 3).join(' · '));
     return ch;
   }
 
@@ -485,10 +510,10 @@ const BR = (() => {
   }
 
   /* ----- start ----- */
-  { const _save = save; save = function () { gen++; _save(); publish(); }; }
+  { const _save = save; save = function () { gen++; _save(); publish(); try { pushLessons(); } catch (e) { /* lessons are sent next time */ } }; }
   { const _render = render; render = function (...a) { if (typeof sheet === 'undefined' || !sheet) sync(); const r = _render(...a); setTimeout(banner, 0); return r; }; }
   setInterval(banner, 2000);
-  window.addEventListener('storage', (e) => { if (e.key === RS) { sync(); syncLessons(); render(); } });
+  window.addEventListener('storage', (e) => { if (e.key === RS || e.key === LS) { sync(); syncLessons(); render(); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); syncLessons(); publish(); setTimeout(handoff, 300); }); } });
   whenOpen(() => setTimeout(() => { sync(); syncLessons(); publish(); handoff(); if (typeof render === 'function') render(); }, 500));
   function delRecord() {
@@ -497,5 +522,5 @@ const BR = (() => {
     undoToast('Record deleted', () => { S.records.push(r); });
     return true;
   }
-  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read(), syncLessons, isT };
+  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read(), syncLessons, pushLessons, isT };
 })();
