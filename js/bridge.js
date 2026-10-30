@@ -102,17 +102,54 @@ const BR = (() => {
     } catch (e) { /* storage full: Budget itself still has everything */ }
   }
 
-  /* ----- Budget -> Teacher: the work part of the schedule (30 Oct) -----
-     Budget is the only place where the schedule is changed. Teacher reads "budget-schedule" and shows today's lessons only.
-     Only blocks whose activity is a lesson go out (University, Travel, Home never do). tid = the Teacher group, when the activity is linked to one. */
-  let schedJson = '';
-  function publishSchedule() {
-    try {
-      if (typeof dayPlan !== 'function' || !S.schedule) return;
-      const days = S.schedule.days.map((d, di) => dayPlan(di).filter((b) => b.a.kind === 'lesson').map((b) => ({ from: b.from, to: b.to, name: b.a.name, color: b.a.color, tid: (b.a.group && b.a.group.tid) || '' })));
-      const j = JSON.stringify(days); if (j === schedJson) return; schedJson = j;
-      localStorage.setItem('budget-schedule', JSON.stringify({ v: 1, at: Date.now(), days }));
-    } catch (e) { /* storage full: Budget itself still has everything */ }
+  /* ----- Teacher -> Budget: the lessons (30 Oct 2026, user) -----
+     Teacher owns the groups and every lesson time (each day can have its own time). Each Teacher group with lesson days
+     becomes a locked activity "T<Teacher group id>" whose blocks are painted into the schedule here; they are changed only
+     in Teacher. Everything else in the schedule (University, Travel, Home...) stays yours. Lesson activities you made here
+     earlier: the ones that match a Teacher group give way to Teacher's lessons, the others become "something else"
+     (nothing is deleted). */
+  const isT = (id) => /^T./.test(id || '');
+  const HEXC = /^#[0-9a-f]{6}$/i;
+  function syncLessons() {
+    const r = read(); if (!r || !S.schedule || typeof paintBlock !== 'function') return false;
+    const want = r.groups.filter((rg) => Array.isArray(rg.slots) && rg.slots.length), wid = new Set(want.map((rg) => 'T' + rg.id));
+    const sched = S.schedule, low2 = (x) => String(x || '').trim().toLowerCase(), notes = [];
+    let ch = false;
+    // 1. lesson activities made here before
+    sched.acts.filter((a) => a.kind === 'lesson' && !isT(a.id)).forEach((a) => {
+      const g = grp(a.groupId), mine = want.find((rg) => (g && g.tid === rg.id) || low2(rg.name) === low2(a.name));
+      if (mine) { sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === a.id).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x !== a); }
+      else { a.kind = 'other'; a.groupId = null; notes.push(a.name); }
+      ch = true;
+    });
+    // 2. one locked activity per Teacher group (its name and colour follow Teacher)
+    want.forEach((rg) => {
+      const id = 'T' + rg.id, g = S.groups.find((x) => x.tid === rg.id), color = HEXC.test(rg.color) ? rg.color : '#007AFF';
+      let a = sched.acts.find((x) => x.id === id);
+      if (!a) { a = { id, name: rg.name, color, kind: 'lesson', groupId: g ? g.id : null }; sched.acts.push(a); ch = true; }
+      else if (a.name !== rg.name || a.color !== color || a.kind !== 'lesson' || a.groupId !== (g ? g.id : null)) { Object.assign(a, { name: rg.name, color, kind: 'lesson', groupId: g ? g.id : null }); ch = true; }
+    });
+    // 3. the lesson blocks: what Teacher says vs what the schedule has
+    const key = (act, d, from, len) => `${act}|${d}|${from}|${len}`;
+    const wantK = new Set(), haveK = new Set();
+    want.forEach((rg) => rg.slots.forEach((sl) => { if (sl.d >= 0 && sl.d <= 6 && sl.len > 0) wantK.add(key('T' + rg.id, sl.d, sl.from, sl.len)); }));
+    sched.days.forEach((_, di) => dayPlan(di).forEach((b) => { if (isT(b.act)) haveK.add(key(b.act, di, b.from, b.dur)); }));
+    const same = wantK.size === haveK.size && [...wantK].every((k) => haveK.has(k));
+    if (!same) {
+      sched.days.forEach((d, di) => dayPlan(di).forEach((b) => { if (isT(b.act)) freeUp(di, b.id); }));
+      const cut = new Set();
+      [...wantK].map((k) => k.split('|')).sort((x, y) => +x[1] - +y[1] || +x[2] - +y[2]).forEach(([act, d, from, len]) => {
+        const di = +d, f = +from, t = f + +len;
+        dayPlan(di).forEach((b) => { if (b.a.kind !== 'free' && !isT(b.act) && b.from < t && b.to > f) cut.add(`${b.a.name} on ${WK[di]}`); });
+        paintBlock(di, f, t, act);
+      });
+      if (cut.size) notes.push(...[...cut].map((x) => 'lesson time over ' + x));
+      ch = true;
+    }
+    // 4. activities of Teacher groups that have no lessons any more
+    sched.acts.filter((a) => isT(a.id) && !wid.has(a.id)).forEach((a) => { sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === a.id).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x !== a); ch = true; });
+    if (ch) { save(); if (notes.length) toast('Lessons from Teacher are in your schedule · ' + notes.slice(0, 3).join(' · ')); }
+    return ch;
   }
 
   /* ----- what a student owes, and where a payment goes ----- */
@@ -448,17 +485,17 @@ const BR = (() => {
   }
 
   /* ----- start ----- */
-  { const _save = save; save = function () { gen++; _save(); publish(); publishSchedule(); }; }
+  { const _save = save; save = function () { gen++; _save(); publish(); }; }
   { const _render = render; render = function (...a) { if (typeof sheet === 'undefined' || !sheet) sync(); const r = _render(...a); setTimeout(banner, 0); return r; }; }
   setInterval(banner, 2000);
-  window.addEventListener('storage', (e) => { if (e.key === RS) { sync(); render(); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); publish(); publishSchedule(); setTimeout(handoff, 300); }); } });
-  whenOpen(() => setTimeout(() => { sync(); publish(); publishSchedule(); handoff(); if (typeof render === 'function') render(); }, 500));
+  window.addEventListener('storage', (e) => { if (e.key === RS) { sync(); syncLessons(); render(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); syncLessons(); publish(); setTimeout(handoff, 300); }); } });
+  whenOpen(() => setTimeout(() => { sync(); syncLessons(); publish(); handoff(); if (typeof render === 'function') render(); }, 500));
   function delRecord() {
     const r = (S.records || []).find((x) => x.id === draft.id); if (!r) return false;
     S.records = S.records.filter((x) => x.id !== r.id); save(); txDone(); render();
     undoToast('Record deleted', () => { S.records.push(r); });
     return true;
   }
-  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read() };
+  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read(), syncLessons, isT };
 })();

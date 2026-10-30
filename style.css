@@ -1156,3 +1156,6 @@ html.glass:not([data-theme="light"]):not([data-theme="dark"]) .dlg-box, html.gla
    so their white text and icons disappeared: the chosen "Cash", the "+" on Goals, the chosen filter and period chips. */
 html.glass .fchip.on, html.glass .quick button.on, html.glass .pill-btn.on, html.glass .icon-btn.solid { background: var(--accent) !important; color: #fff !important; }
 html.glass .fchip.on i { background: #fff; }
+
+/* 30 Oct: "Open Teacher" on a lesson from the Teacher app is a link styled as a button */
+a.btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
