@@ -102,6 +102,19 @@ const BR = (() => {
     } catch (e) { /* storage full: Budget itself still has everything */ }
   }
 
+  /* ----- Budget -> Teacher: the work part of the schedule (30 Oct) -----
+     Budget is the only place where the schedule is changed. Teacher reads "budget-schedule" and shows today's lessons only.
+     Only blocks whose activity is a lesson go out (University, Travel, Home never do). tid = the Teacher group, when the activity is linked to one. */
+  let schedJson = '';
+  function publishSchedule() {
+    try {
+      if (typeof dayPlan !== 'function' || !S.schedule) return;
+      const days = S.schedule.days.map((d, di) => dayPlan(di).filter((b) => b.a.kind === 'lesson').map((b) => ({ from: b.from, to: b.to, name: b.a.name, color: b.a.color, tid: (b.a.group && b.a.group.tid) || '' })));
+      const j = JSON.stringify(days); if (j === schedJson) return; schedJson = j;
+      localStorage.setItem('budget-schedule', JSON.stringify({ v: 1, at: Date.now(), days }));
+    } catch (e) { /* storage full: Budget itself still has everything */ }
+  }
+
   /* ----- what a student owes, and where a payment goes ----- */
   const charge = (tid, m) => { const c = roster && roster.charges[tid]; return c && c[m] != null ? c[m] : null; };
   function paidMap(tid, except) {
@@ -435,12 +448,12 @@ const BR = (() => {
   }
 
   /* ----- start ----- */
-  { const _save = save; save = function () { gen++; _save(); publish(); }; }
+  { const _save = save; save = function () { gen++; _save(); publish(); publishSchedule(); }; }
   { const _render = render; render = function (...a) { if (typeof sheet === 'undefined' || !sheet) sync(); const r = _render(...a); setTimeout(banner, 0); return r; }; }
   setInterval(banner, 2000);
   window.addEventListener('storage', (e) => { if (e.key === RS) { sync(); render(); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); publish(); setTimeout(handoff, 300); }); } });
-  whenOpen(() => setTimeout(() => { sync(); publish(); handoff(); if (typeof render === 'function') render(); }, 500));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); publish(); publishSchedule(); setTimeout(handoff, 300); }); } });
+  whenOpen(() => setTimeout(() => { sync(); publish(); publishSchedule(); handoff(); if (typeof render === 'function') render(); }, 500));
   function delRecord() {
     const r = (S.records || []).find((x) => x.id === draft.id); if (!r) return false;
     S.records = S.records.filter((x) => x.id !== r.id); save(); txDone(); render();
