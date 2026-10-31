@@ -470,7 +470,7 @@ function removeBlocks() {
 let actDraft = null;
 function openActForm(id, back) {
   const a = id ? S.schedule.acts.find((x) => x.id === id) : null;
-  if (a) { const v = actView(a.id); actDraft = { id: a.id, name: v.name, color: v.color, kind: a.kind, groupId: a.groupId, back }; }
+  if (a) { const v = actView(a.id); actDraft = { id: a.id, name: v.name, color: v.color, kind: a.kind, was: a.kind, groupId: a.groupId, back }; }
   else actDraft = { id: null, name: '', color: PALETTE[3], kind: 'other', groupId: null, back };
   openSheet(actFormHtml(), mountActForm);
 }
@@ -482,10 +482,10 @@ function actFormHtml() {
     <div class="blk-preview ${d.kind}" id="act-preview" style="--c:${d.color}"><div class="bp-title">${esc(d.name || 'Name')}</div><div class="bp-sub">${d.kind === 'lesson' ? 'Lesson' : 'Other activity'}</div></div>
     <div class="form-label">Name</div>
     <div class="group"><label class="field"><input id="act-name" style="text-align:left" placeholder="e.g. University, Gym, Travel, Home" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done" maxlength="30"></label></div>
-    ${isT(d.id) ? '' : `<div class="form-label">Colour</div>
+    ${isT(d.id) && d.kind === 'lesson' ? '' : `<div class="form-label">Colour</div>
     ${swatches('act-color', d.color)}`}
-    ${editing ? '' : `<div class="form-label">Kind</div><div class="seg full">${segButtons('act-kind', [['lesson', 'Work group'], ['other', 'Something else']], d.kind)}</div>`}
-    <p class="hint">${d.kind === 'lesson' ? 'A work group is shared with the Teacher app: its days and times are the same in both, and it appears there at once (add the students there).' : 'A personal activity: it stays in Budget only.'}</p>
+    <div class="form-label">Kind</div><div class="seg full">${segButtons('act-kind', [['lesson', 'Work group'], ['other', 'Something else']], d.kind)}</div>
+    <p class="hint">${d.kind === 'lesson' ? 'Work: shared with the Teacher app. Its days and times are the same in both, and it appears there at once (add the students there).' : 'Personal: it stays in Budget only. Teacher never shows it.'}${editing && d.kind !== d.was ? (d.kind === 'lesson' ? ' Saving makes it a work group: its blocks become lesson days in Teacher.' : ' Saving makes it personal: Teacher stops showing its days and times.') : ''}</p>
     <div class="actions">
       <button class="btn" data-act="act-save">${editing ? 'Save changes' : 'Create'}</button>
       ${editing ? `<button class="btn danger" data-act="act-del">Delete “${esc(d.name)}”${uses ? ` · ${plural(uses, 'block')} become free` : ''}</button>` : ''}
@@ -503,10 +503,20 @@ function mountActForm(sh) {
   sync();
   if (!actDraft.id) setTimeout(() => name.focus({ preventScroll: true }), 420);
 }
-function saveAct() {
+async function saveAct() {
   const d = actDraft;
   if (!d.name.trim()) return;
   let a = d.id ? S.schedule.acts.find((x) => x.id === d.id) : null;
+  let moved = false;
+  if (a && (a.kind === 'lesson') !== (d.kind === 'lesson')) { // work <-> personal: the activity changes sides (its id says which side it is on)
+    const toWork = d.kind === 'lesson';
+    if (!toWork && !(await ask({ title: `Make “${a.name}” personal?`, msg: 'Teacher stops showing its days and times. Its students and payments are not touched (a group with no students is removed there). Its blocks stay in your schedule.', ok: 'Make personal' }))) return;
+    const oldId = a.id, newId = (toWork ? 'Tb' : 'a') + uid();
+    S.schedule.days.forEach((day) => day.blocks.forEach((b) => { if (b.act === oldId) b.act = newId; }));
+    if (UI.lastAct === oldId) UI.lastAct = newId;
+    a.id = newId; if (!toWork) a.groupId = null;
+    d.id = newId; moved = true;
+  }
   const groupId = d.kind === 'lesson' && grp(d.groupId) ? d.groupId : null;
   if (a) Object.assign(a, { name: d.name.trim(), color: d.color, kind: d.kind, groupId });
   else { a = { id: (d.kind === 'lesson' ? 'Tb' : 'a') + uid(), name: d.name.trim(), color: d.color, kind: d.kind, groupId }; S.schedule.acts.push(a); }
@@ -514,7 +524,7 @@ function saveAct() {
   if (g) { g.name = a.name; g.color = a.color; }
   save(); buzz(); render();
   if (d.back) d.back(a.id); else closeSheet();
-  toast(d.id ? 'Updated everywhere in your week' : `${a.name} created`);
+  toast(moved ? (d.kind === 'lesson' ? `${a.name} is a work group now: Teacher shows it` : `${a.name} is personal now: Teacher does not show it`) : d.id ? 'Updated everywhere in your week' : `${a.name} created`);
 }
 async function deleteAct() {
   const d = actDraft;
