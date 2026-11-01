@@ -227,7 +227,7 @@ function renderHome() {
   const now = new Date();
   const cur = UI.cur, other = cur === 'UZS' ? 'USD' : 'UZS'; // everything in the chosen currency
   let h = `<header class="lt"><div><div class="eyebrow">${DOW_LONG[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}</div><h1>Overview</h1></div>
-    <div class="lt-right">${curSeg()}<button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
+    <div class="lt-right"><button class="icon-btn" data-act="settings" aria-label="Settings">${I.settings}</button></div></header>`;
 
   const prevYm = ymShift(ymNow(), -1);
   const [pf, pt] = ymRange(prevYm);
@@ -354,11 +354,12 @@ function renderHistory() {
     <div class="seg full seg-lg">${segButtons('hview', [['entries', 'Entries'], ['cal', 'Calendar'], ['groups', 'Groups']], UI.hView)}</div>`;
   if (UI.hView === 'groups') return h + renderGroupsList();
   if (UI.hView === 'cal') return h + `<div class="pager" id="calpg">${UI.calYear != null ? yearBody(UI.calYear) : calBody(UI.calYm, UI.calDay)}</div>`;
+  const nFilt = (UI.hType === 'transfer' ? 1 : 0) + (UI.hCur !== 'all' ? 1 : 0) + (UI.hAcc !== 'all' ? 1 : 0) + (UI.hGroup !== 'all' ? 1 : 0); // how many of the hidden filters are on
   const chip = (act, v, label, on, dot) => `<button class="fchip ${on ? 'on' : ''}" data-act="${act}" data-v="${v}">${dot ? `<i style="--c:${dot}"></i>` : ''}${label}</button>`;
   return h + `
     <div class="search" style="margin-top:12px">${glyph('search')}<input id="q" type="search" placeholder="Search names, notes, amounts" value="${esc(UI.q)}" autocomplete="off" enterkeyhint="search"></div>
-    <div class="seg full" style="margin-top:12px">${segButtons('htype', [['all', 'All'], ['in', 'In'], ['out', 'Out'], ['transfer', 'Transfers']], UI.hType)}</div>
-    <div class="fchips">${curItems.map(([v, l]) => chip('hcur', v, l, UI.hCur === v)).join('')}<span class="fsep"></span>${S.accounts.map((a) => chip('hacc', a.id, esc(a.name), UI.hAcc === a.id)).join('')}${S.groups.length ? '<span class="fsep"></span>' + S.groups.map((g) => chip('hgroup', g.id, esc(g.name), UI.hGroup === g.id, g.color)).join('') : ''}</div>
+    <div class="hrow"><div class="seg full">${segButtons('htype', [['all', 'All'], ['in', 'In'], ['out', 'Out']], UI.hType === 'transfer' ? 'all' : UI.hType)}</div><button class="hfbtn ${UI.hFilter ? 'on' : ''}" data-act="hfilter">${glyph('search')}Filter${nFilt ? '<b>' + nFilt + '</b>' : ''}</button></div>
+    <div class="fchips" ${UI.hFilter || nFilt ? '' : 'hidden'}>${chip('htype', 'transfer', 'Transfers', UI.hType === 'transfer')}<span class="fsep"></span>${curItems.map(([v, l]) => chip('hcur', v, l, UI.hCur === v)).join('')}<span class="fsep"></span>${S.accounts.map((a) => chip('hacc', a.id, esc(a.name), UI.hAcc === a.id)).join('')}${S.groups.length ? '<span class="fsep"></span>' + S.groups.map((g) => chip('hgroup', g.id, esc(g.name), UI.hGroup === g.id, g.color)).join('') : ''}</div>
     <div id="hist-list">${histList()}</div>`;
 }
 function histList() {
@@ -529,7 +530,7 @@ PAGES.history = { title: 'History', render: renderHistory, after: afterHistory }
 // One period (week, month or year) at a time. Swipe sideways — or use ‹ › — for the one before or
 // after; the period's own title moves with it.
 function renderStats() {
-  let h = `<header class="lt"><h1>Stats</h1><div class="lt-right">${curSeg()}</div></header>`;
+  let h = `<header class="lt"><h1>Stats</h1></header>`;
   if (!S.tx.length) {
     return h + `<section class="card empty"><div class="big">${ic('chart', '#AF52DE', 'xl')}</div><h3>Nothing to show yet</h3><p>Charts appear here after you add a few entries.</p><button class="btn" data-act="add">Add entry</button><button class="link" data-act="load-demo">or try it with demo data</button></section>`;
   }
@@ -2255,6 +2256,7 @@ Object.assign(ACTIONS, {
     refreshSheet(txHtml(), mountTx);
   },
   htype: (a, v) => { const d = segDir(a); UI.hType = v; UI.hLimit = HIST_PAGE; renderSub(a, d); },
+  hfilter: () => { UI.hFilter = !UI.hFilter; render(); },
   hcur: (a, v) => { UI.hCur = UI.hCur === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hacc: (a, v) => { UI.hAcc = UI.hAcc === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },
   hgroup: (a, v) => { UI.hGroup = UI.hGroup === v ? 'all' : v; UI.hLimit = HIST_PAGE; render(); },

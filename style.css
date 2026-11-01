@@ -1159,3 +1159,9 @@ html.glass .fchip.on i { background: #fff; }
 
 /* 30 Oct: "Open Teacher" on a lesson from the Teacher app is a link styled as a button */
 a.btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
+
+/* 1 Nov 2026 draft: All / In / Out stay on the page, every other filter sits behind one Filter button */
+.hrow { display: flex; gap: 8px; align-items: center; margin-top: 12px; } .hrow .seg { flex: 1; }
+.hfbtn { flex: none; display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); font-weight: 600; font-size: 14.5px; }
+.hfbtn.on { background: var(--accent); color: #fff; } .hfbtn b { background: var(--accent); color: #fff; border-radius: 10px; min-width: 18px; height: 18px; font-size: 12px; display: grid; place-items: center; } .hfbtn.on b { background: #fff; color: var(--accent); }
+.fchips[hidden] { display: none; }
