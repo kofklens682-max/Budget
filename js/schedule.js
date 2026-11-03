@@ -14,7 +14,15 @@ function actView(id) {
 function dayPlan(di) {
   const d = S.schedule.days[di];
   let t = d.start;
-  return d.blocks.map((b) => { const r = { ...b, from: t, to: t + b.dur, a: actView(b.act) }; t += b.dur; return r; });
+  return d.blocks.map((b) => { const r = { ...b, from: t, to: t + b.dur, a: actView(b.act), brk: breakFor(b.act, di) }; t += b.dur; return r; });
+}
+// Breaks (holidays, trips) set in Teacher: localStorage "teacher-breaks" = [{ from, to, label, gids }]. A lesson block on such a day
+// stays in the plan but is greyed out and not counted as a lesson (this week only: the week view shows this week's dates).
+function teacherBreaks() { try { const l = JSON.parse(localStorage.getItem('teacher-breaks') || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+function breakFor(actId, di) {
+  if (!/^T./.test(actId || '')) return '';
+  const k = iso(weekDate(di)), gid = actId.slice(1), p = teacherBreaks().find((x) => k >= x.from && k <= x.to && (!x.gids || !x.gids.length || x.gids.includes(gid)));
+  return p ? p.label || 'Break' : '';
 }
 const dayEnd = (di) => S.schedule.days[di].start + S.schedule.days[di].blocks.reduce((a, b) => a + b.dur, 0);
 const isT = (id) => typeof BR !== 'undefined' && BR.isT && BR.isT(id);
@@ -36,10 +44,11 @@ function freeSlotFor(di, dur) {
 }
 const clock = (min) => `${Math.floor(min / 60) % 24}:${pad2(min % 60)}`; // 9:00 rather than 09:00
 const weekDate = (i) => addDays(new Date(), i - todayIdx()); // this week's date of weekday i (0 = Monday)
-const lessonsIn = (plan) => plan.filter((b) => b.a.kind === 'lesson');
+const lessonsIn = (plan) => plan.filter((b) => b.a.kind === 'lesson' && !b.brk);
 const minutesIn = (list) => list.reduce((a, b) => a + b.dur, 0);
 const freeIn = (plan) => minutesIn(plan.filter((b) => b.a.kind === 'free'));
 function blockSub(b) {
+  if (b.brk) return `${esc(b.brk)} · no lesson`;
   const m = b.a.group ? groupMonth(b.a.group, ymNow()) : null;
   return m && m.n ? `${m.paidCount} of ${m.n} paid` : b.a.kind === 'lesson' ? 'Lesson' : '';
 }
@@ -93,8 +102,8 @@ function wsRest(strip) {
 // Today only: what's on now (or free time), how long is left, and what's next.
 function nowCard(plan) {
   const now = nowMin();
-  const cur = plan.find((b) => now >= b.from && now < b.to);
-  const next = plan.find((b) => b.from >= (cur ? cur.to : now) && b.a.kind !== 'free');
+  const cur = plan.find((b) => now >= b.from && now < b.to && !b.brk);
+  const next = plan.find((b) => b.from >= (cur ? cur.to : now) && b.a.kind !== 'free' && !b.brk);
   if (cur) {
     const free = cur.a.kind === 'free';
     return `<section class="card nowc ${free ? 'free' : ''}" style="--c:${free ? 'var(--in)' : cur.a.color}">
@@ -127,12 +136,12 @@ function dayBody(di) {
   const L = lessonsIn(plan), free = freeIn(plan);
   h += `<p class="dsum"><b class="num">${clock(plan[0].from)}–${clock(plan[plan.length - 1].to)}</b> · ${plural(L.length, 'lesson')}${L.length ? ` · ${durText(minutesIn(L))} teaching` : ''}${free ? ` · ${durText(free)} free` : ''}</p>`;
   const rows = plan.map((b) => {
-    const cur = isToday && now >= b.from && now < b.to;
+    const cur = isToday && now >= b.from && now < b.to && !b.brk;
     if (b.a.kind === 'free') {
       return `<button class="drow free ${cur ? 'now' : ''}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b></span><i class="dbar"></i><span class="dmain">Free · ${durText(b.dur)}</span><span class="dadd" aria-label="Add something here">${glyph('plus')}</span></button>`;
     }
     const sub = blockSub(b);
-    return `<button class="drow ${cur ? 'now' : ''}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b><span>${clock(b.to)}</span></span><i class="dbar"></i><span class="dmain"><b>${esc(b.a.name)}${cur ? '<em>NOW</em>' : ''}</b>${sub ? `<span>${sub}</span>` : ''}</span><span class="dd num">${durText(b.dur)}</span></button>`;
+    return `<button class="drow ${cur ? 'now' : ''}${b.brk ? ' brk' : ''}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="dt num"><b>${clock(b.from)}</b><span>${clock(b.to)}</span></span><i class="dbar"></i><span class="dmain"><b>${esc(b.a.name)}${cur ? '<em>NOW</em>' : ''}</b>${sub ? `<span>${sub}</span>` : ''}</span><span class="dd num">${durText(b.dur)}</span></button>`;
   }).join('');
   return h + `<section class="card dlist">${rows}</section>
     <div class="dfoot"><button class="link" data-act="sched-copy">Copy ${WEEK[di]} to other days</button></div>`;
@@ -146,7 +155,7 @@ function weekHtml() {
     const p = dayPlan(di), L = lessonsIn(p), free = freeIn(p);
     const rows = p.map((b) => (b.a.kind === 'free'
       ? `<button class="wli free" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="t"></span><i></i><span class="n num">Free ${clock(b.from)} – ${clock(b.to)}</span><span class="d num">${durText(b.dur)}</span></button>`
-      : `<button class="wli ${b.a.kind}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="t num">${clock(b.from)}</span><i></i><span class="n">${esc(b.a.name)}</span><span class="d num">${durText(b.dur)}</span></button>`)).join('');
+      : `<button class="wli ${b.a.kind}${b.brk ? ' brk' : ''}" style="--c:${b.a.color}" data-act="sched-block" data-id="${b.id}" data-day="${di}"><span class="t num">${clock(b.from)}</span><i></i><span class="n">${esc(b.a.name)}${b.brk ? ` · ${esc(b.brk)}` : ''}</span><span class="d num">${durText(b.dur)}</span></button>`)).join('');
     return `<section class="card wday ${di === today ? 'today' : ''}">
       <button class="wdh" data-act="sched-open-day" data-v="${di}"><b>${WEEK[di]}</b>${di === today ? '<span class="chip info">Today</span>' : ''}${p.length ? `<span class="r num">${clock(p[0].from)}–${clock(p[p.length - 1].to)}</span>` : ''}${I.chev}</button>
       ${p.length ? `${rows}<div class="wdf">${L.length ? `${plural(L.length, 'lesson')} · ` : ''}${free ? `<b>${durText(free)} free</b>` : 'no free time'}</div>` : '<div class="woff">Nothing planned — a free day</div>'}

@@ -1165,3 +1165,19 @@ a.btn{text-decoration:none;display:flex;align-items:center;justify-content:cente
 .hfbtn { flex: none; display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 14px; background: var(--card); box-shadow: var(--shadow); font-weight: 600; font-size: 14.5px; }
 .hfbtn.on { background: var(--accent); color: #fff; } .hfbtn b { background: var(--accent); color: #fff; border-radius: 10px; min-width: 18px; height: 18px; font-size: 12px; display: grid; place-items: center; } .hfbtn.on b { background: #fff; color: var(--accent); }
 .fchips[hidden] { display: none; }
+
+/* a lesson on a Teacher break (holiday): kept in the plan, greyed out */
+.drow.brk, .wli.brk { opacity: .5; }
+.drow.brk .dmain b, .wli.brk .n { text-decoration: line-through; }
+
+/* the evening question / weekly check: a card above the tab bar for 8 seconds */
+.safe-pop { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 92px); z-index: 80; width: calc(100% - 28px); max-width: 420px; transform: translate(-50%, 140%); opacity: 0; transition: transform .4s cubic-bezier(.32, .72, 0, 1), opacity .3s;
+  background: var(--elev); color: var(--text); border-radius: 20px; padding: 14px 16px 16px; box-shadow: 0 10px 34px rgba(0, 0, 0, .22), 0 0 0 .5px var(--sep); overflow: hidden; }
+.safe-pop.show { transform: translate(-50%, 0); opacity: 1; }
+.safe-pop b { display: block; font-size: 16px; margin-bottom: 2px; }
+.safe-pop span { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 10px; }
+.safe-pop div { display: flex; gap: 8px; flex-wrap: wrap; }
+.safe-pop button { border-radius: 14px; padding: 9px 13px; font-size: 14px; font-weight: 600; background: var(--accent); color: #fff; }
+.safe-pop button.n { background: var(--fill); color: var(--text); }
+.safe-pop .sp-bar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--accent); transform-origin: left; animation: spbar 8s linear forwards; }
+@keyframes spbar { to { transform: scaleX(0); } }
