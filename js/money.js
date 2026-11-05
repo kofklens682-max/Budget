@@ -1194,6 +1194,11 @@ function openCatForm(type, id, back) {
   cdraft = c ? { ...c, type, back } : { id: null, type, name: '', g: 'tag', c: PALETTE[3], back };
   openSheet(catFormHtml(), mountCatForm);
 }
+// the icon picker: every icon as a small coloured tile, by topic (6 Nov 2026)
+function iconPickerHtml(d) {
+  const secs = (window.ICON_SECTIONS || [['Icons', CAT_GLYPHS]]).map(([n, l]) => [n, l.filter((g) => CAT_GLYPHS.includes(g))]).filter((x) => x[1].length);
+  return `<div class="icon-picker">${secs.map(([n, l]) => `<div><h4>${n}</h4><div class="icon-grid">${l.map((g) => `<button class="${d.g === g ? 'on' : ''}" data-act="cat-glyph" data-v="${g}" aria-label="${g}">${ic(g, d.c)}</button>`).join('')}</div></div>`).join('')}</div>`;
+}
 function catFormHtml() {
   const d = cdraft, editing = !!d.id, isOther = d.id === OTHER_CAT[d.type];
   return sheetHead(editing ? 'Edit category' : 'New category', '<button data-act="cat-cancel">Cancel</button>', '<button data-act="save-cat">Save</button>') + `
@@ -1203,7 +1208,7 @@ function catFormHtml() {
     <div class="group"><label class="field"><input id="c-name" style="text-align:left" placeholder="e.g. Tutoring, Sadaqa, To'y gifts" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done" maxlength="30"></label></div>
     <p class="hint">For money ${d.type === 'in' ? 'coming in' : 'going out'}.</p>
     <div class="form-label">Icon</div>
-    <div class="glyph-grid" style="--c:${d.c}">${CAT_GLYPHS.map((g) => `<button class="${d.g === g ? 'on' : ''}" data-act="cat-glyph" data-v="${g}" aria-label="${g}">${glyph(g)}</button>`).join('')}</div>
+    ${iconPickerHtml(d)}
     <div class="form-label">Colour</div>
     ${swatches('cat-color', d.c)}
     <div class="actions">
@@ -2352,7 +2357,7 @@ Object.assign(ACTIONS, {
   'edit-cat': (a, v, id) => openCatForm(catType, id, null),
   'new-cat': () => openCatForm(catType, null, null),
   'cat-cancel': () => catBack(),
-  'cat-glyph': (a, v) => { cdraft.g = v; pick(a, '.glyph-grid'); $('#cat-preview').innerHTML = ic(cdraft.g, cdraft.c, 'xl'); },
+  'cat-glyph': (a, v) => { cdraft.g = v; pick(a, '.icon-picker'); $('#cat-preview').innerHTML = ic(cdraft.g, cdraft.c, 'xl'); },
   'cat-color': (a, v) => { cdraft.c = v; refreshSheet(catFormHtml(), mountCatForm); },
   'save-cat': () => saveCat(),
   'del-cat': () => deleteCat(),

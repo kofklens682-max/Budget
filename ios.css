@@ -116,3 +116,51 @@ html.glass .sheet { -webkit-backdrop-filter: none !important; backdrop-filter: n
 .lt-right > .icon-btn, .eye-btn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 .lt-right > .icon-btn:not(.solid) { background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(255,255,255,.86)) !important; }
 .eye-btn { background: var(--fill) !important; box-shadow: none !important; }
+
+
+/* ---------- 6 Nov 2026 (user: "the background feels dark, the colour grade is off, the writing isn't right"): a brighter, cleaner iPhone look ----------
+   A lighter page, white cards with a hair-thin edge, one set of iPhone colours everywhere, and iPhone-style writing:
+   the system font first (real SF on an iPhone), Inter as the close cousin everywhere else, tighter letter spacing, clearer sizes. */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --bg: #F7F8FC; --card: #FFFFFF;
+  --text: #1C1C1E; --text-2: rgba(60, 60, 67, .72); --text-3: rgba(60, 60, 67, .38); --sep: rgba(60, 60, 67, .13);
+  --shadow: 0 0 0 .5px rgba(60, 60, 67, .07), 0 6px 18px -10px rgba(40, 50, 90, .16);
+  --grid: #EEF0F6; --axis: #D1D4DE; --muted: #8E8E93;
+  --good: #34C759; --warn: #FF9500; --in-text: #1F9D45;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --text: #FFFFFF; --text-2: rgba(235, 235, 245, .66); --shadow: none; } }
+:root[data-theme="dark"] { --text: #FFFFFF; --text-2: rgba(235, 235, 245, .66); --shadow: none; }
+html, body { background: var(--bg); }
+body { font-family: var(--font); font-size: 16px; letter-spacing: -.011em; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; color: var(--text); }
+button, input, select, textarea { font-family: var(--font); }
+.card, .acc-card, .group, .hero-card { box-shadow: var(--shadow); }
+.hero-card { background:
+  radial-gradient(120% 90% at 100% 0%, rgba(52, 199, 89, .13), transparent 60%),
+  radial-gradient(90% 80% at 0% 100%, rgba(90, 200, 250, .1), transparent 60%), var(--card) !important; }
+
+/* writing: SF-style sizes and weights (heavy 800 becomes 700, body text a little bigger, small text clearer) */
+.lt h1 { font-size: 34px; font-weight: 700; letter-spacing: -.035em; line-height: 1.08; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .035em; color: var(--text-2); }
+.sec-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -.026em; }
+.hero { font-weight: 700; letter-spacing: -.04em; }
+.row-title { font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+.row-sub, .card-sub { font-size: 14px; color: var(--text-2); letter-spacing: -.008em; }
+.row-amt { font-weight: 600; letter-spacing: -.02em; }
+.label, .form-label { font-weight: 600; letter-spacing: -.005em; }
+.day-head { font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--text-2); }
+.btn { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+.seg button { font-weight: 600; letter-spacing: -.012em; }
+.tabs button span { font-size: 10.5px; font-weight: 600; letter-spacing: -.005em; }
+.num, .hero, .row-amt { font-variant-numeric: tabular-nums; }
+
+/* one set of colours (the iPhone ones): no leftover yellows or slates */
+.banner.demo { background: rgba(255, 204, 0, .16); }
+.toast { font-weight: 500; letter-spacing: -.012em; }
+
+
+/* 6 Nov 2026 (user: "the message at the top is unclear"): in the Glass look the toast turned pale cream while its text stayed white.
+   Now the toast is ONE clear dark card with white text in every look (light, glass, dark): easy to read over any page. */
+.toast, html.glass .toast, html.glass[data-theme="dark"] .toast { background: rgba(28, 28, 30, .94) !important; color: #fff !important; font-size: 15px; font-weight: 500; letter-spacing: -.012em;
+  -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 18px; box-shadow: 0 12px 30px rgba(0, 0, 0, .28) !important; }
+.toast .toast-btn { color: #7CE08F; }

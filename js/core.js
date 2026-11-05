@@ -16,11 +16,15 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DOW_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const WK = WEEK.map((d) => d.slice(0, 3));
-const DAY_COLORS = ['#3B82F6', '#16A34A', '#F59E0B', '#7C3AED', '#F87171', '#14B8A6', '#EC4899'];
+const DAY_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#30B0C7', '#FF2D55']; // iPhone system colours (6 Nov 2026)
 const NBSP = ' ';
 const HEX = /^#[0-9a-f]{6}$/i;
-const PALETTE = ['#34C759', '#00C7BE', '#5AC8FA', '#007AFF', '#5856D6', '#7D6BF2', '#AF52DE', '#FF2D55', '#FF3B30', '#FF9500', '#F2B705', '#A2845E', '#8E8E93', '#636366'];
-const CAT_GLYPHS = ['briefcase', 'board', 'family', 'users', 'gift', 'laptop', 'store', 'refund', 'usercheck', 'coins', 'cart', 'utensils', 'coffee', 'car', 'bus', 'fuel', 'house', 'bolt', 'phone', 'shirt', 'pill', 'gradcap', 'book', 'sparkles', 'film', 'music', 'gamepad', 'dumbbell', 'scissors', 'baby', 'paw', 'wrench', 'handheart', 'tag', 'receipt', 'cake', 'plane', 'globe', 'umbrella', 'heart', 'star', 'box'];
+const PALETTE = ['#34C759', '#00C7BE', '#30B0C7', '#5AC8FA', '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF3B30', '#FF9500', '#FFCC00', '#A2845E', '#8E8E93', '#636366'];
+// colours saved before the iPhone palette are shown in the nearest iPhone colour
+const LEGACY_C = { '#F2B705': '#FFCC00', '#7D6BF2': '#5856D6', '#64748B': '#8E8E93', '#3B82F6': '#007AFF', '#16A34A': '#34C759', '#F59E0B': '#FF9500', '#7C3AED': '#AF52DE', '#F87171': '#FF3B30', '#14B8A6': '#30B0C7', '#EC4899': '#FF2D55' };
+const fixC = (c) => LEGACY_C[String(c).toUpperCase()] || c;
+const CAT_GLYPHS_OLD = ['briefcase', 'board', 'family', 'users', 'gift', 'laptop', 'store', 'refund', 'usercheck', 'coins', 'cart', 'utensils', 'coffee', 'car', 'bus', 'fuel', 'house', 'bolt', 'phone', 'shirt', 'pill', 'gradcap', 'book', 'sparkles', 'film', 'music', 'gamepad', 'dumbbell', 'scissors', 'baby', 'paw', 'wrench', 'handheart', 'tag', 'receipt', 'cake', 'plane', 'globe', 'umbrella', 'heart', 'star', 'box'];
+const CAT_GLYPHS = window.ICON_SECTIONS ? [...new Set(window.ICON_SECTIONS.flatMap((x) => x[1]))].filter((g) => (window.GLYPHS_IOS && window.GLYPHS_IOS[g]) || G[g]) : CAT_GLYPHS_OLD;
 const DEFAULT_CATS = {
   in: [
     { id: 'salary', name: 'Salary', g: 'briefcase', c: '#34C759' },
@@ -38,7 +42,7 @@ const DEFAULT_CATS = {
     { id: 'eating', name: 'Eating out', g: 'utensils', c: '#FF9500' },
     { id: 'transport', name: 'Transport', g: 'car', c: '#00C7BE' },
     { id: 'home', name: 'Home & rent', g: 'house', c: '#007AFF' },
-    { id: 'bills', name: 'Bills', g: 'bolt', c: '#F2B705' },
+    { id: 'bills', name: 'Bills', g: 'bolt', c: '#FFCC00' },
     { id: 'phone', name: 'Phone & net', g: 'phone', c: '#5AC8FA' },
     { id: 'clothes', name: 'Clothes', g: 'shirt', c: '#AF52DE' },
     { id: 'health', name: 'Health', g: 'pill', c: '#FF3B30' },
@@ -59,10 +63,10 @@ const ACC_KINDS = [
 const GOAL_ICONS = [
   { id: 'target', c: '#FF3B30' }, { id: 'phone', c: '#007AFF' }, { id: 'laptop', c: '#5856D6' }, { id: 'car', c: '#00C7BE' },
   { id: 'plane', c: '#5AC8FA' }, { id: 'house', c: '#FF9500' }, { id: 'gradcap', c: '#AF52DE' }, { id: 'gem', c: '#FF2D55' },
-  { id: 'gift', c: '#FF2D55' }, { id: 'shield', c: '#34C759' }, { id: 'gamepad', c: '#636366' }, { id: 'star', c: '#F2B705' },
+  { id: 'gift', c: '#FF2D55' }, { id: 'shield', c: '#34C759' }, { id: 'gamepad', c: '#636366' }, { id: 'star', c: '#FFCC00' },
 ];
 const EMOJI_TO_ICON = { '🎯': 'target', '📱': 'phone', '💻': 'laptop', '🚗': 'car', '✈️': 'plane', '🏠': 'house', '🎓': 'gradcap', '💍': 'gem', '🎁': 'gift', '🛡️': 'shield', '🎮': 'gamepad', '⭐': 'star' };
-const TRANSFER_C = '#64748B';
+const TRANSFER_C = '#8E8E93';
 const PEOPLE_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#5AC8FA', '#5856D6', '#00C7BE'];
 
 // Interface chrome icons (tinted with the accent colour by their container)
@@ -105,7 +109,7 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(12); } catch (e) { /* no haptics */ } };
 
-const ic = (g, c, cls = '') => `<span class="ic ${cls}" style="--c:${c}"><svg viewBox="0 0 24 24" aria-hidden="true">${(window.GLYPHS_IOS && window.GLYPHS_IOS[g]) || G[g] || ''}</svg></span>`; // 4 Nov 2026: iPhone-style filled symbols (icons-ios.js)
+const ic = (g, c, cls = '') => `<span class="ic ${cls}" data-g="${g}" data-m="${(window.ICON_MOTION && window.ICON_MOTION[g]) || 'pulse'}" style="--c:${fixC(c)}"><svg viewBox="0 0 24 24" aria-hidden="true">${(window.GLYPHS_IOS && window.GLYPHS_IOS[g]) || G[g] || ''}</svg></span>`; // 4 Nov 2026: iPhone-style filled symbols (icons-ios.js)
 const glyph = (g, cls = '') => `<svg class="gl ${cls}" viewBox="0 0 24 24" aria-hidden="true">${G[g] || ''}</svg>`;
 
 function fmt(n, cur, o = {}) {
@@ -206,7 +210,7 @@ function normCats(c) {
   const out = {};
   for (const type of ['in', 'out']) {
     const list = c && Array.isArray(c[type])
-      ? c[type].filter((x) => x && x.id && x.name).map((x) => ({ id: String(x.id), name: String(x.name).slice(0, 30), g: G[x.g] ? x.g : 'box', c: HEX.test(x.c) ? x.c : '#8E8E93' }))
+      ? c[type].filter((x) => x && x.id && x.name).map((x) => ({ id: String(x.id), name: String(x.name).slice(0, 30), g: (G[x.g] || (window.GLYPHS_IOS && window.GLYPHS_IOS[x.g])) ? x.g : 'box', c: HEX.test(x.c) ? x.c : '#8E8E93' }))
       : [];
     out[type] = list.length ? list : DEFAULT_CATS[type].map((x) => ({ ...x }));
     if (!out[type].some((x) => x.id === OTHER_CAT[type])) out[type].push({ ...DEFAULT_CATS[type].find((x) => x.id === OTHER_CAT[type]) });
