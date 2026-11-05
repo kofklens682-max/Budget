@@ -765,7 +765,7 @@ function openTx(id, preset = {}) {
     const to = (S.accounts.find((a) => a.id !== from) || S.accounts[0]).id;
     const cur = preset.currency || UI.cur;
     draft = {
-      id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: to, toAmount: 0, toCurrency: cur,
+      id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: preset.toAccount || to, toAmount: 0, toCurrency: preset.toCurrency || cur, // 5 Nov: an exchange inside one account (js/split.js)
       person: preset.person || '', category: preset.category || null, date: /^\d{4}-\d\d-\d\d$/.test(preset.date || '') && preset.date <= todayIso() ? preset.date : todayIso(), note: preset.note || '',
       goalSpend: preset.goalSpend || null, goalLast: !!preset.goalLast, from: preset.from || ['free'], pic: preset.pic || null,
       groupId: preset.groupId || null, studentId: preset.studentId || null, forMonth: preset.forMonth || null,
@@ -1077,6 +1077,7 @@ function accountHtml() {
       <button class="btn" data-act="add-to-acc" data-id="${a.id}">＋ Add entry</button>
       ${S.accounts.length > 1 ? `<button class="btn grey" data-act="transfer-from" data-id="${a.id}">Transfer</button>` : ''}
     </div>
+    ${typeof splitCard === 'function' ? splitCard(a) : ''}
     <div class="form-label">Latest</div>
     ${list.length ? `<div class="group">${list.slice(0, 25).map((t) => txRow(t, true, true)).join('')}</div>
       ${list.length > 25 ? `<div class="actions"><button class="btn soft" data-act="acc-history" data-id="${a.id}">See all ${list.length} in History</button></div>` : ''}`

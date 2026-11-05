@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v47';
+const VERSION = 'budget-v48';
 const SHARE = 'budget-share'; // a picture or message shared to Budget, until the app picks it up
 const SHELL = [
   './',
@@ -17,10 +17,15 @@ const SHELL = [
   './js/acctui.js',
   './js/pics.js',
   './js/main.js',
+  './js/hide.js',
+  './js/morph.js',
+  './js/split.js',
   './js/bridge.js',
   './liquid.css',
   './liquid.js',
   './bridge.css',
+  './ios.css',
+  './icons-ios.js',
   './js/repeat.js',
   './js/safety.js',
   './manifest.webmanifest',

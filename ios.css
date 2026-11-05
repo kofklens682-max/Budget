@@ -1,0 +1,122 @@
+/* 4 Nov 2026 (user): a fresher, more iPhone-like Budget. Loaded last, so it only changes the look, never how the app works.
+   iOS grouped background, white cards with bigger rounded corners, iOS system colors, a soft "Apple Card" balance card,
+   the hide-balance eye, and smoother motion. Dark mode follows the iPhone's dark palette. */
+:root {
+  --geo-ring: transparent; --geo-t: transparent; --geo-g: transparent; --geo-y: transparent; --geo-t2: transparent; --geo-g2: transparent; --geo-y2: transparent;
+  --bg: #F2F2F7; --card: #FFFFFF; --elev: #FFFFFF; --seg-on: #FFFFFF;
+  --fill: rgba(118, 118, 128, .12); --fill-2: rgba(118, 118, 128, .07);
+  --text: #000000; --text-2: rgba(60, 60, 67, .62); --text-3: rgba(60, 60, 67, .3); --sep: rgba(60, 60, 67, .16);
+  --accent: #34C759; --accent-soft: rgba(52, 199, 89, .14);
+  --in: #34C759; --out: #FF9500; --in-text: #248A3D; --danger: #FF3B30; --good: #34C759; --warn: #FF9500;
+  --grid: #EBEBF0; --axis: #C7C7CC; --muted: #8E8E93; --bar: rgba(249, 249, 249, .94);
+  --shadow: 0 1px 1px rgba(0, 0, 0, .02), 0 8px 24px -12px rgba(0, 0, 0, .14);
+  --r: 22px;
+  --ios-ease: cubic-bezier(.32, .72, 0, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --card: #1C1C1E; --elev: #2C2C2E; --seg-on: #636366;
+    --fill: rgba(118, 118, 128, .24); --fill-2: rgba(118, 118, 128, .14);
+    --text: #FFFFFF; --text-2: rgba(235, 235, 245, .62); --text-3: rgba(235, 235, 245, .3); --sep: rgba(84, 84, 88, .6);
+    --accent: #30D158; --accent-soft: rgba(48, 209, 88, .18); --in: #30D158; --out: #FF9F0A; --in-text: #30D158;
+    --grid: #2C2C2E; --axis: #48484A; --bar: rgba(22, 22, 24, .94); --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --card: #1C1C1E; --elev: #2C2C2E; --seg-on: #636366;
+  --fill: rgba(118, 118, 128, .24); --fill-2: rgba(118, 118, 128, .14);
+  --text: #FFFFFF; --text-2: rgba(235, 235, 245, .62); --text-3: rgba(235, 235, 245, .3); --sep: rgba(84, 84, 88, .6);
+  --accent: #30D158; --accent-soft: rgba(48, 209, 88, .18); --in: #30D158; --out: #FF9F0A; --in-text: #30D158;
+  --grid: #2C2C2E; --axis: #48484A; --bar: rgba(22, 22, 24, .94); --shadow: none;
+}
+
+/* the balance card: a soft mint "Apple Card" glow instead of the old circles */
+.hero-card { background:
+  radial-gradient(120% 90% at 100% 0%, rgba(52, 199, 89, .16), transparent 60%),
+  radial-gradient(90% 80% at 0% 100%, rgba(90, 200, 250, .12), transparent 60%), var(--card) !important;
+  border-radius: 28px; padding: 18px 18px 14px; }
+.hero { font-size: 44px; letter-spacing: -.035em; }
+.acc-card::after, .goal-mini::after { display: none; }
+.card { border-radius: var(--r); }
+.acc-card { border-radius: 20px; }
+.fab { box-shadow: 0 10px 26px -6px rgba(52, 199, 89, .65), inset 0 1px 0 rgba(255, 255, 255, .35); background: linear-gradient(160deg, #3DDC6A, #28B14C); }
+.btn { border-radius: 16px; background: linear-gradient(160deg, #3DDC6A, #2DBA52); box-shadow: 0 8px 20px -10px rgba(52, 199, 89, .8); }
+.seg { border-radius: 11px; }
+.sec-head h2 { font-size: 22px; letter-spacing: -.02em; }
+
+/* the hide-balance eye (js/hide.js): next to "Total balance"; the choice is remembered */
+.hero-lab { display: flex; align-items: center; gap: 6px; }
+.eye-btn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2); margin-left: auto; transition: transform .25s var(--ios-ease), background .25s; }
+.eye-btn:active { transform: scale(.86); }
+.eye-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.eye-btn .off { display: none; } html.hide-money .eye-btn .on { display: none; } html.hide-money .eye-btn .off { display: block; }
+/* hidden money: the numbers are replaced by **** in js/hide.js (no blur) */
+
+/* smoother, calmer motion: cards rise in with the iOS curve, presses spring back */
+@keyframes ios-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+.view:not(.settled) > section.card, .view:not(.settled) > .card, .view:not(.settled) > .strip, .view:not(.settled) > .sec-head { animation: ios-rise .55s var(--ios-ease) both; }
+.view:not(.settled) > :nth-child(2) { animation-delay: .04s; } .view:not(.settled) > :nth-child(3) { animation-delay: .08s; }
+.view:not(.settled) > :nth-child(4) { animation-delay: .12s; } .view:not(.settled) > :nth-child(5) { animation-delay: .16s; }
+.view:not(.settled) > :nth-child(n+6) { animation-delay: .2s; }
+.card, .acc-card, .btn, .fab { transition: transform .35s var(--ios-ease), box-shadow .3s, background .3s; }
+.acc-card:active, button.card:active { transform: scale(.97); }
+.split i { transform-origin: left; animation: ios-bar .9s var(--ios-ease) .15s both; }
+@keyframes ios-bar { from { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .view > *, .split i { animation: none !important; } }
+
+/* a pop-up that grows out of its button (js/morph.js): no slide while it morphs */
+
+/* iPhone-style tiles: the iOS system colour with a soft light from the top, rounder corners, filled white symbols (icons-ios.js) */
+.ic { background: linear-gradient(180deg, color-mix(in srgb, var(--c, #8E8E93) 80%, #fff) 0%, var(--c, #8E8E93) 62%, color-mix(in srgb, var(--c, #8E8E93) 92%, #000) 100%);
+  box-shadow: inset 0 .5px 0 rgba(255,255,255,.45), inset 0 0 0 .5px rgba(0,0,0,.05), 0 2px 6px -2px color-mix(in srgb, var(--c, #8E8E93) 55%, transparent); border-radius: 11px; }
+.ic.sm { border-radius: 9.5px; } .ic.xs { border-radius: 7px; } .ic.lg { border-radius: 15px; } .ic.xl { border-radius: 20px; }
+.ic svg { width: 23px; height: 23px; } .ic.lg svg { width: 30px; height: 30px; } .ic.xl svg { width: 40px; height: 40px; } .ic.sm svg { width: 20px; height: 20px; } .ic.xs svg { width: 15px; height: 15px; }
+
+/* ---------- Stronger liquid glass (4 Nov 2026; the same rules as the Teacher app's glass.css) ----------
+   Behind the glass: a hard blur with richer colours. The glass: lightly white, brighter at the top-left. Its edge: a bright
+   rim top-left, a softer one bottom-right, a soft glow inside. Pop-ups turn to glass only after they finish growing. */
+:root {
+  --gl-bg: linear-gradient(135deg, rgba(255,255,255,.62) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.44) 100%);
+  --gl-blur: blur(24px) saturate(2.2) brightness(1.06);
+  --gl-rim: inset 1px 1.2px 0 rgba(255,255,255,.95), inset -1px -1px 0 rgba(255,255,255,.4), inset 0 0 0 .6px rgba(255,255,255,.55), inset 0 0 22px rgba(255,255,255,.22);
+  --gl-lift: 0 14px 34px -8px rgba(20,25,60,.2), 0 2px 6px rgba(20,25,60,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --gl-bg: linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.05) 46%, rgba(255,255,255,.1) 100%);
+    --gl-blur: blur(24px) saturate(1.8) brightness(.9);
+    --gl-rim: inset 1px 1.2px 0 rgba(255,255,255,.3), inset -1px -1px 0 rgba(255,255,255,.1), inset 0 0 0 .6px rgba(255,255,255,.14), inset 0 0 22px rgba(255,255,255,.05);
+    --gl-lift: 0 14px 34px -8px rgba(0,0,0,.6);
+  }
+}
+html .tabs { background: var(--gl-bg) !important; -webkit-backdrop-filter: var(--gl-blur); backdrop-filter: var(--gl-blur); box-shadow: var(--gl-rim), var(--gl-lift) !important; }
+html .tab-ind { background: radial-gradient(120% 90% at 30% 0%, rgba(255,255,255,.95), rgba(255,255,255,.5) 55%, rgba(255,255,255,.7)) !important;
+  box-shadow: inset 1px 1.5px 0 #fff, inset -1px -1.5px 1px rgba(255,255,255,.6), inset 0 0 10px rgba(255,255,255,.5), 0 6px 16px rgba(20,25,60,.16), 0 1px 2px rgba(20,25,60,.1) !important; }
+.fab { background: radial-gradient(110% 90% at 30% 10%, #6BE58A 0%, #34C759 48%, #23A847 100%) !important;
+  box-shadow: inset 1px 1.5px 0 rgba(255,255,255,.65), inset -1px -1px 0 rgba(0,0,0,.08), inset 0 0 14px rgba(255,255,255,.25), 0 12px 28px -6px rgba(52,199,89,.7) !important; }
+.lt-right > .icon-btn, .eye-btn { background: var(--gl-bg) !important; -webkit-backdrop-filter: var(--gl-blur); backdrop-filter: var(--gl-blur); box-shadow: var(--gl-rim), 0 6px 16px -6px rgba(20,25,60,.2) !important; }
+.toast { background: rgba(28,28,30,.72) !important; color: #fff; -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8); box-shadow: inset 1px 1px 0 rgba(255,255,255,.18), inset 0 0 0 .5px rgba(255,255,255,.12), 0 14px 30px rgba(0,0,0,.25) !important; }
+.dlg-box { background: rgba(250,250,252,.78) !important; -webkit-backdrop-filter: blur(30px) saturate(1.9); backdrop-filter: blur(30px) saturate(1.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 .6px rgba(255,255,255,.5), 0 20px 50px rgba(0,0,0,.2); border-radius: 22px !important; }
+html.moving .tabs { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+@media (prefers-reduced-transparency: reduce) { html .tabs, .sheet, .dlg-box, .eye-btn { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: var(--card) !important; } }
+:root[data-theme="dark"] .dlg-box { background: rgba(44,44,46,.78) !important; }
+
+
+/* 5 Nov 2026 (user: "once it opens, it reloads one more time"): big pop-ups no longer turn to live glass when the zoom ends
+   (the blur switching on looked like a second load, and blurring a big area every frame made phones skip frames).
+   They look frosted from the first frame to the last: one soft colour, a light rim at the top, one shadow. Nothing changes
+   when the zoom ends, so it simply settles. (The tab bar and the small buttons keep the live glass.) */
+.sheet { background: #F4F4F8; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.95), inset 0 0 0 .6px rgba(255,255,255,.7); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sheet { background: #1C1C1E; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); } }
+:root[data-theme="dark"] .sheet { background: #1C1C1E; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+.sheet.morph { transform: none; transition: none !important; }
+html.glass .sheet { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #F4F4F8 !important; } /* the "glass" look in Settings: pop-ups stay frosted, never a live blur (smoothness) */
+
+/* 5 Nov 2026: an account's money by currency (js/split.js) */
+.sp-card .sp-row { min-height: 60px; }
+.sp-sym { font-size: 11px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+.sp-amt { font-size: 16px; margin-left: auto; white-space: nowrap; }
+.sp-chg { margin-left: 10px; border-radius: 99px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); transition: transform .25s var(--ios-ease), background .25s; }
+.sp-chg:active { transform: scale(.92); }
+.sp-tot .row-title { font-weight: 600; } .sp-tot b { font-size: 17px; }
+.sp-ex { margin-top: 10px; }
