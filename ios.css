@@ -164,3 +164,10 @@ button, input, select, textarea { font-family: var(--font); }
 .toast, html.glass .toast, html.glass[data-theme="dark"] .toast { background: rgba(28, 28, 30, .94) !important; color: #fff !important; font-size: 15px; font-weight: 500; letter-spacing: -.012em;
   -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 18px; box-shadow: 0 12px 30px rgba(0, 0, 0, .28) !important; }
 .toast .toast-btn { color: #7CE08F; }
+
+/* 6 Nov 2026 (user, from a phone screenshot: "the background colour is not that bright"): the Glass look still had the old cream page with strong
+   yellow and green glows. Now the page is the same bright cool white as the normal look, with only a faint mint, sky and lilac light behind the glass. */
+html.glass { --glass-bg: radial-gradient(320px 300px at 100% 3%, rgba(52, 199, 89, .12) 0, transparent 72%),
+  radial-gradient(340px 320px at -8% 36%, rgba(90, 200, 250, .14) 0, transparent 72%),
+  radial-gradient(320px 300px at 106% 64%, rgba(175, 130, 255, .08) 0, transparent 72%),
+  radial-gradient(360px 320px at 24% 100%, rgba(52, 199, 89, .09) 0, transparent 72%), #F7F8FC; background: #F7F8FC !important; }
