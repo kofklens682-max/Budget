@@ -56,6 +56,6 @@
     ms.forEach((m) => { if (m.type === 'characterData') { const t = m.target; if (masked.has(t) && t.nodeValue === shown.get(t)) return; /* our own change */ masked.delete(t); if (wants(t)) maskText(t); } else m.addedNodes.forEach((n) => (n.nodeType === 3 ? !masked.has(n) && wants(n) && maskText(n) : maskIn(n))); });
     
   });
-  const start = () => { addEye(); countHero(); maskIn(document.body); mo.observe(document.body, { childList: true, subtree: true, characterData: true }); };
+  const start = () => { addEye(); maskIn(document.body); mo.observe(document.body, { childList: true, subtree: true, characterData: true }); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

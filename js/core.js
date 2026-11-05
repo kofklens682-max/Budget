@@ -504,9 +504,6 @@ function openSheet(html, mount) {
   // again on every open and close. The dimmed layer takes the touches instead.)
   bindSheetGestures(sh, ov);
   mount && mount(sh);
-  // 4 Nov 2026 (measured after mount, so the content is complete): it grows out of the button that opened it (js/morph.js); with no button on the screen it slides up as before
-  const from = typeof Morph !== 'undefined' && Morph.src();
-  if (from) { sh.classList.add('morph'); void sh.offsetHeight; if (Morph.open(sh, from, '24px 24px 0px 0px')) { sheet.src = from; setTimeout(() => { if (sheet && sheet.sh === sh) sh.classList.remove('morph'); }, Morph.OPEN + 30); } else sh.classList.remove('morph'); }
 }
 function refreshSheet(html, mount) {
   if (!sheet) return;
@@ -523,14 +520,8 @@ function closeSheet() {
 }
 function closeSheetNow() {
   if (!sheet) return;
-  const { ov, sh, src } = sheet;
+  const { ov, sh } = sheet;
   sheet = null;
-  if (src && !sh.style.transform && typeof Morph !== 'undefined') { // back into its button (not after a pull down by hand)
-    sh.classList.add('morph'); if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    if (Morph.close(sh, src, '24px 24px 0px 0px')) { ov.classList.remove('show'); setTimeout(() => { ov.remove(); sh.remove(); if (pendingReload) location.reload(); }, Morph.CLOSE + 120); return; }
-    sh.classList.remove('morph');
-  }
-  if (src && typeof Morph !== 'undefined') Morph.show(src); // the card it came from is shown again
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   sh.classList.remove('dragging');
   sh.style.transform = '';

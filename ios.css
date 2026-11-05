@@ -53,18 +53,9 @@
 /* hidden money: the numbers are replaced by **** in js/hide.js (no blur) */
 
 /* smoother, calmer motion: cards rise in with the iOS curve, presses spring back */
-@keyframes ios-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
-.view:not(.settled) > section.card, .view:not(.settled) > .card, .view:not(.settled) > .strip, .view:not(.settled) > .sec-head { animation: ios-rise .55s var(--ios-ease) both; }
-.view:not(.settled) > :nth-child(2) { animation-delay: .04s; } .view:not(.settled) > :nth-child(3) { animation-delay: .08s; }
-.view:not(.settled) > :nth-child(4) { animation-delay: .12s; } .view:not(.settled) > :nth-child(5) { animation-delay: .16s; }
-.view:not(.settled) > :nth-child(n+6) { animation-delay: .2s; }
 .card, .acc-card, .btn, .fab { transition: transform .35s var(--ios-ease), box-shadow .3s, background .3s; }
 .acc-card:active, button.card:active { transform: scale(.97); }
-.split i { transform-origin: left; animation: ios-bar .9s var(--ios-ease) .15s both; }
-@keyframes ios-bar { from { transform: scaleX(0); } }
-@media (prefers-reduced-motion: reduce) { .view > *, .split i { animation: none !important; } }
 
-/* a pop-up that grows out of its button (js/morph.js): no slide while it morphs */
 
 /* iPhone-style tiles: the iOS system colour with a soft light from the top, rounder corners, filled white symbols (icons-ios.js) */
 .ic { background: linear-gradient(180deg, color-mix(in srgb, var(--c, #8E8E93) 80%, #fff) 0%, var(--c, #8E8E93) 62%, color-mix(in srgb, var(--c, #8E8E93) 92%, #000) 100%);
@@ -109,7 +100,6 @@ html.moving .tabs { -webkit-backdrop-filter: none !important; backdrop-filter: n
 .sheet { background: #F4F4F8; box-shadow: inset 0 1.5px 0 rgba(255,255,255,.95), inset 0 0 0 .6px rgba(255,255,255,.7); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sheet { background: #1C1C1E; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); } }
 :root[data-theme="dark"] .sheet { background: #1C1C1E; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
-.sheet.morph { transform: none; transition: none !important; }
 html.glass .sheet { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: #F4F4F8 !important; } /* the "glass" look in Settings: pop-ups stay frosted, never a live blur (smoothness) */
 
 /* 5 Nov 2026: an account's money by currency (js/split.js) */
