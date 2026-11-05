@@ -473,7 +473,7 @@ const BR = (() => {
       : `<div class="br-line del"><div class="br-lh">${letterTile(x.person || '?', '#F04438')}<div class="tx"><b>Removed in Teacher: ${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))}</small></div></div>
          <div class="br-two"><button class="br-no" data-act="tb-take" data-v="${esc(x.id)}">Take it out of my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Keep it</button></div></div>`;
     return sheetHead('From the Teacher app', '<button data-act="close-sheet">Later</button>', '') + `<div class="sheet-body">
-      <p class="hint" style="margin-top:0">You marked these payments in the Teacher app. Add the new money to your balance. If the money is already in Budget, tap Already counted: nothing is added.</p>
+      <p class="hint" style="margin-top:0">You marked these payments in the Teacher app. Add the new money to your balance. If the money is already in Budget, tap Already counted: nothing is added. ${splitGoals().length ? 'New money is shared into your goals by their percentages, like an entry you type yourself.' : ''}</p>
       ${adds.length ? `<div class="form-label">Put the money in</div><div class="quick">${accs.map((x) => `<button data-act="tb-acc" data-v="${x.id}" class="${x.id === a ? 'on' : ''}">${esc(x.name)}</button>`).join('')}</div>` : ''}
       ${adds.length > 1 ? `<div class="br-two" style="margin:0 0 14px"><button class="br-yes" data-act="tb-addall">Add all ${adds.length} · ${money(adds.reduce((q, x) => q + x.amount, 0))}</button><button data-act="tb-skipall">All already counted</button></div>` : ''}
       ${l.map(row).join('') || '<p class="hint">Nothing is waiting.</p>'}</div>`;
@@ -481,10 +481,14 @@ const BR = (() => {
   function tbAdd(x) {
     const f = x.sid ? findTid(x.sid) : null, a = inAcc || UI.lastAcc.in || S.accounts[0].id;
     if (S.tx.some((t) => t.tpid === x.id)) return; // never twice
-    S.tx.push({ id: uid(), tpid: x.id, type: 'in', amount: Math.round(+x.amount), currency: 'UZS', account: a, date: /^\d{4}-\d\d-\d\d$/.test(x.date || '') ? x.date : todayIso(), note: `${x.group} · ${mName(x.m)} fee`, createdAt: Date.now(),
-      person: x.person || '', category: lessonCat() || OTHER_CAT.in, groupId: f ? f.g.id : null, studentId: f ? f.s.id : null, forMonth: x.m, alloc: [{ m: x.m, amount: Math.round(+x.amount) }] });
+    const rec = { id: uid(), tpid: x.id, type: 'in', amount: Math.round(+x.amount), currency: 'UZS', account: a, date: /^\d{4}-\d\d-\d\d$/.test(x.date || '') ? x.date : todayIso(), note: `${x.group} · ${mName(x.m)} fee`, createdAt: Date.now(),
+      person: x.person || '', category: lessonCat() || OTHER_CAT.in, groupId: f ? f.g.id : null, studentId: f ? f.s.id : null, forMonth: x.m, alloc: [{ m: x.m, amount: Math.round(+x.amount) }] };
+    // 6 Nov 2026 (user): money that comes from the Teacher app is shared into the goals by their % exactly like an entry typed here
+    const plan = splitPlan(rec); S.tx.push(rec); const sp = applySplit(rec, plan);
     UI.lastAcc.in = a;
+    return sp;
   }
+  const spNote = (n, sum, name) => (n ? ` — ${fmt(sum, 'UZS')} went into ${n === 1 ? name : plural(n, 'goal')}` : '');
   function tbDone(ids, msg) {
     tbSet(tbList().filter((x) => !ids.includes(x.id))); save(); render();
     if (tbList().length) refreshSheet(inboxHtml(), null); else { closeSheet(); toast(msg); }
@@ -492,10 +496,19 @@ const BR = (() => {
   Object.assign(ACTIONS, {
     'tb-open': () => { const b = document.getElementById('br-banner'); if (b) b.remove(); openSheet(inboxHtml(), null); },
     'tb-acc': (a, v) => { inAcc = v; refreshSheet(inboxHtml(), null); },
-    'tb-add': (a, v) => { const x = tbList().find((y) => y.id === v); if (x) tbAdd(x); tbDone([v], 'Added to your balance'); },
+    'tb-add': (a, v) => { const x = tbList().find((y) => y.id === v); const sp = x ? tbAdd(x) : null; tbDone([v], 'Added to your balance' + (sp ? spNote(sp.n, sp.sum, sp.name) : '')); },
     'tb-skip': (a, v) => tbDone([v], 'Nothing added'),
-    'tb-take': (a, v) => { S.tx = S.tx.filter((t) => t.tpid !== v); tbDone([v], 'Taken out of your balance'); },
-    'tb-addall': () => { const l = tbList().filter((x) => x.op === 'add'); l.forEach(tbAdd); tbDone(l.map((x) => x.id), `${l.length} payments added`); },
+    'tb-take': (a, v) => { // (its share in the goals goes back too)
+      const ids = S.tx.filter((t) => t.tpid === v).map((t) => t.id);
+      S.tx = S.tx.filter((t) => t.tpid !== v);
+      S.goals.forEach((g) => { g.contribs = g.contribs.filter((c) => !(c.auto && ids.includes(c.auto))); });
+      tbDone([v], 'Taken out of your balance');
+    },
+    'tb-addall': () => {
+      const l = tbList().filter((x) => x.op === 'add'); let sum = 0, name = ''; const goals = new Set();
+      l.forEach((x) => { const sp = tbAdd(x); if (sp && sp.n) { sum += sp.sum; name = sp.name; S.goals.forEach((g) => { if (g.contribs.some((c) => c.auto && S.tx.some((t) => t.id === c.auto && t.tpid === x.id))) goals.add(g.id); }); } });
+      tbDone(l.map((x) => x.id), `${l.length} payments added` + spNote(goals.size, sum, name));
+    },
     'tb-skipall': () => tbDone(tbList().filter((x) => x.op === 'add').map((x) => x.id), 'Nothing added'),
   });
   // a removal Budget never added (it was "already counted", or never seen) needs no question
