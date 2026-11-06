@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v53';
+const VERSION = 'budget-v54';
 const SHARE = 'budget-share'; // a picture or message shared to Budget, until the app picks it up
 const SHELL = [
   './',
@@ -69,6 +69,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || !url.pathname.startsWith(new URL(self.registration.scope).pathname)) return;
+  const scopeP = new URL(self.registration.scope).pathname; // only the app page itself comes from the saved copy: other pages (the repair page reset.html) always come from the network
+  if (req.mode === 'navigate' && url.pathname !== scopeP && url.pathname !== scopeP + 'index.html') return;
   e.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const key = req.mode === 'navigate' ? './index.html' : req;
