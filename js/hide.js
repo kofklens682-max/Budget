@@ -29,7 +29,9 @@
   const STAR = '****', masked = new Map(), shown = new WeakMap(); let busy = false; // masked: text node -> real text; shown: what we put there
   const MONEY = /[−+-]?\s?\$?\d[\d\s.,\u00a0\u202f]*(?:[kKMB](?![a-z]))?/g;
   const skip = (el) => !el || el.closest('input, textarea, select, .keypad, [contenteditable]') || ((el.closest('.sheet') || {}).querySelector && el.closest('.sheet') && el.closest('.sheet').querySelector('input, textarea, .keypad'));
-  const wants = (t) => { const el = t.parentElement; if (!el || !/\d/.test(t.nodeValue)) return false; if (el.closest('.chart text')) return !/[A-Za-z]{3}/.test(t.nodeValue); // the amounts on the chart, not its dates
+  // 7 Nov 2026 (user): the Schedule is never hidden, only money is. Times, durations and day numbers there stay readable.
+  const SCHED = '.wstrip, .dday, .nowc, .dsum, .dlist, .dfoot, .wday, .blk-preview, .blk-sheet, .sched-seg';
+  const wants = (t) => { const el = t.parentElement; if (!el || !/\d/.test(t.nodeValue) || el.closest(SCHED)) return false; if (el.closest('.chart text')) return !/[A-Za-z]{3}/.test(t.nodeValue); // the amounts on the chart, not its dates
     if (el.closest('.num, .hero')) return !skip(el); return /so'm|\$\s?\d|\d\s?\$/.test(t.nodeValue) && !skip(el); };
   function maskText(t) { const v = t.nodeValue; masked.set(t, v); busy = true; t.nodeValue = v.replace(MONEY, (m) => (/\d/.test(m) ? (m.match(/^\s/) ? ' ' : '') + STAR + (m.match(/\s$/) ? ' ' : '') : m)); shown.set(t, t.nodeValue); busy = false; }
   function maskIn(root) {
