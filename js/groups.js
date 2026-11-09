@@ -104,7 +104,7 @@ function renderGroupsList() {
 function gFeeLine(g, m) {
   if (m.teacher && m.n && m.expected) {
     const d = m.rows.map((r) => r.due), same = d.every((x) => x === d[0]);
-    return same ? ` · ${fmt(d[0], m.cur)} a month` : ` · ${fmt(m.expected, m.cur)} this month in all`;
+    return (same ? ` · ${fmt(d[0], m.cur)} a month` : ` · ${fmt(m.expected, m.cur)} this month in all`) + (same && g.fee && g.fee.amount !== d[0] ? ` (usual fee ${fmt(g.fee.amount, g.fee.currency)})` : '');
   }
   return g.fee ? ` · ${fmt(g.fee.amount, g.fee.currency)} a month` : '';
 }
@@ -147,7 +147,7 @@ function groupHtml() {
       right = `<span class="pay-st part" style="--p:${Math.round((r.paid / (dd || 1)) * 100)}%"></span>`;
       act = 'pay-student'; id = r.s.id;
     } else {
-      sub = 'Not paid yet';
+      sub = r.due != null && g.fee && r.due !== g.fee.amount ? `Not paid yet · pays ${fmt(r.due, m.cur)} (usual fee ${fmt(g.fee.amount, g.fee.currency)})` : 'Not paid yet';
       right = m.teacher ? '<span class="pay-btn">Not paid</span>' : '<span class="pay-btn">Record</span>';
       act = 'pay-student'; id = r.s.id;
     }
