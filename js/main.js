@@ -59,17 +59,22 @@ function start() {
 }
 // Open at once from the quick copy, then compare it with the second copy. With no quick copy
 // (first start, or it was lost), open from the second copy.
-const checked = keepStart(S.rev, hadQuick);
-if (hadQuick) {
-  start();
-  checked.then((took) => {
-    if (took) { applyTheme(); UI.cur = S.settings.currency; if (!sheet) render(); }
-    keepCopy('day');
-    if (Acct.signedIn()) Acct.sync(); // newer copy from another phone? unsaved changes? (account.js)
-  });
-} else {
-  checked.then(() => { UI.cur = S.settings.currency; start(); keepCopy('day'); if (Acct.signedIn()) Acct.sync(); });
-}
+const checked = keepStart(S.rev, hadQuick); // the check of the second copy starts at once...
+// ...but the first screen is drawn only after ALL scripts have loaded (9 Nov): the Teacher link (bridge.js) loads after this file,
+// so drawing earlier showed a first version of the screen and a second, different one half a second later.
+const boot = () => {
+  if (hadQuick) {
+    start();
+    checked.then((took) => {
+      if (took) { applyTheme(); UI.cur = S.settings.currency; if (!sheet) render(); }
+      keepCopy('day');
+      if (Acct.signedIn()) Acct.sync(); // newer copy from another phone? unsaved changes? (account.js)
+    });
+  } else {
+    checked.then(() => { UI.cur = S.settings.currency; start(); keepCopy('day'); if (Acct.signedIn()) Acct.sync(); });
+  }
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 bindTabSlide($('#tabs'), (t) => goTab(t));
 bindSegSlide();
@@ -81,12 +86,16 @@ bindDaysSlide();
 const isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !isLocal) {
   const hadController = !!navigator.serviceWorker.controller;
-  let reloading = false;
+  // 9 Nov: an update is installed quietly while you use the app, and the app switches to it only when you leave it
+  // (so the screen never reloads in front of you). An open form is never cut: it waits for the next time you leave.
+  let reloading = false, updateReady = false;
+  const reloadSoon = () => { if (reloading || sheet) return; reloading = true; keepNow().finally(() => location.reload()); };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloading) return;
-    reloading = true;
-    if (sheet) pendingReload = true; else keepNow().finally(() => location.reload());
+    if (!hadController) return;
+    updateReady = true;
+    if (document.hidden) reloadSoon();
   });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && updateReady) reloadSoon(); });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; }).catch(() => {});
   });

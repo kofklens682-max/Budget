@@ -532,7 +532,7 @@ function closeSheetNow() {
   ov.style.opacity = '';
   ov.classList.remove('show');
   sh.classList.remove('show');
-  setTimeout(() => { ov.remove(); sh.remove(); if (pendingReload) location.reload(); }, 450);
+  setTimeout(() => { ov.remove(); sh.remove(); }, 450);
 }
 // Pull a sheet down to close it — from anywhere inside it, as long as its content is scrolled to
 // the top (like iOS). A quick flick closes it too. Mouse users can drag the top bar.

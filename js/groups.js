@@ -99,15 +99,24 @@ function renderGroupsList() {
   h += '<div class="actions"><button class="btn soft" data-act="new-group">＋ New group</button></div>';
   return h;
 }
+// The fee under a group's name must be the SAME money the progress line uses. When the Teacher app is linked,
+// that is what each student really owes this month (a student's own fee or a discount can differ from the group fee).
+function gFeeLine(g, m) {
+  if (m.teacher && m.n && m.expected) {
+    const d = m.rows.map((r) => r.due), same = d.every((x) => x === d[0]);
+    return same ? ` · ${fmt(d[0], m.cur)} a month` : ` · ${fmt(m.expected, m.cur)} this month in all`;
+  }
+  return g.fee ? ` · ${fmt(g.fee.amount, g.fee.currency)} a month` : '';
+}
 function groupCard(g, ym) {
   const m = groupMonth(g, ym);
   const pct = m.n ? (m.paidCount / m.n) * 100 : m.expected ? (m.collected / m.expected) * 100 : 0;
   return `<button class="card grp-card" data-act="group" data-id="${g.id}">
-    <div class="gc-top">${grpBadge(g)}<div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${m.n ? plural(m.n, 'student') : 'No students yet'}${g.fee ? ` · ${fmt(g.fee.amount, g.fee.currency)} a month` : ''}</div></div>${I.chev}</div>
+    <div class="gc-top">${grpBadge(g)}<div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${m.n ? plural(m.n, 'student') : 'No students yet'}${gFeeLine(g, m)}</div></div>${I.chev}</div>
     ${m.n ? `<div class="meter tint" style="--mc:${g.color}"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}
     ${m.n || m.pays.length
       ? `<div class="gc-nums"><span><b class="num">${fmt(m.collected, m.cur)}</b>${m.expected ? ` <span class="muted">of ${fmt(m.expected, m.cur)}</span>` : ''}</span><span class="muted">${m.n ? `${m.paidCount} of ${m.n} paid` : plural(m.pays.length, 'payment')}</span></div>`
-      : '<div class="gc-nums" style="margin-top:10px"><span class="link" style="font-size:14px">Add students and the monthly fee →</span></div>'}
+      : `<div class="gc-nums" style="margin-top:10px"><span class="link" style="font-size:14px">${typeof BR !== 'undefined' && BR.on() && g.tid ? 'Add students in the Teacher app' : 'Add students and the monthly fee →'}</span></div>`}
   </button>`;
 }
 
@@ -149,7 +158,7 @@ function groupHtml() {
     <div class="gd-hero">
       ${grpBadge(g, 'xl')}
       <div class="gd-name">${esc(g.name)}</div>
-      <div class="gd-amt">${m.n ? plural(m.n, 'student') : 'No students yet'}${g.fee ? ` · ${fmt(g.fee.amount, g.fee.currency)} a month` : ''}</div>
+      <div class="gd-amt">${m.n ? plural(m.n, 'student') : 'No students yet'}${gFeeLine(g, m)}</div>
     </div>
     <div class="period-nav" style="margin:16px 0 10px">
       <button class="icon-btn" data-act="gs-month" data-v="-1" aria-label="Previous month">${I.left}</button>

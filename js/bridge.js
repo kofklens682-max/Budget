@@ -528,7 +528,9 @@ const BR = (() => {
   setInterval(banner, 2000);
   window.addEventListener('storage', (e) => { if (e.key === RS || e.key === LS) { sync(); syncLessons(); render(); } });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); syncLessons(); publish(); setTimeout(handoff, 300); }); } });
-  whenOpen(() => setTimeout(() => { sync(); syncLessons(); publish(); handoff(); if (typeof render === 'function') render(); }, 500));
+  // 9 Nov: the first screen already went through sync() (see render above), so this second pass redraws only if something really changed
+  const firstSync = () => whenOpen(() => setTimeout(() => { const c1 = sync(), c2 = syncLessons(); publish(); handoff(); if ((c1 || c2) && typeof render === 'function') render(); }, 500));
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', firstSync); else firstSync();
   function delRecord() {
     const r = (S.records || []).find((x) => x.id === draft.id); if (!r) return false;
     S.records = S.records.filter((x) => x.id !== r.id); save(); txDone(); render();
