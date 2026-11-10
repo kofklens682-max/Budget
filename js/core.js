@@ -728,6 +728,7 @@ const onUnlock = []; // things to do right after the passcode is entered
 function lockNow() {
   if (!S.settings.pin || locked) return;
   locked = true;
+  const bb = document.getElementById('br-banner'); if (bb) bb.remove(); // the Teacher payment banner never shows over the passcode (bridge.js banner)
   pinPad({
     title: 'Enter passcode',
     onDone: async (code, c) => {

@@ -528,10 +528,12 @@ const BR = (() => {
   function tbTidy() { const l = tbList(), keep = l.filter((x) => x.op !== 'del' || S.tx.some((t) => t.tpid === x.id)); if (keep.length !== l.length) tbSet(keep); return keep; }
   function banner() {
     let el = document.getElementById('br-banner'); const l = tbTidy();
-    if (!l.length || (typeof sheet !== 'undefined' && sheet)) { if (el) el.remove(); return; }
+    // never over the passcode screen; the amount is masked while money is hidden (audit G3)
+    if (!l.length || (typeof sheet !== 'undefined' && sheet) || locked) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement('div'); el.id = 'br-banner'; document.body.appendChild(el); }
     const adds = l.filter((x) => x.op === 'add'), dels = l.length - adds.length;
-    const html = `<button data-act="tb-open"><b>${adds.length ? `${adds.length} payment${adds.length === 1 ? '' : 's'} from the Teacher app · ${money(adds.reduce((q, x) => q + x.amount, 0))} so'm` : `${dels} payment${dels === 1 ? '' : 's'} removed in the Teacher app`}</b><span>${adds.length ? `Tap to add ${adds.length === 1 ? 'it' : 'them'} to your balance, or skip.` : 'Tap to take it out of your balance, or keep it.'}</span></button>`;
+    const sum = document.documentElement.classList.contains('hide-money') ? '****' : money(adds.reduce((q, x) => q + x.amount, 0));
+    const html = `<button data-act="tb-open"><b>${adds.length ? `${adds.length} payment${adds.length === 1 ? '' : 's'} from the Teacher app · ${sum} so'm` : `${dels} payment${dels === 1 ? '' : 's'} removed in the Teacher app`}</b><span>${adds.length ? `Tap to add ${adds.length === 1 ? 'it' : 'them'} to your balance, or skip.` : 'Tap to take it out of your balance, or keep it.'}</span></button>`;
     if (el._h !== html) { el._h = html; el.innerHTML = html; }
   }
 
