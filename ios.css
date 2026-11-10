@@ -170,3 +170,53 @@ html.glass { --glass-bg: radial-gradient(320px 300px at 100% 3%, rgba(52, 199, 8
   radial-gradient(340px 320px at -8% 36%, rgba(90, 200, 250, .14) 0, transparent 72%),
   radial-gradient(320px 300px at 106% 64%, rgba(175, 130, 255, .08) 0, transparent 72%),
   radial-gradient(360px 320px at 24% 100%, rgba(52, 199, 89, .09) 0, transparent 72%), #F7F8FC; background: #F7F8FC !important; }
+
+/* ===== 10 Nov 2026: the iPhone-style Glass look (the same recipe as the Teacher app; user approved the sample). Only when Look = Glass.
+   Glass is only on what floats: tab bar, top edge, round buttons, pop-ups. Cards are content and stay solid white. The lens and the
+   scroll code are at the end of liquid.js. Colors of the app are not changed. ===== */
+html.glass:root {
+  --g2-bg: rgba(255, 255, 255, .16);
+  --g2-bg-strong: rgba(255, 255, 255, .30);
+  --g2-blur: blur(6px) saturate(1.7);
+  --g2-rim: inset 0 1.5px 0 rgba(255, 255, 255, .95), inset 1px 0 0 rgba(255, 255, 255, .5), inset -1px 0 0 rgba(255, 255, 255, .35), inset 0 0 0 .6px rgba(255, 255, 255, .6), inset 0 -1.5px 1px rgba(20, 30, 60, .10), inset 0 10px 14px -10px rgba(255, 255, 255, .7);
+  --g2-shadow: 0 10px 30px -8px rgba(20, 40, 80, .22), 0 2px 6px rgba(20, 40, 80, .06);
+  --g2-spring: cubic-bezier(.3, 1.35, .5, 1);
+}
+html.glass:root .tabs {
+  background: var(--g2-bg) !important;
+  -webkit-backdrop-filter: var(--g2-blur) !important; backdrop-filter: var(--g2-blur) !important;
+  box-shadow: var(--g2-rim), var(--g2-shadow) !important; border: 0 !important;
+  transform-origin: 30% 100%; transition: transform .45s var(--g2-spring) !important;
+}
+html.glass.g2-lens:root .tabs { -webkit-backdrop-filter: url(#g2lens-tabs) blur(1.5px) saturate(1.6) !important; backdrop-filter: url(#g2lens-tabs) blur(1.5px) saturate(1.6) !important; }
+html.glass:root .tabs button { text-shadow: 0 0 6px rgba(255, 255, 255, .9); }
+html.glass:root .tabs button span { transition: opacity .2s ease-out; }
+html.glass:root .tab-ind {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .70), rgba(255, 255, 255, .38)) !important;
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 .6px rgba(255, 255, 255, .8), 0 4px 12px -4px rgba(20, 40, 80, .22) !important;
+}
+html.glass.g2-down:root .tabs { transform: translateY(5px) scale(.88) !important; }
+html.glass.g2-down:root .tabs button span { opacity: 0; }
+/* the top: no bar. The page fades softly under the status area */
+html.glass:root .topbar {
+  background: linear-gradient(to bottom, rgba(247, 248, 252, .9), rgba(247, 248, 252, 0)) !important; border: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+/* round buttons at the top */
+html.glass:root .lt-right > .icon-btn:not(.solid), html.glass:root .icon-btn.glassy {
+  background: var(--g2-bg-strong) !important; -webkit-backdrop-filter: var(--g2-blur) !important; backdrop-filter: var(--g2-blur) !important;
+  box-shadow: var(--g2-rim), 0 4px 14px -6px rgba(20, 40, 80, .25) !important; border: 0 !important;
+}
+/* cards are content: solid, one soft shadow; a row shows the press again */
+html.glass:root .card, html.glass:root .group { background: #fff !important; background-image: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; box-shadow: 0 1px 2px rgba(20, 40, 80, .05), 0 6px 18px -10px rgba(20, 40, 80, .14) !important; }
+html.glass:root button.row:active, html.glass:root a.row:active { background: rgba(20, 30, 60, .06) !important; }
+/* pop-ups: a glass sheet with a bright top edge */
+html.glass:root .sheet {
+  background: rgba(248, 249, 252, .80) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.8) !important; backdrop-filter: blur(28px) saturate(1.8) !important;
+  box-shadow: inset 0 1px 0 #fff, 0 -10px 40px -10px rgba(20, 40, 80, .25) !important;
+}
+html.glass:root .sheet .sheet-head { background: transparent !important; }
+html.glass:root .toast { -webkit-backdrop-filter: blur(18px) saturate(1.8) !important; backdrop-filter: blur(18px) saturate(1.8) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), var(--g2-shadow) !important; }
+html.glass:root .fab { box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, .55), 0 10px 26px -8px rgba(20, 120, 70, .5) !important; }
