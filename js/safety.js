@@ -78,7 +78,7 @@ function quickHtml() {
   return sheetHead(q.type === 'in' ? 'Got money, name it later' : 'Spent, name it later', '', '<button data-act="close-sheet">Cancel</button>') + `<div class="sheet-body">
     <div style="padding:22px 0 8px;text-align:center"><input class="amount-input num" id="q-amt" inputmode="decimal" placeholder="0" value="${shownAmount(q.amount, q.currency)}" autocomplete="off" aria-label="Amount"></div>
     ${cs.length > 1 ? `<div class="seg full sm">${segButtons('q-cur', cs.map((c) => [c, c === 'UZS' ? "so'm" : '$']), q.currency)}</div>` : ''}
-    <div class="form-label">From</div><div class="seg full sm">${segButtons('q-acc', S.accounts.map((a) => [a.id, esc(a.name)]), q.account)}</div>
+    <div class="form-label">From</div><div class="seg full sm">${segButtons('q-acc', openAccs().map((a) => [a.id, esc(a.name)]), q.account)}</div>
     <div class="group plain" style="margin-top:14px"><label class="row field"><span>Note (optional)</span><input id="q-note" placeholder="" value="${esc(q.note)}" autocomplete="off"></label></div>
     <button class="btn" data-act="q-save" style="margin-top:18px">Save now, name it later</button>
     <p class="hint">The balance is right at once. A small card on Home reminds you to name it.</p></div>`;
@@ -88,11 +88,11 @@ function mountQuick(sh) {
   $('#q-note', sh).addEventListener('input', (e) => { quick.note = e.target.value; });
   blurOnEnter(sh); setTimeout(() => amt.focus(), 350);
 }
-function openQuick(type) { quick = { type: type || 'out', amount: 0, currency: sfCurs()[0] || S.settings.currency, account: UI.lastAcc && UI.lastAcc[type || 'out'] && S.accounts.some((a) => a.id === UI.lastAcc[type || 'out']) ? UI.lastAcc[type || 'out'] : S.accounts[0].id, note: '' }; openSheet(quickHtml(), mountQuick); }
+function openQuick(type) { quick = { type: type || 'out', amount: 0, currency: sfCurs()[0] || S.settings.currency, account: UI.lastAcc && UI.lastAcc[type || 'out'] && isOpenAcc(UI.lastAcc[type || 'out']) ? UI.lastAcc[type || 'out'] : openAccs()[0].id, note: '' }; openSheet(quickHtml(), mountQuick); }
 
 /* ---------- 1. cash check ---------- */
 let cc = null; // typed amounts: cc['account|cur'] = number or undefined
-const ccRows = () => { const out = []; S.accounts.forEach((a) => sfCurs().forEach((c) => { const b = accBalance(a.id, c); if (b || a.opening[c] || S.tx.some((t) => t.account === a.id && t.currency === c)) out.push({ a, c, b }); })); return out; };
+const ccRows = () => { const out = []; openAccs().forEach((a) => sfCurs().forEach((c) => { const b = accBalance(a.id, c); if (b || a.opening[c] || S.tx.some((t) => t.account === a.id && t.currency === c)) out.push({ a, c, b }); })); return out; };
 function ccDiffs() { return ccRows().filter((r) => cc[r.a.id + '|' + r.c] !== undefined).map((r) => ({ ...r, real: cc[r.a.id + '|' + r.c], d: roundCur(cc[r.a.id + '|' + r.c] - r.b, r.c) })); }
 function ccResultHtml() {
   const ds = ccDiffs(); if (!ds.length) return '<p class="hint">Type what is really there in at least one box.</p>';

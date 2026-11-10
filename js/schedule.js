@@ -460,19 +460,19 @@ function freeUp(di, id) {
 function saveBlock() {
   const d = bdraft, to = d.from + d.len;
   if (!d.days.size || d.len < 5) return;
-  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+  const before = daysJson();
   if (d.id && !d.days.has(d.day)) freeUp(d.day, d.id); // moved to other days
   for (const j of dayList(d.days)) paintBlock(j, d.from, to, d.act, idOn(j));
   UI.lastAct = d.act;
   save(); buzz(); closeSheet(); render();
-  undoToast(`${actView(d.act).name} · ${dayNames(d.days)} ${clock(d.from)}–${clock(to)}`, () => { S.schedule.days = snapshot; });
+  undoToast(`${actView(d.act).name} · ${dayNames(d.days)} ${clock(d.from)}–${clock(to)}`, dayUndo(before));
 }
 function removeBlocks() {
   const days = removeDays(), name = actView(bdraft.oact || bdraft.act).name;
-  const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+  const before = daysJson();
   days.forEach((j) => freeUp(j, idOn(j)));
   save(); closeSheet(); render();
-  undoToast(`${name} removed from ${dayNames(days)} — that time is free now`, () => { S.schedule.days = snapshot; });
+  undoToast(`${name} removed from ${dayNames(days)} — that time is free now`, dayUndo(before));
 }
 
 // ================= Activities (things that fill a block) =================
@@ -539,10 +539,22 @@ async function deleteAct() {
   const d = actDraft;
   const ok = await ask({ title: `Delete “${d.name}”?`, msg: isT(d.id) ? 'Its lessons become free time and the group has no lesson days in Teacher. Students and payments are not touched (a group with no students is removed there).' : 'Its blocks become free time. Your groups and payments are not touched.', ok: 'Delete', destructive: true });
   if (!ok) return;
+  const before = daysJson(), idx = S.schedule.acts.findIndex((x) => x.id === d.id), act = S.schedule.acts[idx];
   S.schedule.days.forEach((day, i) => { day.blocks.forEach((b) => { if (b.act === d.id) b.act = 'free'; }); mergeFree(i); });
   S.schedule.acts = S.schedule.acts.filter((x) => x.id !== d.id);
   save(); closeSheet(); render();
-  toast('Deleted');
+  const days = dayUndo(before); // (audit G16: Undo for 8 s, only this activity and the days it was on)
+  undoToast(`${d.name} deleted`, () => { if (act && !S.schedule.acts.some((x) => x.id === act.id)) S.schedule.acts.splice(Math.min(idx, S.schedule.acts.length), 0, act); days(); });
+}
+// Undo for a schedule change: only the days that change touched go back, and only if nothing changed them since (audit B9).
+const daysJson = () => S.schedule.days.map((d) => JSON.stringify(d));
+function dayUndo(before) {
+  const sched = S.schedule, after = daysJson();
+  return () => {
+    if (S.schedule !== sched) return; // the whole schedule was replaced meanwhile
+    const now = daysJson();
+    before.forEach((b, i) => { if (b !== after[i] && now[i] === after[i]) S.schedule.days[i] = JSON.parse(b); });
+  };
 }
 const backToBlock = () => { const keep = { ...bdraft }; return (newAct) => { bdraft = keep; if (newAct) bdraft.act = newAct; openSheet(blockHtml(), mountBlock); }; };
 
@@ -598,11 +610,11 @@ Object.assign(ACTIONS, {
   'copy-do': () => {
     if (!copyTargets.size) return;
     const src = S.schedule.days[UI.sDay];
-    const snapshot = JSON.parse(JSON.stringify(S.schedule.days));
+    const before = daysJson();
     copyTargets.forEach((i) => { S.schedule.days[i] = { start: src.start, blocks: src.blocks.map((b) => ({ ...b, id: uid() })) }; });
     const n = copyTargets.size;
     save(); closeSheet(); render();
-    undoToast(`Copied to ${plural(n, 'day')}`, () => { S.schedule.days = snapshot; });
+    undoToast(`Copied to ${plural(n, 'day')}`, dayUndo(before));
   },
   'blk-act': (a, v) => { bdraft.act = v; refreshSheet(blockHtml(), mountBlock); },
   'blk-dur': (a, v) => { bdraft.len = Math.min(Number(v), 1440 - bdraft.from); syncBlock(sheet.sh); },

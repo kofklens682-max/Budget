@@ -288,12 +288,19 @@ async function deleteGroup() {
   const n = S.tx.filter((t) => t.groupId === g.id).length;
   const ok = await ask({ title: `Delete “${g.name}”?`, msg: n ? `Its ${n} payment${n === 1 ? '' : 's'} stay in History as normal money in, just without the group.` : 'It has no payments.', ok: 'Delete group', destructive: true });
   if (!ok) return;
+  // remembered so Undo (8 s) gives back exactly this group and its links, nothing else (SYSTEM §5, audit G16)
+  const idx = S.groups.indexOf(g), pays = [], acts = [];
   S.groups = S.groups.filter((x) => x.id !== g.id);
-  S.tx.forEach((t) => { if (t.groupId === g.id) { delete t.groupId; delete t.studentId; delete t.forMonth; } });
-  S.schedule.acts.forEach((a) => { if (a.groupId === g.id) { a.groupId = null; a.name = g.name; a.color = g.color; } });
+  S.tx.forEach((t) => { if (t.groupId === g.id) { pays.push({ id: t.id, studentId: t.studentId, forMonth: t.forMonth }); delete t.groupId; delete t.studentId; delete t.forMonth; } });
+  S.schedule.acts.forEach((a) => { if (a.groupId === g.id) { acts.push({ id: a.id, name: a.name, color: a.color }); a.groupId = null; a.name = g.name; a.color = g.color; } });
   if (UI.hGroup === g.id) UI.hGroup = 'all';
   save(); closeSheet(); render();
-  toast('Group deleted');
+  undoToast('Group deleted', () => {
+    if (S.groups.some((x) => x.id === g.id)) return;
+    S.groups.splice(Math.min(idx, S.groups.length), 0, g);
+    pays.forEach((p) => { const t = S.tx.find((x) => x.id === p.id); if (t && !t.groupId && t.type === 'in') { t.groupId = g.id; if (p.studentId) t.studentId = p.studentId; if (p.forMonth) t.forMonth = p.forMonth; } });
+    acts.forEach((p) => { const a = S.schedule.acts.find((x) => x.id === p.id); if (a && !a.groupId) Object.assign(a, { groupId: g.id, name: p.name, color: p.color }); });
+  });
 }
 function createGroupsFromSchedule() {
   let made = 0;

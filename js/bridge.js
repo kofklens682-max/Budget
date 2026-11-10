@@ -477,9 +477,10 @@ const BR = (() => {
   const tbList = () => { try { const l = JSON.parse(localStorage.getItem(TB) || '[]'); return Array.isArray(l) ? l.filter((x) => x && x.op && x.id && +x.amount > 0) : []; } catch (e) { return []; } };
   const tbSet = (l) => { try { if (l.length) localStorage.setItem(TB, JSON.stringify(l)); else localStorage.removeItem(TB); } catch (e) { /* full */ } };
   let inAcc = null;
+  const inAccId = () => [inAcc, UI.lastAcc.in].find((id) => id && isOpenAcc(id)) || openAccs()[0].id; // (never a closed account)
   const mName = (m) => ymLabel(m);
   function inboxHtml() {
-    const l = tbList(), accs = S.accounts, a = inAcc || UI.lastAcc.in || accs[0].id, adds = l.filter((x) => x.op === 'add');
+    const l = tbList(), accs = openAccs(), a = inAccId(), adds = l.filter((x) => x.op === 'add');
     const row = (x) => x.op === 'add'
       ? `<div class="br-line"><div class="br-lh">${letterTile(x.person || '?', '#12B76A')}<div class="tx"><b>${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))} · marked ${shortDate(x.date)}</small></div></div>
          <div class="br-two"><button class="br-yes" data-act="tb-add" data-v="${esc(x.id)}">Add to my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Already counted</button></div></div>`
@@ -492,7 +493,7 @@ const BR = (() => {
       ${l.map(row).join('') || '<p class="hint">Nothing is waiting.</p>'}</div>`;
   }
   function tbAdd(x) {
-    const f = x.sid ? findTid(x.sid) : null, a = inAcc || UI.lastAcc.in || S.accounts[0].id;
+    const f = x.sid ? findTid(x.sid) : null, a = inAccId();
     if (S.tx.some((t) => t.tpid === x.id)) return; // never twice
     const rec = { id: uid(), tpid: x.id, type: 'in', amount: Math.round(+x.amount), currency: 'UZS', account: a, date: /^\d{4}-\d\d-\d\d$/.test(x.date || '') ? x.date : todayIso(), note: `${x.group} · ${mName(x.m)} fee`, createdAt: Date.now(),
       person: x.person || '', category: lessonCat() || OTHER_CAT.in, groupId: f ? f.g.id : null, studentId: f ? f.s.id : null, forMonth: x.m, alloc: [{ m: x.m, amount: Math.round(+x.amount) }] };
@@ -502,25 +503,37 @@ const BR = (() => {
     return sp;
   }
   const spNote = (n, sum, name) => (n ? ` — ${fmt(sum, 'UZS')} went into ${n === 1 ? name : plural(n, 'goal')}` : '');
-  function tbDone(ids, msg) {
+  // Every answer to the prompt can be undone for 8 seconds (audit G14): the prompt comes back, and only what that tap did is reversed.
+  function tbDone(ids, msg, undo) {
+    const gone = tbList().filter((x) => ids.includes(x.id));
     tbSet(tbList().filter((x) => !ids.includes(x.id))); save(); render();
-    if (tbList().length) refreshSheet(inboxHtml(), null); else { closeSheet(); toast(msg); }
+    if (tbList().length) refreshSheet(inboxHtml(), null); else closeSheet();
+    undoToast(msg, () => {
+      if (undo) undo();
+      const l = tbList(); tbSet(l.concat(gone.filter((x) => !l.some((y) => y.id === x.id))));
+      if (sheet && sheet.sh.querySelector('[data-act="tb-skip"]')) refreshSheet(inboxHtml(), null);
+    });
   }
+  // the entries a tap added (and their shares in the goals) go out again
+  const unAdd = (made) => () => { const ids = new Set(made.map((t) => t.id)); S.tx = S.tx.filter((t) => !ids.has(t.id)); S.goals.forEach((g) => { if (g.contribs.some((c) => ids.has(c.auto))) g.contribs = g.contribs.filter((c) => !ids.has(c.auto)); }); };
   Object.assign(ACTIONS, {
     'tb-open': () => { const b = document.getElementById('br-banner'); if (b) b.remove(); openSheet(inboxHtml(), null); },
     'tb-acc': (a, v) => { inAcc = v; refreshSheet(inboxHtml(), null); },
-    'tb-add': (a, v) => { const x = tbList().find((y) => y.id === v); const sp = x ? tbAdd(x) : null; tbDone([v], 'Added to your balance' + (sp ? spNote(sp.n, sp.sum, sp.name) : '')); },
+    'tb-add': (a, v) => { const x = tbList().find((y) => y.id === v), n0 = S.tx.length; const sp = x ? tbAdd(x) : null; tbDone([v], 'Added to your balance' + (sp ? spNote(sp.n, sp.sum, sp.name) : ''), unAdd(S.tx.slice(n0))); },
     'tb-skip': (a, v) => tbDone([v], 'Nothing added'),
     'tb-take': (a, v) => { // (its share in the goals goes back too)
-      const ids = S.tx.filter((t) => t.tpid === v).map((t) => t.id);
+      const took = S.tx.filter((t) => t.tpid === v), ids = took.map((t) => t.id), lines = [];
       S.tx = S.tx.filter((t) => t.tpid !== v);
-      S.goals.forEach((g) => { g.contribs = g.contribs.filter((c) => !(c.auto && ids.includes(c.auto))); });
-      tbDone([v], 'Taken out of your balance');
+      S.goals.forEach((g) => { const out = g.contribs.filter((c) => c.auto && ids.includes(c.auto)); if (out.length) { lines.push([g, out]); g.contribs = g.contribs.filter((c) => !out.includes(c)); } });
+      tbDone([v], 'Taken out of your balance', () => {
+        took.forEach((t) => { if (!S.tx.some((y) => y.id === t.id)) S.tx.push(t); });
+        lines.forEach(([g, out]) => { if (S.goals.includes(g)) g.contribs.push(...out.filter((c) => !g.contribs.includes(c))); });
+      });
     },
     'tb-addall': () => {
-      const l = tbList().filter((x) => x.op === 'add'); let sum = 0, name = ''; const goals = new Set();
+      const l = tbList().filter((x) => x.op === 'add'), n0 = S.tx.length; let sum = 0, name = ''; const goals = new Set();
       l.forEach((x) => { const sp = tbAdd(x); if (sp && sp.n) { sum += sp.sum; name = sp.name; S.goals.forEach((g) => { if (g.contribs.some((c) => c.auto && S.tx.some((t) => t.id === c.auto && t.tpid === x.id))) goals.add(g.id); }); } });
-      tbDone(l.map((x) => x.id), `${l.length} payments added` + spNote(goals.size, sum, name));
+      tbDone(l.map((x) => x.id), `${l.length} payments added` + spNote(goals.size, sum, name), unAdd(S.tx.slice(n0)));
     },
     'tb-skipall': () => tbDone(tbList().filter((x) => x.op === 'add').map((x) => x.id), 'Nothing added'),
   });

@@ -206,7 +206,7 @@ function txRow(t, showDate, inAccount) {
 }
 
 function accPicker(act, selected) {
-  return `<div class="acc-pick">${S.accounts.map((a) => `<button class="${selected === a.id ? 'on' : ''}" data-act="${act}" data-v="${a.id}">${accIc(a, 'xs')}<span>${esc(a.name)}</span></button>`).join('')}</div>`;
+  return `<div class="acc-pick">${S.accounts.filter((a) => !a.closed || a.id === selected).map((a) => `<button class="${selected === a.id ? 'on' : ''}" data-act="${act}" data-v="${a.id}">${accIc(a, 'xs')}<span>${esc(a.name)}</span></button>`).join('')}</div>`;
 }
 
 function emptyWelcome() {
@@ -279,8 +279,8 @@ function renderHome() {
   }
 
   // Accounts
-  h += `<div class="sec-head"><h2>Accounts</h2>${S.accounts.length > 1 ? '<button class="link" data-act="new-transfer">Transfer</button>' : ''}</div>
-    <div class="strip">${S.accounts.map((a) => {
+  h += `<div class="sec-head"><h2>Accounts</h2>${openAccs().length > 1 ? '<button class="link" data-act="new-transfer">Transfer</button>' : ''}</div>
+    <div class="strip">${openAccs().map((a) => {
       // The account's money in the chosen currency; underneath, what's in it in the other currency.
       const main = accBalanceIn(a.id, cur), sec = accBalance(a.id, other);
       return `<button class="card acc-card" data-act="account" data-id="${a.id}">
@@ -761,8 +761,9 @@ function openTx(id, preset = {}) {
   if (t) draft = { ...t };
   else {
     const type = preset.type || UI.lastType;
-    const from = preset.account || (type !== 'transfer' && UI.lastAcc[type]) || S.accounts[0].id;
-    const to = (S.accounts.find((a) => a.id !== from) || S.accounts[0]).id;
+    const last = type !== 'transfer' && UI.lastAcc[type];
+    const from = preset.account || (last && isOpenAcc(last) ? last : openAccs()[0].id);
+    const to = (openAccs().find((a) => a.id !== from) || openAccs()[0]).id;
     const cur = preset.currency || UI.cur;
     draft = {
       id: null, type, amount: preset.amount || 0, currency: cur, account: from, toAccount: preset.toAccount || to, toAmount: 0, toCurrency: preset.toCurrency || cur, // 5 Nov: an exchange inside one account (js/split.js)
@@ -772,9 +773,9 @@ function openTx(id, preset = {}) {
     };
   }
   draft.from = Array.isArray(draft.from) && draft.from.length ? [...draft.from] : ['free'];
-  if (!S.accounts.some((a) => a.id === draft.account)) draft.account = S.accounts[0].id;
+  if (!S.accounts.some((a) => a.id === draft.account)) draft.account = openAccs()[0].id;
   if (!draft.toCurrency) draft.toCurrency = draft.currency;
-  if (!draft.toAccount) draft.toAccount = (S.accounts.find((a) => a.id !== draft.account) || S.accounts[0]).id;
+  if (!draft.toAccount) draft.toAccount = (openAccs().find((a) => a.id !== draft.account) || openAccs()[0]).id;
   draft.back = preset.back || null;
   BR.fromDraft(draft, preset);
   const tpl = repeatTemplate(draft);
@@ -995,7 +996,7 @@ function saveTx() {
     // whatever is still in the envelope goes back to free money.
     if (d.goalLast) {
       const rest = goalSaved(spendGoal);
-      if (rest > 0.004) spendGoal.contribs.push({ id: uid(), amount: -rest, date: rec.date, note: 'Left over — back to free money' });
+      if (rest > 0.004) spendGoal.contribs.push({ id: uid(), amount: -rest, date: rec.date, note: 'Left over — back to free money', left: rec.id }); // (deleting the entry puts it back)
       spendGoal.paid = rec.date;
     }
   }
@@ -1073,11 +1074,11 @@ function accountHtml() {
       <div class="gd-name">${esc(a.name)}</div>
       ${lines.map((c, i) => `<div class="${i ? 'gd-amt' : 'acc-hero-bal'} num">${fmt(bal(c), c)}</div>`).join('')}
     </div>
-    <div class="btn-row" style="margin-top:18px">
+    ${a.closed ? '<p class="hint" style="text-align:center;margin-top:14px">This account is closed. Its entries stay in History. Tap Edit to open it again.</p>' : `<div class="btn-row" style="margin-top:18px">
       <button class="btn" data-act="add-to-acc" data-id="${a.id}">＋ Add entry</button>
-      ${S.accounts.length > 1 ? `<button class="btn grey" data-act="transfer-from" data-id="${a.id}">Transfer</button>` : ''}
+      ${openAccs().length > 1 ? `<button class="btn grey" data-act="transfer-from" data-id="${a.id}">Transfer</button>` : ''}
     </div>
-    ${typeof splitCard === 'function' ? splitCard(a) : ''}
+    ${typeof splitCard === 'function' ? splitCard(a) : ''}`}
     <div class="form-label">Latest</div>
     ${list.length ? `<div class="group">${list.slice(0, 25).map((t) => txRow(t, true, true)).join('')}</div>
       ${list.length > 25 ? `<div class="actions"><button class="btn soft" data-act="acc-history" data-id="${a.id}">See all ${list.length} in History</button></div>` : ''}`
@@ -1111,7 +1112,8 @@ function accountFormHtml() {
     <p class="hint">How much was in this account before your first entry here. It isn't counted as money coming in.</p>
     <div class="actions">
       <button class="btn" data-act="save-account">${editing ? 'Save changes' : 'Create account'}</button>
-      ${editing && S.accounts.length > 1 ? `<button class="btn danger" data-act="del-account" data-id="${d.id}">Delete account</button>` : ''}
+      ${editing && d.closed ? `<button class="btn soft" data-act="reopen-account" data-id="${d.id}">Open this account again</button>` : ''}
+      ${editing && !d.closed && openAccs().length > 1 ? `<button class="btn danger" data-act="del-account" data-id="${d.id}">${accUsed(d.id) ? 'Close account' : 'Delete account'}</button>` : ''}
     </div>
   </div>`;
 }
@@ -1129,36 +1131,61 @@ function saveAccount() {
   const d = adraft;
   if (!d.name.trim()) return;
   const rec = { id: d.id || uid(), name: d.name.trim(), kind: d.kind, color: d.color, opening: { UZS: roundCur(d.opening.UZS, 'UZS'), USD: roundCur(d.opening.USD, 'USD') } };
+  if (d.closed) rec.closed = true;
   const i = S.accounts.findIndex((a) => a.id === rec.id);
   if (i >= 0) S.accounts[i] = rec; else S.accounts.push(rec);
   save(); buzz(); render();
   if (i >= 0) { openAccount(rec.id); toast('Account updated'); }
   else { closeSheet(); toast(`${rec.name} added`); }
 }
+// An account that any entry (or student record) uses is CLOSED, never merged into another one: its entries keep saying
+// which account paid, and stay in History with its name (audit B10). An account nothing uses is simply deleted.
+const accUsed = (id) => S.tx.some((t) => t.account === id || t.toAccount === id) || (S.records || []).some((r) => r.account === id);
 async function deleteAccount(id) {
-  const a = acc(id);
-  const others = S.accounts.filter((x) => x.id !== id);
-  if (!others.length) return;
+  const a = S.accounts.find((x) => x.id === id);
+  const others = openAccs().filter((x) => x.id !== id);
+  if (!a || a.closed || !others.length) return;
+  if (!accUsed(id)) {
+    const hasMoney = a.opening.UZS || a.opening.USD;
+    const ok = await ask({ title: `Delete “${a.name}”?`, msg: hasMoney ? `It has no entries. The money already there (${['UZS', 'USD'].filter((c) => a.opening[c]).map((c) => fmt(a.opening[c], c)).join(' and ')}) leaves your total.` : 'It has no entries.', ok: 'Delete account', destructive: true });
+    if (!ok) return;
+    const idx = S.accounts.indexOf(a);
+    S.accounts = S.accounts.filter((x) => x !== a);
+    if (UI.hAcc === id) UI.hAcc = 'all';
+    save(); closeSheet(); render();
+    undoToast('Account deleted', () => { if (!S.accounts.some((x) => x.id === id)) S.accounts.splice(Math.min(idx, S.accounts.length), 0, a); });
+    return;
+  }
+  // what is still in it goes to another account first, as an ordinary transfer you can see in History
   const target = others[0];
-  const n = S.tx.filter((t) => t.account === id || t.toAccount === id).length;
+  const left = ['UZS', 'USD'].map((c) => [c, accBalance(id, c)]).filter(([c, v]) => Math.abs(v) >= (c === 'USD' ? 0.005 : 0.5));
   const ok = await ask({
-    title: `Delete “${a.name}”?`,
-    msg: n ? `Its ${n} entr${n === 1 ? 'y' : 'ies'} and starting money will be moved to “${target.name}”. Totals stay the same.` : 'This account has no entries.',
-    ok: 'Delete account', destructive: true,
+    title: `Close “${a.name}”?`,
+    msg: `${left.length ? `The ${left.map(([c, v]) => fmt(v, c)).join(' and ')} still in it moves to “${target.name}”. ` : ''}It is hidden from Home and the account lists. Its entries stay in History. You can open it again in Settings.`,
+    ok: 'Close account', destructive: true,
   });
   if (!ok) return;
-  target.opening.UZS += a.opening.UZS;
-  target.opening.USD += a.opening.USD;
-  S.tx = S.tx.map((t) => {
-    const r = { ...t };
-    if (r.account === id) r.account = target.id;
-    if (r.toAccount === id) r.toAccount = target.id;
-    return r;
-  }).filter((t) => !(t.type === 'transfer' && t.account === t.toAccount && t.currency === t.toCurrency));
-  S.accounts = others;
-  if (UI.hAcc === id) UI.hAcc = 'all';
+  const made = left.map(([c, v]) => {
+    const amt = roundCur(Math.abs(v), c);
+    return { id: uid(), type: 'transfer', amount: amt, currency: c, account: v > 0 ? id : target.id, toAccount: v > 0 ? target.id : id, toCurrency: c, toAmount: amt, date: todayIso(), note: `${a.name} closed`, createdAt: Date.now() };
+  });
+  S.tx.push(...made);
+  a.closed = true;
+  ['in', 'out'].forEach((k) => { if (UI.lastAcc[k] === id) UI.lastAcc[k] = null; });
   save(); closeSheet(); render();
-  toast('Account deleted');
+  undoToast(`${a.name} closed`, () => {
+    const ids = new Set(made.map((t) => t.id));
+    S.tx = S.tx.filter((t) => !ids.has(t.id));
+    const x = S.accounts.find((y) => y.id === id); if (x) delete x.closed;
+  });
+}
+function reopenAccount(id) {
+  const a = S.accounts.find((x) => x.id === id);
+  if (!a || !a.closed) return;
+  delete a.closed;
+  save(); render();
+  openAccount(id);
+  toast(`${a.name} is open again`);
 }
 
 // ================= Categories =================
@@ -1414,7 +1441,7 @@ function goalDetailHtml() {
     <p class="hint" id="g-apart-hint">${apartHint(g)}</p>
     <div class="form-label">History</div>
     ${contribs.length ? `<div class="group plain">${contribs.map((c) => `<button class="row" data-act="del-contrib" data-id="${c.id}"><div class="row-main"><div class="row-title">${esc(c.txId ? (c.note || 'Paid').replace(/^Spent — /, 'Paid — ') : c.note || (c.amount >= 0 ? 'Added' : 'Taken out'))}</div><div class="row-sub">${dayLabel(c.date)}${c.txId || c.spent ? ' · also in History' : ''}</div></div><div class="row-amt num ${c.amount >= 0 ? 'in' : ''}">${fmtG(c.amount, cur, { sign: true })}</div></button>`).join('')}</div>
-      <p class="hint">Tap a line to undo it.</p>` : '<p class="hint">Nothing added yet. Use “Add money” whenever you put some aside.</p>'}
+      <p class="hint">Tap a line to remove it.</p>` : '<p class="hint">Nothing added yet. Use “Add money” whenever you put some aside.</p>'}
     <p class="hint" style="margin-top:16px">Goals only hold money you really have: your total balance is split into money in goals and free money. “I paid for it” records the expense and takes it from the envelope — all at once, or in parts like a fee paid in instalments.</p>
   </div>`;
 }
@@ -1422,6 +1449,25 @@ function goalDetailHtml() {
 // ---------- Moving money into, out of and between goals ----------
 let mv = null; // { gid, dir: 1 add | -1 take out, amount, sources: [goal ids], dest: 'free' | goal id }
 const goalById = (id) => S.goals.find((x) => x.id === id);
+// Undo for goals (audit B9): put back or take away ONLY the lines one change touched — never a copy of all goals,
+// which would also wipe any goal change made in the seconds after.
+function pullContribs(test) { // takes the matching lines out of every goal; returns what to give back
+  const out = [];
+  S.goals.forEach((g) => { const gone = g.contribs.filter(test); if (gone.length) { out.push({ g, lines: gone, paid: g.paid }); g.contribs = g.contribs.filter((c) => !gone.includes(c)); } });
+  return out;
+}
+function putContribs(list) {
+  list.forEach(({ g, lines, paid }) => { if (!S.goals.includes(g)) return; g.contribs.push(...lines.filter((c) => !g.contribs.includes(c))); if (paid === undefined) delete g.paid; else g.paid = paid; });
+}
+function undoLines(lines, paid) { // lines a change added; paid = [[goal, its "paid" before]]
+  return () => {
+    S.goals.forEach((g) => { if (g.contribs.some((c) => lines.includes(c))) g.contribs = g.contribs.filter((c) => !lines.includes(c)); });
+    paid.forEach(([g, v]) => { if (v === undefined) delete g.paid; else g.paid = v; });
+    refreshGoalSheet();
+  };
+}
+// (only when the open sheet really is a goal's page)
+const refreshGoalSheet = () => { if (sheet && gid && $('[data-act="goal-move"]', sheet.sh)) refreshSheet(goalDetailHtml(), null); };
 const siblingGoals = (g) => S.goals.filter((x) => x.id !== g.id && x.currency === g.currency);
 function paceOf(g) {
   const st = goalStats(g);
@@ -1522,7 +1568,9 @@ function saveMove() {
   const s = moveState();
   if (!s.ok) return;
   const g = s.g, cur = s.cur, amt = s.amt, today = todayIso();
-  const snapshot = JSON.parse(JSON.stringify(S.goals));
+  const savedBefore = goalSaved(g), lines = [], paid = [];
+  const add = (x, c) => { x.contribs.push(c); lines.push(c); }; // (Undo takes back exactly these lines)
+  const unpay = (x) => { if ('paid' in x) { paid.push([x, x.paid]); delete x.paid; } };
   let msg;
   if (mv.dir > 0) {
     let need = s.need;
@@ -1532,29 +1580,29 @@ function saveMove() {
       const x = goalById(id), t = roundCur(Math.min(goalSaved(x), need), cur);
       if (t <= 0) continue;
       const pair = uid();
-      x.contribs.push({ id: uid(), amount: -t, date: today, note: `Moved to ${g.name}`, pair });
-      g.contribs.push({ id: uid(), amount: t, date: today, note: `Moved from ${x.name}`, pair });
+      add(x, { id: uid(), amount: -t, date: today, note: `Moved to ${g.name}`, pair });
+      add(g, { id: uid(), amount: t, date: today, note: `Moved from ${x.name}`, pair });
       used.push(x.name);
       need -= t;
     }
     const fromFree = roundCur(amt - (s.need - Math.max(0, need)), cur);
-    if (fromFree > 0) g.contribs.push({ id: uid(), amount: fromFree, date: today, note: 'Added from free money' });
-    delete g.paid;
+    if (fromFree > 0) add(g, { id: uid(), amount: fromFree, date: today, note: 'Added from free money' });
+    unpay(g);
     msg = used.length ? `${fmtG(amt, cur)} → ${g.name} (incl. from ${used.join(', ')})` : `${fmtG(amt, cur)} added to ${g.name}`;
   } else if (mv.dest === 'free') {
-    g.contribs.push({ id: uid(), amount: -amt, date: today, note: 'Back to free money' });
+    add(g, { id: uid(), amount: -amt, date: today, note: 'Back to free money' });
     msg = `${fmtG(amt, cur)} is free money again`;
   } else {
     const x = goalById(mv.dest), pair = uid();
-    g.contribs.push({ id: uid(), amount: -amt, date: today, note: `Moved to ${x.name}`, pair });
-    x.contribs.push({ id: uid(), amount: amt, date: today, note: `Moved from ${g.name}`, pair });
-    delete x.paid;
+    add(g, { id: uid(), amount: -amt, date: today, note: `Moved to ${x.name}`, pair });
+    add(x, { id: uid(), amount: amt, date: today, note: `Moved from ${g.name}`, pair });
+    unpay(x);
     msg = `${fmtG(amt, cur)} moved to ${x.name}`;
   }
-  const reached = mv.dir > 0 && !g.open && goalSaved(g) >= g.target && snapshot.find((x) => x.id === g.id).contribs.reduce((a, c) => a + c.amount, 0) < g.target;
+  const reached = mv.dir > 0 && !g.open && goalSaved(g) >= g.target && savedBefore < g.target;
   save(); buzz(); render();
   openGoal(g.id);
-  undoToast(reached ? `🎉 ${g.name} is fully saved!` : msg, () => { S.goals = snapshot; if (sheet && gid) refreshSheet(goalDetailHtml(), null); });
+  undoToast(reached ? `🎉 ${g.name} is fully saved!` : msg, undoLines(lines, paid));
 }
 // When goals hold more than you have (goal money was spent, or a money in was deleted), you choose
 // the goals to take it back from: ticked in order, each gives what it holds until it's covered.
@@ -1594,14 +1642,15 @@ function syncFix(sh) {
 function saveFix() {
   const s = fixState();
   if (!s.ok) return;
-  const snapshot = JSON.parse(JSON.stringify(S.goals)), touched = [];
+  const lines = [], touched = [];
   for (const p of s.parts) {
     if (!(p.t > 0)) continue;
-    p.g.contribs.push({ id: uid(), amount: -p.t, date: todayIso(), note: 'Taken back — the money was spent' });
+    const c = { id: uid(), amount: -p.t, date: todayIso(), note: 'Taken back — the money was spent' };
+    p.g.contribs.push(c); lines.push(c);
     touched.push(p.g.name);
   }
   save(); buzz(); closeSheet(); render();
-  undoToast(`Taken out of ${touched.join(', ')}`, () => { S.goals = snapshot; });
+  undoToast(`Taken out of ${touched.join(', ')}`, undoLines(lines, []));
 }
 // After money leaves your balance, warn if goals now hold more than you have.
 function goalsShort(cur) { return S.goals.some((g) => g.currency === cur && goalSaved(g) > 0) && freeMoney(cur) < -0.004; }
@@ -2021,7 +2070,7 @@ function settingsHtml() {
     ${acctSettingsHtml()}
     <div class="form-label">Accounts</div>
     <div class="group">
-      ${S.accounts.map((a) => `<button class="row" data-act="edit-account" data-id="${a.id}">${accIc(a, 'sm')}<div class="row-main"><div class="row-title">${esc(a.name)}</div><div class="row-sub num">${fmt(accBalance(a.id, 'UZS'), 'UZS')} · ${fmt(accBalance(a.id, 'USD'), 'USD')}</div></div>${I.chev}</button>`).join('')}
+      ${S.accounts.map((a) => `<button class="row" data-act="edit-account" data-id="${a.id}">${accIc(a, 'sm')}<div class="row-main"><div class="row-title">${esc(a.name)}</div><div class="row-sub num">${a.closed ? 'Closed · entries kept in History' : `${fmt(accBalance(a.id, 'UZS'), 'UZS')} · ${fmt(accBalance(a.id, 'USD'), 'USD')}`}</div></div>${I.chev}</button>`).join('')}
       <button class="row" data-act="new-account"><span class="ic sm" style="--c:var(--accent)">${glyph('plus')}</span><div class="row-main" style="color:var(--accent);font-weight:500">Add account</div></button>
     </div>
 
@@ -2198,8 +2247,9 @@ function rng(seed) {
 }
 function makeDemo() {
   const R = rng(7), tx = [], now = new Date(), t0 = todayIso();
-  const cash = (S.accounts.find((a) => a.kind === 'cash') || S.accounts[0]).id;
-  const card = (S.accounts.find((a) => a.kind === 'card' && a.id !== cash) || S.accounts.find((a) => a.id !== cash) || S.accounts[0]).id;
+  const open = openAccs();
+  const cash = (open.find((a) => a.kind === 'cash') || open[0]).id;
+  const card = (open.find((a) => a.kind === 'card' && a.id !== cash) || open.find((a) => a.id !== cash) || open[0]).id;
   const catId = (type, id) => (S.cats[type].some((c) => c.id === id) ? id : OTHER_CAT[type]);
   const rnd = (x, step) => Math.round(x / step) * step;
   const add = (type, amount, currency, date, person, category, account, note = '') => {
@@ -2259,7 +2309,7 @@ Object.assign(ACTIONS, {
   again: (a, v, id) => {
     const t = S.tx.find((x) => x.id === id);
     if (!t) return;
-    Object.assign(draft, { amount: t.amount, currency: t.currency, category: t.category, person: t.person || '', note: t.person ? draft.note : t.note || '', account: S.accounts.some((x) => x.id === t.account) ? t.account : draft.account });
+    Object.assign(draft, { amount: t.amount, currency: t.currency, category: t.category, person: t.person || '', note: t.person ? draft.note : t.note || '', account: isOpenAcc(t.account) ? t.account : draft.account });
     buzz();
     refreshSheet(txHtml(), mountTx);
   },
@@ -2287,7 +2337,7 @@ Object.assign(ACTIONS, {
     draft.type = v;
     draft.category = null;
     if (v !== 'in') { draft.groupId = null; draft.studentId = null; draft.lesson = false; }
-    if (v === 'transfer' && draft.toAccount === draft.account) draft.toAccount = (S.accounts.find((x) => x.id !== draft.account) || S.accounts[0]).id;
+    if (v === 'transfer' && draft.toAccount === draft.account) draft.toAccount = (openAccs().find((x) => x.id !== draft.account) || openAccs()[0]).id;
     refreshSheet(txHtml(), mountTx);
   },
   'tx-cur': (a, v) => {
@@ -2324,21 +2374,49 @@ Object.assign(ACTIONS, {
   'pick-month': (a, v) => { draft.forMonth = v; refreshSheet(txHtml(), mountTx); },
   'new-cat-inline': () => openCatForm(draft.type, null, reopenTx),
   'save-tx': () => saveTx(),
-  'del-tx': () => {
-    if (draft.record && BR.delRecord()) return;
-    const removed = S.tx.find((t) => t.id === draft.id);
+  'del-tx': async () => {
+    const d = draft;
+    if (!d || !d.id) return;
+    const t0 = S.tx.find((t) => t.id === d.id) || (S.records || []).find((t) => t.id === d.id);
+    if (!t0) return;
+    // ask once (SYSTEM §5); the original of an "Every month" entry asks what happens to the monthly copies (audit B6)
+    const what = `${t0.type === 'transfer' ? `${acc(t0.account).name} → ${acc(t0.toAccount).name}` : t0.person || cat(t0.type, t0.category).name} · ${fmt(t0.amount, t0.currency)}`;
+    const copies = t0.repeat ? S.tx.filter((t) => t.fromRepeat === t0.id) : [];
+    const ans = await ask({
+      title: t0.type === 'transfer' ? 'Delete this transfer?' : 'Delete this entry?',
+      msg: !t0.repeat ? what : copies.length ? `${what}. It is added every month. Both choices delete this entry: “Delete this one” keeps adding it each month, “Stop monthly” stops that too.` : `${what}. It is added every month: deleting it stops that too.`,
+      ok: t0.repeat && copies.length ? 'Delete this one' : 'Delete', alt: t0.repeat && copies.length ? 'Stop monthly' : null, destructive: true,
+    });
+    if (!ans || draft !== d) return;
+    if (d.record && BR.delRecord()) return;
+    const removed = S.tx.find((t) => t.id === d.id);
     if (!removed) return;
-    const goalsBefore = JSON.parse(JSON.stringify(S.goals));
-    S.tx = S.tx.filter((t) => t.id !== removed.id);
-    // Deleting a "paid for a goal" expense gives the goal its money back.
-    // (and the parts Split money in put into goals from it go too)
-    // (and what it took from goals goes back into them)
-    S.goals.forEach((g) => { const paid = g.contribs.some((c) => c.txId === removed.id); g.contribs = g.contribs.filter((c) => c.txId !== removed.id && c.auto !== removed.id && c.spent !== removed.id); if (paid) delete g.paid; });
+    S.tx = S.tx.filter((t) => t !== removed);
+    // The monthly copies go on: the newest copy carries the "Every month" on, and the others point to it.
+    let heir = null;
+    if (ans === true && copies.length) {
+      heir = copies.slice().sort(sortTx)[0];
+      Object.assign(heir, { repeat: removed.repeat, repeatDay: removed.repeatDay, repeatNext: removed.repeatNext });
+      delete heir.fromRepeat;
+      copies.forEach((c) => { if (c !== heir) c.fromRepeat = heir.id; });
+    }
+    // Deleting a "paid for a goal" expense gives the goal its money back, with the "Left over" line it made;
+    // the parts Split money in put into goals from it go too; what it took from goals goes back into them.
+    const pulled = pullContribs((c) => c.txId === removed.id || c.auto === removed.id || c.spent === removed.id || c.left === removed.id);
+    pulled.forEach(({ g, lines }) => { if (lines.some((c) => c.txId === removed.id)) delete g.paid; });
     save(); txDone(); render();
     const cur = removed.type === 'in' ? removed.currency : null;
     // (always Undo — when goals now hold too much, the Goals page offers “Fix it”)
     const short = cur && goalsShort(cur) ? ` — goals now hold ${fmtG(-freeMoney(cur), cur)} more than you have` : '';
-    undoToast((removed.type === 'transfer' ? 'Transfer deleted' : 'Entry deleted') + short, () => { S.tx.push(removed); S.goals = goalsBefore; });
+    undoToast((removed.type === 'transfer' ? 'Transfer deleted' : 'Entry deleted') + short, () => {
+      if (!S.tx.some((t) => t.id === removed.id)) S.tx.push(removed);
+      putContribs(pulled);
+      if (heir) {
+        const h = S.tx.find((t) => t.id === heir.id);
+        if (h) { delete h.repeat; delete h.repeatDay; delete h.repeatNext; h.fromRepeat = removed.id; }
+        S.tx.forEach((t) => { if (t.fromRepeat === heir.id) t.fromRepeat = removed.id; });
+      }
+    });
   },
 
   // accounts
@@ -2349,6 +2427,7 @@ Object.assign(ACTIONS, {
   'acc-color': (a, v) => { adraft.color = v; refreshSheet(accountFormHtml(), mountAccountForm); },
   'save-account': () => saveAccount(),
   'del-account': (a, v, id) => deleteAccount(id),
+  'reopen-account': (a, v, id) => reopenAccount(id),
   'add-to-acc': (a, v, id) => openTx(null, { account: id, back: () => openAccount(id) }),
   'transfer-from': (a, v, id) => openTx(null, { type: 'transfer', account: id, back: () => openAccount(id) }),
   'acc-history': (a, v, id) => { UI.hView = 'entries'; UI.hAcc = id; UI.hType = 'all'; closeSheet(); goTab('history'); },
@@ -2385,14 +2464,18 @@ Object.assign(ACTIONS, {
     refreshSheet(goalFormHtml(), mountGoalForm);
   },
   'save-goal': () => saveGoal(),
-  'del-goal': (a, v, id) => {
-    const idx = S.goals.findIndex((g) => g.id === id);
+  'del-goal': async (a, v, id) => {
+    const g0 = goalById(id);
+    if (!g0) return;
+    const has = goalSaved(g0);
+    if (!(await ask({ title: `Delete “${g0.name}”?`, msg: has > 0 ? `The ${fmtG(has, g0.currency)} in it becomes free money again.` : 'There is no money in it.', ok: 'Delete goal', destructive: true }))) return;
+    const idx = S.goals.indexOf(g0);
     if (idx < 0) return;
     const removed = S.goals[idx];
     S.goals.splice(idx, 1);
     // Money moved from this goal into others stays there; its own money becomes free again.
     save(); closeSheet(); render();
-    undoToast(goalSaved(removed) > 0 ? `Goal deleted — ${fmtG(goalSaved(removed), removed.currency)} is free money again` : 'Goal deleted', () => S.goals.splice(Math.min(idx, S.goals.length), 0, removed));
+    undoToast(goalSaved(removed) > 0 ? `Goal deleted — ${fmtG(goalSaved(removed), removed.currency)} is free money again` : 'Goal deleted', () => { if (!S.goals.some((g) => g.id === removed.id)) S.goals.splice(Math.min(idx, S.goals.length), 0, removed); });
   },
   'goal-move': (a, v) => openMove(Number(v)),
   'mv-set': (a, v) => { mv.amount = Number(v); const inp = $('#mv-amt'), c = goalById(mv.gid).currency; if (inp) inp.value = shownAmount(conv(mv.amount, c, dispCur(c)), dispCur(c)); syncMove(sheet.sh); },
@@ -2432,16 +2515,24 @@ Object.assign(ACTIONS, {
     const inp = $('#g-init');
     if (inp) { inp.value = shownAmount(gdraft.initial, gdraft.currency); inp.dispatchEvent(new Event('input')); }
   },
-  'del-contrib': (a, v, id) => {
+  'del-contrib': async (a, v, id) => {
     const g = S.goals.find((x) => x.id === gid);
     const c = g && g.contribs.find((x) => x.id === id);
     if (!c) return;
-    const snapshot = JSON.parse(JSON.stringify(S.goals));
+    // A line made by an entry belongs to that entry: removing only the line would count the money twice (audit B8).
+    const link = c.txId || c.spent || c.auto;
+    if (link) {
+      const t = S.tx.find((x) => x.id === link);
+      if (!t) return toast('This line comes from an entry that is no longer in History');
+      if (await ask({ title: 'This line comes from an entry', msg: 'To change or remove it, change or delete the entry in History.', ok: 'Open the entry' })) openTx(t.id, { back: () => openGoal(g.id) });
+      return;
+    }
+    if (!(await ask({ title: c.pair ? 'Undo this move?' : 'Remove this line?', msg: `${c.note || (c.amount >= 0 ? 'Added' : 'Taken out')} · ${fmtG(c.amount, g.currency, { sign: true })}${c.pair ? '. Both goals change back.' : ''}`, ok: c.pair ? 'Undo move' : 'Remove', destructive: true }))) return;
     // A move between goals has two halves — undoing one undoes both.
-    S.goals.forEach((x) => { x.contribs = x.contribs.filter((k) => k.id !== id && !(c.pair && k.pair === c.pair)); });
-    if (goalSaved(g) > 0 || c.txId) delete g.paid;
-    save(); render(); refreshSheet(goalDetailHtml(), null);
-    undoToast(c.pair ? 'Move undone in both goals' : 'Line removed', () => { S.goals = snapshot; if (sheet && gid) refreshSheet(goalDetailHtml(), null); });
+    const pulled = pullContribs((k) => k === c || (c.pair && k.pair === c.pair));
+    if (goalSaved(g) > 0) delete g.paid;
+    save(); render(); refreshGoalSheet();
+    undoToast(c.pair ? 'Move undone in both goals' : 'Line removed', () => { putContribs(pulled); refreshGoalSheet(); });
   },
 
   // report

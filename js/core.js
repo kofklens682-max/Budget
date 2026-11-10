@@ -204,6 +204,7 @@ function normAccount(a) {
     kind: ACC_KINDS.some((k) => k.id === a.kind) ? a.kind : 'wallet',
     color: HEX.test(a.color) ? a.color : '#8E8E93',
     opening: { UZS: Number(o.UZS) || 0, USD: Number(o.USD) || 0 },
+    ...(a.closed === true ? { closed: true } : {}), // 10 Nov 2026: a closed account is hidden from Home and the pickers; its entries stay in History
   };
 }
 function normCats(c) {
@@ -251,6 +252,7 @@ function normalize(d) {
   if (!d || typeof d !== 'object') return b;
   let accounts = Array.isArray(d.accounts) ? d.accounts.filter((a) => a && a.id).map(normAccount) : [];
   if (!accounts.length) accounts = defaultAccounts();
+  if (accounts.every((a) => a.closed)) delete accounts[0].closed; // there is always one open account to put money in
   const ids = new Set(accounts.map((a) => a.id));
   const first = accounts[0].id;
   const groups = normGroups(d.groups);
@@ -275,7 +277,10 @@ function normalize(d) {
       target: !open && Number(g.target) > 0 ? Number(g.target) : 0,
       deadline: open ? '' : /^\d{4}-\d{2}-\d{2}$/.test(g.deadline || '') ? g.deadline : iso(addDays(new Date(), 365)), // (a dated goal without a date would break the lists)
       auto: clamp(Math.round(Number(g.auto) * 2) / 2 || 0, 0, 100), // Split money in: % of every money in (steps of 2.5)
-      contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)), // (one damaged line would turn every total into NaN)
+      // (one damaged line would turn every total into NaN). Each line is kept whole with its links: txId (paid by an entry),
+      // auto (Split money in from an entry), spent (taken by an entry), pair (a move between goals), left (10 Nov 2026: the
+      // "Left over" line made when an entry finished the goal, so deleting that entry puts it back).
+      contribs: (Array.isArray(g.contribs) ? g.contribs : []).filter((c) => c && Number.isFinite(c.amount)),
     };
     if (!open) delete r.open;
     if (r.apart !== true) delete r.apart;
@@ -310,6 +315,9 @@ function save() {
 // ================= Derived data =================
 const cat = (type, id) => S.cats[type].find((c) => c.id === id) || S.cats[type].find((c) => c.id === OTHER_CAT[type]) || DEFAULT_CATS[type][DEFAULT_CATS[type].length - 1];
 const acc = (id) => S.accounts.find((a) => a.id === id) || S.accounts[0];
+// The accounts you can still use (closed ones keep their entries in History, but are not offered anywhere). Never empty (normalize).
+const openAccs = () => { const l = S.accounts.filter((a) => !a.closed); return l.length ? l : S.accounts.slice(0, 1); };
+const isOpenAcc = (id) => openAccs().some((a) => a.id === id);
 const accKind = (a) => ACC_KINDS.find((k) => k.id === a.kind) || ACC_KINDS[3];
 const accIc = (a, cls = '') => ic(accKind(a).g, a.color, cls);
 const grp = (id) => (id ? S.groups.find((g) => g.id === id) || null : null);
@@ -639,11 +647,12 @@ function makeSortable(list, onDrop) {
 }
 
 // ================= Dialogs & toast =================
-function ask({ title, msg, ok = 'OK', destructive = false, cancel = 'Cancel' }) {
+// Resolves true (ok), false (cancel) or 'alt' (the second choice, when `alt` is given: e.g. "Delete this one" / "Stop monthly").
+function ask({ title, msg, ok = 'OK', destructive = false, cancel = 'Cancel', alt = null }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'dlg-wrap';
-    wrap.innerHTML = `<div class="overlay"></div><div class="dlg" role="alertdialog"><div class="dlg-box">${title || msg ? `<div class="dlg-msg">${title ? `<b>${esc(title)}</b>` : ''}${esc(msg || '')}</div>` : ''}<button data-r="1" class="${destructive ? 'destructive' : ''}">${esc(ok)}</button></div><div class="dlg-box dlg-cancel"><button data-r="0">${esc(cancel)}</button></div></div>`;
+    wrap.innerHTML = `<div class="overlay"></div><div class="dlg" role="alertdialog"><div class="dlg-box">${title || msg ? `<div class="dlg-msg">${title ? `<b>${esc(title)}</b>` : ''}${esc(msg || '')}</div>` : ''}<button data-r="1" class="${destructive ? 'destructive' : ''}">${esc(ok)}</button>${alt ? `<button data-r="2" class="${destructive ? 'destructive' : ''}">${esc(alt)}</button>` : ''}</div><div class="dlg-box dlg-cancel"><button data-r="0">${esc(cancel)}</button></div></div>`;
     $('#dialog-root').appendChild(wrap);
     const ov = $('.overlay', wrap), d = $('.dlg', wrap);
     requestAnimationFrame(() => requestAnimationFrame(() => { ov.classList.add('show'); d.classList.add('show'); }));
@@ -651,22 +660,30 @@ function ask({ title, msg, ok = 'OK', destructive = false, cancel = 'Cancel' }) 
     wrap.addEventListener('click', (e) => {
       e.stopPropagation();
       const b = e.target.closest('button');
-      if (b) done(b.dataset.r === '1');
+      if (b) done(b.dataset.r === '1' ? true : b.dataset.r === '2' ? 'alt' : false);
       else if (e.target === ov) done(false);
     });
   });
 }
-let toastT;
+// A toast with a button (Undo, Fix) stays 8 seconds (SYSTEM §5). A plain message that comes meanwhile waits until it is
+// gone, so it never takes the Undo button away (audit B9); only the newest waiting message is kept.
+let toastT, btnUntil = 0, toastWait = null;
 function toast(msg, action) {
   const t = $('#toast');
+  if (!action && Date.now() < btnUntil) { toastWait = msg; return; }
   t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action.label)}</button>` : ''}`;
-  if (action) $('.toast-btn', t).addEventListener('click', () => { t.classList.remove('show'); action.run(); });
+  if (action) $('.toast-btn', t).addEventListener('click', () => { t.classList.remove('show'); btnUntil = 0; toastWait = null; clearTimeout(toastT); action.run(); });
   t.classList.remove('show');
   void t.offsetWidth;
   t.classList.add('show');
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.classList.remove('show'), action ? 5000 : 2200);
+  btnUntil = action ? Date.now() + 8000 : 0;
+  toastT = setTimeout(() => {
+    t.classList.remove('show'); btnUntil = 0;
+    if (toastWait) { const m = toastWait; toastWait = null; toastT = setTimeout(() => toast(m), 300); }
+  }, action ? 8000 : 2200);
 }
+// restore() must put back ONLY what that one change did (never a whole copy of the list: that would undo later changes too)
 const undoToast = (msg, restore) => toast(msg, { label: 'Undo', run: () => { restore(); save(); render(); toast('Restored'); } });
 
 // ================= Passcode lock =================
