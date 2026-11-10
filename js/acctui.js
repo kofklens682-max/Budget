@@ -42,6 +42,7 @@ Acct.use({
     await keepCopy('before', why === 'newer' ? 'Before the copy from your other phone' : 'Before bringing back the online copy');
     n.settings.pin = S.settings.pin;
     S = n;
+    BR.replaced(); // the other phone's schedule never marks this phone's Teacher groups as gone
     save(); // (quiet: this doesn't count as a change to send back)
     applyTheme();
     UI.cur = S.settings.currency; UI.hAcc = 'all'; UI.hGroup = 'all';

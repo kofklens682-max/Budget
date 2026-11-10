@@ -2145,6 +2145,7 @@ async function importBackupFile(f) {
   n.settings.pin = S.settings.pin;
   if (!data.schedule) n.schedule = S.schedule; // older backups have no schedule — keep the current one
   S = n;
+  BR.replaced(); // Teacher's lesson days are kept (never marked gone by an old backup)
   save(); applyTheme();
   UI.cur = S.settings.currency;
   UI.hAcc = 'all'; UI.hGroup = 'all';
@@ -2179,6 +2180,7 @@ async function restoreCopy(key) {
   await keepCopy('before', 'Before going back');
   d.settings.pin = S.settings.pin;
   S = d;
+  BR.replaced(); // Teacher's lesson days are kept (never marked gone by an older copy)
   save(); applyTheme();
   UI.cur = S.settings.currency; UI.hAcc = 'all'; UI.hGroup = 'all';
   closeSheet(); render();
@@ -2480,7 +2482,7 @@ Object.assign(ACTIONS, {
   erase: async () => {
     if (!(await ask({ title: 'Erase all data?', msg: 'Every entry, account, group, goal, your schedule and settings will be deleted from the app. For two weeks you can still bring them back from Settings → Automatic copies.', ok: 'Erase everything', destructive: true }))) return;
     await keepCopy('before', 'Before erasing');
-    S = blank(); save(); applyTheme(); UI.cur = 'UZS'; UI.hAcc = 'all'; UI.hGroup = 'all';
+    S = blank(); BR.replaced(); save(); applyTheme(); UI.cur = 'UZS'; UI.hAcc = 'all'; UI.hGroup = 'all';
     closeSheet(); render(); toast('All data erased');
   },
 });

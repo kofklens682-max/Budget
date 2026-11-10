@@ -117,8 +117,9 @@ const BR = (() => {
   const NONE = 'none';
   const csOf = (tid) => { const a = S.schedule.acts.find((x) => x.id === tid); return a ? sigOf(a.name, slotsIn(tid)) : NONE; };
   const dropAct = (tid) => { const sched = S.schedule; sched.days.forEach((d, di) => d.blocks.filter((b) => b.act === tid).forEach((b) => freeUp(di, b.id))); sched.acts = sched.acts.filter((x) => x.id !== tid); };
+  let hold = false; // true while the whole of Budget is being replaced: nothing may be sent to Teacher until Teacher's lessons are taken in (see replaced)
   function pushLessons() { // Budget -> Teacher: what you changed in the schedule
-    if (!S.schedule || typeof dayPlan !== 'function') return;
+    if (hold || !S.schedule || typeof dayPlan !== 'function') return;
     const L = lsRead(), M = lsMem(); let wrote = false;
     const ids = new Set([...S.schedule.acts.filter((a) => isT(a.id)).map((a) => a.id.slice(1)), ...Object.keys(M)]);
     ids.forEach((id) => {
@@ -175,6 +176,18 @@ const BR = (() => {
     else pushLessons();
     if (ch && notes.length) toast('Lessons from Teacher are in your schedule · shortened: ' + [...new Set(notes)].slice(0, 3).join(' · '));
     return ch;
+  }
+  /* 10 Nov 2026 (audit G1): Budget's whole data or whole schedule was just replaced (Erase, a backup, an older copy, the copy from
+     another phone, a schedule link). "budget-lsm" still describes the OLD schedule, so the next save would tell Teacher that every
+     lesson group is gone. Call this right after S (or S.schedule) is replaced and BEFORE save(): the agreed state is forgotten,
+     Teacher's lessons are taken in first, and only what is really new here is sent afterwards. Nothing is ever marked gone by it. */
+  function replaced() {
+    hold = true;
+    try {
+      try { localStorage.removeItem(LSM); } catch (e) { /* nothing kept */ }
+      sync(); // the groups follow the Teacher app again (its save() sends nothing to Teacher while hold is on)
+    } finally { hold = false; }
+    syncLessons(); // with no agreed state, everything Teacher has is newer: it is pulled first, then the rest is sent
   }
 
   /* ----- what a student owes, and where a payment goes ----- */
@@ -527,7 +540,15 @@ const BR = (() => {
   { const _render = render; render = function (...a) { if (typeof sheet === 'undefined' || !sheet) sync(); const r = _render(...a); setTimeout(banner, 0); return r; }; }
   setInterval(banner, 2000);
   window.addEventListener('storage', (e) => { if (e.key === RS || e.key === LS) { sync(); syncLessons(); render(); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { whenOpen(() => { sync(); syncLessons(); publish(); setTimeout(handoff, 300); }); } });
+  // back from the Teacher app: when the roster or the lessons changed, the pages kept from before are out of date (audit G4)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    whenOpen(() => {
+      const c1 = sync(), c2 = syncLessons(); publish();
+      if (c1 || c2) { dropKept(); if (!sheet) render(); }
+      setTimeout(handoff, 300);
+    });
+  });
   // 9 Nov: the first screen already went through sync() (see render above), so this second pass redraws only if something really changed
   const firstSync = () => whenOpen(() => setTimeout(() => { const c1 = sync(), c2 = syncLessons(); publish(); handoff(); if ((c1 || c2) && typeof render === 'function') render(); }, 500));
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', firstSync); else firstSync();
@@ -537,5 +558,5 @@ const BR = (() => {
     undoToast('Record deleted', () => { S.records.push(r); });
     return true;
   }
-  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read(), syncLessons, pushLessons, isT };
+  return { lessonGroups, on, who, ok, mount, refresh, save: saveLesson, delRecord, fromDraft, norm, sync, publish, plan, owed, remMap, allocOf, charge, roster: () => read(), syncLessons, pushLessons, replaced, isT };
 })();

@@ -742,7 +742,7 @@ function lockNow() {
       // The automatic copies go too — otherwise they'd open the data without the passcode.
       dropAllCopies();
       dropAllPics();
-      S = blank(); save(); applyTheme(); UI.cur = 'UZS';
+      S = blank(); if (typeof BR !== 'undefined') BR.replaced(); save(); applyTheme(); UI.cur = 'UZS';
       locked = false; c.close(); render();
       toast('All data erased');
     },

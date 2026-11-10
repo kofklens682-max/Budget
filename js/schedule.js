@@ -573,10 +573,11 @@ function scheduleFromCode(code) {
 async function importScheduleCode(code) {
   let sch;
   try { sch = scheduleFromCode(code); } catch (e) { toast('That schedule link is damaged'); return; }
-  if (hasSchedule() && !(await ask({ title: 'Replace your schedule?', msg: 'This link has a full week. Your current schedule will be replaced.', ok: 'Replace' }))) return;
+  if (hasSchedule() && !(await ask({ title: 'Replace your schedule?', msg: `This link has a full week. Your current schedule will be replaced.${BR.on() ? ' Lesson days from the Teacher app stay as they are.' : ''}`, ok: 'Replace' }))) return;
   // Keep links to groups that already exist with the same lesson names.
   sch.acts.forEach((a) => { const g = S.groups.find((x) => x.name.toLowerCase() === a.name.toLowerCase()); if (g && a.kind === 'lesson') a.groupId = g.id; });
   S.schedule = sch;
+  BR.replaced(); // Teacher's lesson days are taken in again, never marked gone
   save();
   UI.sDay = todayIdx();
   if (sheet) closeSheet();
