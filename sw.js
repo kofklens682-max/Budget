@@ -5,6 +5,7 @@ const SHARE = 'budget-share'; // a picture or message shared to Budget, until th
 const SHELL = [
   './',
   './index.html',
+  './tokens.css',
   './style.css',
   './icons.js',
   './js/keep.js',

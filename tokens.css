@@ -1,0 +1,41 @@
+/* THE TOKENS (10 Nov 2026) — one set of speeds, curves, corners, sizes, shadows and colors for Teacher and Budget.
+   The same file is in both apps: change both. Rules: plan\SYSTEM.md. New and changed styles use these names, never raw numbers. */
+:root {
+  /* movement: 3 speeds, 2 curves, 1 spring */
+  --t-fast: 150ms;   /* press, fade, color */
+  --t-base: 300ms;   /* switches, pills, tab change, small sheets */
+  --t-slow: 450ms;   /* pushed screen, full sheet */
+  --ease: cubic-bezier(.32, .72, 0, 1);         /* everything that moves */
+  --ease-fade: ease-out;                         /* everything that only fades */
+  --ease-spring: cubic-bezier(.3, 1.35, .5, 1);  /* the one bounce: tab icon, switch thumb, swatches, glass under the finger */
+
+  /* corners */
+  --r-chip: 8px; --r-btn: 12px; --r-card: 16px; --r-sheet: 22px; --r-pill: 999px;
+
+  /* text */
+  --fs-note: 13px; --fs-sub: 15px; --fs-body: 17px; --fs-card: 20px; --fs-title: 28px; --fs-large: 34px; --fs-chart: 12px;
+
+  /* spacing */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* the smallest thing a finger can hit */
+  --tap: 44px;
+
+  /* shadows: two only */
+  --sh-card: 0 1px 2px rgba(20, 40, 80, .05), 0 6px 18px -10px rgba(20, 40, 80, .14);
+  --sh-sheet: 0 -10px 40px -10px rgba(20, 40, 80, .25);
+
+  /* colors: each means one thing */
+  --c-blue: #007AFF;    /* go somewhere */
+  --c-green: #34C759;   /* done, paid, present, switch on */
+  --c-red: #FF3B30;     /* delete, canceled, absent, not paid */
+  --c-orange: #FF9500;  /* waiting, postponed, warning */
+  --c-gray: #8E8E93; --c-gray-line: #C7C7CC; --c-gray-bg: #F2F2F7;
+
+  /* glass (Look = Glass): only on what floats */
+  --glass-bg: rgba(255, 255, 255, .16);
+  --glass-bg-strong: rgba(255, 255, 255, .30);
+  --glass-blur: blur(6px) saturate(1.7);
+  --glass-rim: inset 0 1.5px 0 rgba(255, 255, 255, .95), inset 1px 0 0 rgba(255, 255, 255, .5), inset -1px 0 0 rgba(255, 255, 255, .35), inset 0 0 0 .6px rgba(255, 255, 255, .6), inset 0 -1.5px 1px rgba(20, 30, 60, .10), inset 0 10px 14px -10px rgba(255, 255, 255, .7);
+  --glass-shadow: 0 10px 30px -8px rgba(20, 40, 80, .22), 0 2px 6px rgba(20, 40, 80, .06);
+}
