@@ -10,20 +10,20 @@ html .ic svg .f { fill: url(#ic-white) #fff; }
 
 /* ---- whole-icon motions (data-m on the tile) ---- */
 .ic svg { transform-origin: 50% 50%; }
-.ic.play svg, .row.flash .ic svg, .fx-new .ic svg { animation-duration: .95s; animation-fill-mode: both; animation-timing-function: var(--ic-out); }
-.row.flash .ic svg, .fx-new .ic svg { animation-delay: .5s; }
-.ic[data-m="hop"].play svg, .row.flash .ic[data-m="hop"] svg, .fx-new .ic[data-m="hop"] svg { animation-name: m-hop; }
-.ic[data-m="beat"].play svg, .row.flash .ic[data-m="beat"] svg, .fx-new .ic[data-m="beat"] svg { animation-name: m-beat; }
-.ic[data-m="spin"].play svg, .row.flash .ic[data-m="spin"] svg, .fx-new .ic[data-m="spin"] svg { animation-name: m-spin; animation-duration: 1.1s; }
-.ic[data-m="flick"].play svg, .row.flash .ic[data-m="flick"] svg, .fx-new .ic[data-m="flick"] svg { animation-name: m-flick; }
-.ic[data-m="drive"].play svg, .row.flash .ic[data-m="drive"] svg, .fx-new .ic[data-m="drive"] svg { animation-name: m-drive; }
-.ic[data-m="fly"].play svg, .row.flash .ic[data-m="fly"] svg, .fx-new .ic[data-m="fly"] svg { animation-name: m-fly; animation-duration: 1.1s; }
-.ic[data-m="wiggle"].play svg, .row.flash .ic[data-m="wiggle"] svg, .fx-new .ic[data-m="wiggle"] svg { animation-name: m-wiggle; }
-.ic[data-m="float"].play svg, .row.flash .ic[data-m="float"] svg, .fx-new .ic[data-m="float"] svg { animation-name: m-float; animation-duration: 1.1s; }
-.ic[data-m="pulse"].play svg, .row.flash .ic[data-m="pulse"] svg, .fx-new .ic[data-m="pulse"] svg { animation-name: m-pulse; }
-.ic[data-m="twirl"].play svg, .row.flash .ic[data-m="twirl"] svg, .fx-new .ic[data-m="twirl"] svg { animation-name: m-twirl; animation-duration: 1.1s; }
-.ic[data-m="nod"].play svg, .row.flash .ic[data-m="nod"] svg, .fx-new .ic[data-m="nod"] svg { animation-name: m-nod; }
-.ic[data-m="swing"].play svg, .row.flash .ic[data-m="swing"] svg, .fx-new .ic[data-m="swing"] svg { animation-name: m-swing; transform-origin: 50% 12%; animation-duration: 1.1s; }
+.ic.play svg, .row.flash .ic svg { animation-duration: .95s; animation-fill-mode: both; animation-timing-function: var(--ic-out); }
+.row.flash .ic svg { animation-delay: .5s; }
+.ic[data-m="hop"].play svg, .row.flash .ic[data-m="hop"] svg { animation-name: m-hop; }
+.ic[data-m="beat"].play svg, .row.flash .ic[data-m="beat"] svg { animation-name: m-beat; }
+.ic[data-m="spin"].play svg, .row.flash .ic[data-m="spin"] svg { animation-name: m-spin; animation-duration: 1.1s; }
+.ic[data-m="flick"].play svg, .row.flash .ic[data-m="flick"] svg { animation-name: m-flick; }
+.ic[data-m="drive"].play svg, .row.flash .ic[data-m="drive"] svg { animation-name: m-drive; }
+.ic[data-m="fly"].play svg, .row.flash .ic[data-m="fly"] svg { animation-name: m-fly; animation-duration: 1.1s; }
+.ic[data-m="wiggle"].play svg, .row.flash .ic[data-m="wiggle"] svg { animation-name: m-wiggle; }
+.ic[data-m="float"].play svg, .row.flash .ic[data-m="float"] svg { animation-name: m-float; animation-duration: 1.1s; }
+.ic[data-m="pulse"].play svg, .row.flash .ic[data-m="pulse"] svg { animation-name: m-pulse; }
+.ic[data-m="twirl"].play svg, .row.flash .ic[data-m="twirl"] svg { animation-name: m-twirl; animation-duration: 1.1s; }
+.ic[data-m="nod"].play svg, .row.flash .ic[data-m="nod"] svg { animation-name: m-nod; }
+.ic[data-m="swing"].play svg, .row.flash .ic[data-m="swing"] svg { animation-name: m-swing; transform-origin: 50% 12%; animation-duration: 1.1s; }
 
 @keyframes m-hop { 0% { transform: none; } 18% { transform: translateY(1px) scale(1.1, .86); } 46% { transform: translateY(-4.5px) scale(.93, 1.1); } 72% { transform: translateY(0) scale(1.06, .94); } 100% { transform: none; } }
 @keyframes m-beat { 0% { transform: none; } 16% { transform: scale(1.26); } 32% { transform: scale(.94); } 48% { transform: scale(1.18); } 70%, 100% { transform: none; } }
@@ -39,57 +39,57 @@ html .ic svg .f { fill: url(#ic-white) #fff; }
 @keyframes m-swing { 0% { transform: none; } 18% { transform: rotate(20deg); } 38% { transform: rotate(-15deg); } 58% { transform: rotate(8deg); } 78% { transform: rotate(-3deg); } 100% { transform: none; } }
 
 /* ---- the tile itself: a new entry arrives with a pop and one soft ring in its own colour ---- */
-.row.flash .ic, .fx-new .ic { animation: ic-pop .7s var(--ic-spring) .3s both, ic-ring 1.1s var(--ic-out) .3s both; }
+.row.flash .ic { animation: ic-pop .7s var(--ic-spring) .3s both, ic-ring 1.1s var(--ic-out) .3s both; }
 @keyframes ic-pop { 0% { transform: scale(.4); opacity: 0; } 60% { transform: scale(1.14); opacity: 1; } 100% { transform: none; opacity: 1; } }
 @keyframes ic-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 100% { box-shadow: 0 0 0 11px color-mix(in srgb, var(--c) 0%, transparent); } }
 .ic.play { animation: ic-tap .5s var(--ic-spring) both; }
 @keyframes ic-tap { 0% { transform: none; } 30% { transform: scale(.9); } 100% { transform: none; } }
 
 /* ---- moving parts inside some icons ---- */
-.ic.play .a-coin, .row.flash .a-coin, .fx-new .a-coin { animation: a-drop 1s var(--ic-out) both; }
+.ic.play .a-coin, .row.flash .a-coin { animation: a-drop 1s var(--ic-out) both; }
 @keyframes a-drop { 0% { transform: translateY(-1px); opacity: 1; } 55% { transform: translateY(5.4px); opacity: 1; } 75% { transform: translateY(6.2px) scale(.7); opacity: 0; } 100% { transform: translateY(-1px); opacity: 1; } }
-.ic.play .a-arrow, .row.flash .a-arrow, .fx-new .a-arrow { animation: a-rise .9s var(--ic-spring) both; }
+.ic.play .a-arrow, .row.flash .a-arrow { animation: a-rise .9s var(--ic-spring) both; }
 @keyframes a-rise { 0% { transform: translate(-2px, 3px); } 55% { transform: translate(1.4px, -1.4px); } 100% { transform: none; } }
-.ic.play .a-dots circle, .row.flash .a-dots circle, .fx-new .a-dots circle { animation: a-bob .8s var(--ic-out) both; transform-box: fill-box; transform-origin: center; }
-.ic.play .a-dots circle:nth-child(2), .row.flash .a-dots circle:nth-child(2), .fx-new .a-dots circle:nth-child(2) { animation-delay: .12s; }
-.ic.play .a-dots circle:nth-child(3), .row.flash .a-dots circle:nth-child(3), .fx-new .a-dots circle:nth-child(3) { animation-delay: .24s; }
+.ic.play .a-dots circle, .row.flash .a-dots circle { animation: a-bob .8s var(--ic-out) both; transform-box: fill-box; transform-origin: center; }
+.ic.play .a-dots circle:nth-child(2), .row.flash .a-dots circle:nth-child(2) { animation-delay: .12s; }
+.ic.play .a-dots circle:nth-child(3), .row.flash .a-dots circle:nth-child(3) { animation-delay: .24s; }
 @keyframes a-bob { 0% { transform: none; } 35% { transform: translateY(-2.4px) scale(1.2); } 100% { transform: none; } }
-.ic.play .a-rec, .row.flash .a-rec, .fx-new .a-rec { animation: a-blink .9s steps(1) both; }
+.ic.play .a-rec, .row.flash .a-rec { animation: a-blink .9s steps(1) both; }
 @keyframes a-blink { 0%, 100% { opacity: 1; } 25%, 75% { opacity: 0; } 50% { opacity: 1; } }
-.ic.play .a-day, .row.flash .a-day, .fx-new .a-day { animation: a-pop .8s var(--ic-spring) both; }
+.ic.play .a-day, .row.flash .a-day { animation: a-pop .8s var(--ic-spring) both; }
 @keyframes a-pop { 0% { transform: scale(.2); } 100% { transform: none; } }
-.ic.play .a-minute, .row.flash .a-minute, .fx-new .a-minute { animation: a-hand 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
-.ic.play .a-hour, .row.flash .a-hour, .fx-new .a-hour { animation: a-hand .8s var(--ic-out) both reverse; transform-box: view-box; transform-origin: 12px 12px; }
+.ic.play .a-minute, .row.flash .a-minute { animation: a-hand 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
+.ic.play .a-hour, .row.flash .a-hour { animation: a-hand .8s var(--ic-out) both reverse; transform-box: view-box; transform-origin: 12px 12px; }
 @keyframes a-hand { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
-.ic.play .a-rays, .row.flash .a-rays, .fx-new .a-rays { animation: a-turn 1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
+.ic.play .a-rays, .row.flash .a-rays { animation: a-turn 1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
 @keyframes a-turn { 0% { transform: rotate(0) scale(.9); } 100% { transform: rotate(90deg) scale(1); } }
-.ic.play .a-core, .row.flash .a-core, .fx-new .a-core { animation: a-lick .9s ease-in-out both; transform-origin: 50% 100%; }
+.ic.play .a-core, .row.flash .a-core { animation: a-lick .9s ease-in-out both; transform-origin: 50% 100%; }
 @keyframes a-lick { 0%, 100% { transform: none; } 25% { transform: scale(.8, 1.22); } 55% { transform: scale(1.14, .86); } 80% { transform: scale(.92, 1.1); } }
-.ic.play .a-fil, .row.flash .a-fil, .fx-new .a-fil { animation: a-blink .9s steps(1) both; }
-.ic.play .a-ice, .row.flash .a-ice, .fx-new .a-ice { animation: a-clink 1s var(--ic-out) both; }
+.ic.play .a-fil, .row.flash .a-fil { animation: a-blink .9s steps(1) both; }
+.ic.play .a-ice, .row.flash .a-ice { animation: a-clink 1s var(--ic-out) both; }
 @keyframes a-clink { 0% { transform: none; } 30% { transform: translateY(-1.6px) rotate(-8deg); } 60% { transform: translateY(.8px) rotate(5deg); } 100% { transform: none; } }
-.ic.play .a-slice, .row.flash .a-slice, .fx-new .a-slice { animation: a-sway 1s var(--ic-out) both; transform-origin: 50% 90%; }
+.ic.play .a-slice, .row.flash .a-slice { animation: a-sway 1s var(--ic-out) both; transform-origin: 50% 90%; }
 @keyframes a-sway { 0% { transform: none; } 30% { transform: rotate(-9deg); } 60% { transform: rotate(6deg); } 100% { transform: none; } }
-.ic.play .a-gem, .row.flash .a-gem, .fx-new .a-gem { animation: a-glint 1s var(--ic-spring) both; }
+.ic.play .a-gem, .row.flash .a-gem { animation: a-glint 1s var(--ic-spring) both; }
 @keyframes a-glint { 0% { transform: scale(1); } 35% { transform: translateY(-1.6px) scale(1.2); } 100% { transform: none; } }
-.ic.play .a-petals, .row.flash .a-petals, .fx-new .a-petals { animation: a-bloom 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
+.ic.play .a-petals, .row.flash .a-petals { animation: a-bloom 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 12px; }
 @keyframes a-bloom { 0% { transform: rotate(-72deg) scale(.6); } 100% { transform: none; } }
-.ic.play .a-star, .row.flash .a-star, .fx-new .a-star { animation: a-twinkle 1s var(--ic-spring) both; }
-.ic.play .a-tw, .row.flash .a-tw, .fx-new .a-tw { animation: a-twinkle 1s var(--ic-spring) .1s both; }
+.ic.play .a-star, .row.flash .a-star { animation: a-twinkle 1s var(--ic-spring) both; }
+.ic.play .a-tw, .row.flash .a-tw { animation: a-twinkle 1s var(--ic-spring) .1s both; }
 @keyframes a-twinkle { 0% { transform: scale(.1) rotate(-60deg); opacity: 0; } 55% { transform: scale(1.35) rotate(10deg); opacity: 1; } 100% { transform: none; opacity: 1; } }
-.ic.play .a-b, .row.flash .a-b, .fx-new .a-b { animation: a-up 1.2s var(--ic-out) both; transform-origin: 50% 100%; }
+.ic.play .a-b, .row.flash .a-b { animation: a-up 1.2s var(--ic-out) both; transform-origin: 50% 100%; }
 @keyframes a-up { 0% { transform: translateY(3px) scale(.92); } 45% { transform: translateY(-3.4px) rotate(4deg); } 75% { transform: translateY(.6px) rotate(-2deg); } 100% { transform: none; } }
-.ic.play .a-head, .row.flash .a-head, .fx-new .a-head { animation: a-twist .9s var(--ic-out) both; }
+.ic.play .a-head, .row.flash .a-head { animation: a-twist .9s var(--ic-out) both; }
 @keyframes a-twist { 0% { transform: none; } 40% { transform: rotate(-40deg); } 100% { transform: none; } }
-.ic.play .a-lens, .row.flash .a-lens, .fx-new .a-lens { animation: a-focus .9s var(--ic-out) both; }
+.ic.play .a-lens, .row.flash .a-lens { animation: a-focus .9s var(--ic-out) both; }
 @keyframes a-focus { 0% { transform: none; } 30% { transform: scale(1.5); } 60% { transform: scale(.7); } 100% { transform: none; } }
-.ic.play .a-cross, .row.flash .a-cross, .fx-new .a-cross { animation: a-pop2 .9s var(--ic-spring) both; }
+.ic.play .a-cross, .row.flash .a-cross { animation: a-pop2 .9s var(--ic-spring) both; }
 @keyframes a-pop2 { 0% { transform: scale(.3); } 55% { transform: scale(1.3); } 100% { transform: none; } }
-.ic.play .a-lamp, .row.flash .a-lamp, .fx-new .a-lamp { animation: a-blink .9s steps(1) both; }
-.ic.play .a-bell, .row.flash .a-bell, .fx-new .a-bell { animation: m-swing 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 3px; }
-.ic[data-g="bell"].play svg, .row.flash .ic[data-g="bell"] svg, .fx-new .ic[data-g="bell"] svg { animation-name: none; }
+.ic.play .a-lamp, .row.flash .a-lamp { animation: a-blink .9s steps(1) both; }
+.ic.play .a-bell, .row.flash .a-bell { animation: m-swing 1.1s var(--ic-out) both; transform-box: view-box; transform-origin: 12px 3px; }
+.ic[data-g="bell"].play svg, .row.flash .ic[data-g="bell"] svg { animation-name: none; }
 /* in a new row everything waits for the tile to pop in */
-.row.flash .ic [class^="a-"], .row.flash .ic [class^="a-"] circle, .fx-new .ic [class^="a-"], .fx-new .ic [class^="a-"] circle { animation-delay: .5s; }
+.row.flash .ic [class^="a-"], .row.flash .ic [class^="a-"] circle { animation-delay: .5s; }
 
 /* the picker: the chosen icon is a coloured tile, the rest are small neutral ones */
 .icon-picker { display: flex; flex-direction: column; gap: 14px; }
@@ -102,5 +102,5 @@ html .ic svg .f { fill: url(#ic-white) #fff; }
 .icon-grid button.on .ic { opacity: 1; transform: scale(1.06); box-shadow: 0 0 0 2.5px var(--card), 0 0 0 4.5px var(--c), 0 6px 14px -4px color-mix(in srgb, var(--c) 60%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ic.play, .ic.play svg, .row.flash .ic, .row.flash .ic svg, .fx-new .ic, .fx-new .ic svg, .ic svg g { animation: none !important; }
+  .ic.play, .ic.play svg, .row.flash .ic, .row.flash .ic svg, .ic svg g { animation: none !important; }
 }

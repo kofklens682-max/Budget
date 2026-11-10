@@ -46,14 +46,15 @@
 
 /* the hide-balance eye (js/hide.js): next to "Total balance"; the choice is remembered */
 .hero-lab { display: flex; align-items: center; gap: 6px; }
-.eye-btn { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2); margin-left: auto; transition: transform .25s var(--ios-ease), background .25s; }
+.eye-btn { position: relative; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text-2); margin-left: auto; transition: transform .25s var(--ios-ease), background .25s; }
+.eye-btn::before { content: ""; position: absolute; inset: min(0px, calc((100% - var(--tap)) / 2)); }
 .eye-btn:active { transform: scale(.86); }
 .eye-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .eye-btn .off { display: none; } html.hide-money .eye-btn .on { display: none; } html.hide-money .eye-btn .off { display: block; }
 /* hidden money: the numbers are replaced by **** in js/hide.js (no blur) */
 
 /* smoother, calmer motion: cards rise in with the iOS curve, presses spring back */
-.card, .acc-card, .btn, .fab { transition: transform .35s var(--ios-ease), box-shadow .3s, background .3s; }
+.card, .acc-card, .btn, .fab { transition: transform .35s var(--ios-ease), background .3s; }
 .acc-card:active, button.card:active { transform: scale(.97); }
 
 
@@ -104,9 +105,10 @@ html.glass .sheet { -webkit-backdrop-filter: none !important; backdrop-filter: n
 
 /* 5 Nov 2026: an account's money by currency (js/split.js) */
 .sp-card .sp-row { min-height: 60px; }
-.sp-sym { font-size: 11px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+.sp-sym { font-size: 12px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
 .sp-amt { font-size: 16px; margin-left: auto; white-space: nowrap; }
-.sp-chg { margin-left: 10px; border-radius: 99px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); transition: transform .25s var(--ios-ease), background .25s; }
+.sp-chg { position: relative; margin-left: 10px; border-radius: 99px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); transition: transform .25s var(--ios-ease), background .25s; }
+.sp-chg::before { content: ""; position: absolute; inset: min(0px, calc((100% - var(--tap)) / 2)); }
 .sp-chg:active { transform: scale(.92); }
 .sp-tot .row-title { font-weight: 600; } .sp-tot b { font-size: 17px; }
 .sp-ex { margin-top: 10px; }
@@ -151,7 +153,7 @@ button, input, select, textarea { font-family: var(--font); }
 .day-head { font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--text-2); }
 .btn { font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
 .seg button { font-weight: 600; letter-spacing: -.012em; }
-.tabs button span { font-size: 10.5px; font-weight: 600; letter-spacing: -.005em; }
+.tabs button span { font-size: 12px; font-weight: 600; letter-spacing: -.005em; }
 .num, .hero, .row-amt { font-variant-numeric: tabular-nums; }
 
 /* one set of colours (the iPhone ones): no leftover yellows or slates */

@@ -18,8 +18,8 @@
       "files": [{ "name": "file", "accept": ["image/*"] }]
     }
   },
-  "background_color": "#F5F1E6",
-  "theme_color": "#F5F1E6",
+  "background_color": "#F7F8FC",
+  "theme_color": "#F7F8FC",
   "icons": [
     {
       "src": "icons/icon-192.png",
