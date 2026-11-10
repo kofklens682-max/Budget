@@ -23,8 +23,8 @@
 <script>
 (async function () {
   var msg = document.getElementById('msg'), go = document.getElementById('go'), n = 0, c = 0;
-  try { var regs = await navigator.serviceWorker.getRegistrations(); for (var r of regs) { if (await r.unregister()) n++; } } catch (e) { /* no service worker */ }
-  try { var keys = await caches.keys(); for (var k of keys) { if (await caches.delete(k)) c++; } } catch (e) { /* no cache storage */ }
+  try { var regs = await navigator.serviceWorker.getRegistrations(); var here = new URL('./', location.href).href; for (var r of regs) { if (r.scope === here && (await r.unregister())) n++; } // 10 Nov 2026: only this app, the other apps on the site are left alone } catch (e) { /* no service worker */ }
+  try { var keys = await caches.keys(); for (var k of keys) { if (k.indexOf('budget-') === 0 && k !== 'teacher-media' && (await caches.delete(k))) c++; } // only this app's saved files; the downloaded lesson files stay } catch (e) { /* no cache storage */ }
   document.querySelector('h1').textContent = 'Done';
   msg.textContent = 'Removed ' + n + ' old helper and ' + c + ' saved file set(s). Your notes, money and groups are still there. Opening the app…';
   go.hidden = false;
