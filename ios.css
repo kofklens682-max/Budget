@@ -241,3 +241,13 @@ html.glass:root .tabs button span { font-weight: 700; }
 html.glass.g2-down:root .tabs button span { opacity: 1; }
 /* 11 Nov (user): the blur at the top is lighter */
 html.glass .g2-edge.t { height: 56px; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+
+/* 11 Nov 2026, from the phone (lag): the lens behind the tab bar and the blur strips at the screen edges are OFF; the tab bar keeps a light, cheap blur. */
+html.glass .g2-edge { display: none !important; }
+html.glass.g2-lens:root .tabs, html.glass:root .tabs { -webkit-backdrop-filter: blur(10px) saturate(1.5) !important; backdrop-filter: blur(10px) saturate(1.5) !important; }
+
+/* 11 Nov 2026 (user): while a finger slides over the tab bar, the GREEN goes with the glass under the finger, not with the page that is still open */
+.tabs.sliding button.on:not(.over), html.glass:root .tabs.sliding button.on:not(.over) { color: var(--muted) !important; }
+html.glass:root .tabs.sliding button.on:not(.over) { color: #15171C !important; }
+.tabs.sliding button.over { color: var(--accent) !important; }
+html.glass:root .tabs.sliding button.over { color: color-mix(in srgb, var(--accent) 68%, #000) !important; }
