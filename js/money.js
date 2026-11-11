@@ -152,7 +152,7 @@ function periodInfo(period, offset) {
 function breakdown(type, cur, from, to) {
   const map = new Map();
   for (const t of txBetween(from, to)) {
-    if (t.type !== type || t.date < from || t.date >= to) continue;
+    if (t.type !== type || t.date < from || t.date >= to || t.loan) continue;
     const c = cat(type, t.category);
     let key, e;
     if (type === 'out') { key = c.id; e = { id: c.id, name: c.name, g: c.g, c: c.c }; }
@@ -197,6 +197,7 @@ function txRow(t, showDate, inAccount) {
     tile = g ? grpBadge(g) : ic(c.g, c.c);
     title = t.person || (g ? g.name : c.name);
     if (g) parts.push(g.name + (t.forMonth && t.forMonth !== t.date.slice(0, 7) ? ` · for ${ymLabel(t.forMonth, true)}` : ''));
+    else if (t.loan) parts.push(LOAN_WORD[t.loan] || c.name);
     else if (t.person) parts.push(c.name);
     if (S.accounts.length > 1 && !inAccount) parts.push(acc(t.account).name);
     const v = t.type === 'in' ? t.amount : -t.amount;
@@ -423,7 +424,7 @@ const calChev = '<svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><path d=
 function calSpent(from, to) {
   const byDay = {};
   for (const x of txBetween(from, to)) {
-    if (x.date < from || x.date >= to || x.type === 'transfer') continue;
+    if (x.date < from || x.date >= to || x.type === 'transfer' || x.loan) continue;
     const d = byDay[x.date] || (byDay[x.date] = { out: 0, in: false });
     if (x.type === 'out') d.out += convT(x); else d.in = true;
   }
@@ -832,6 +833,7 @@ function txHtml() {
       who = (isIn && BR.on() ? who : '') + `<div class="form-label">${isIn ? 'Who gave it' : 'Paid to'}</div>
         <div class="group"><label class="field"><input id="person" style="text-align:left" placeholder="${isIn ? 'e.g. Mom, Employer' : 'e.g. Supermarket, Taxi (optional)'}" value="${esc(d.person)}" autocomplete="off" enterkeyhint="done"></label></div>
         ${people.length ? `<div class="quick">${people.map((p) => `<button data-act="pick-person" data-v="${esc(p)}" class="${p === d.person ? 'on' : ''}">${esc(p)}</button>`).join('')}</div>` : ''}`;
+      if (!d.groupId && !d.tpid) who += loanRow(d); // 11 Nov: lent / borrowed (js/loans.js)
     }
     body = `
     <div class="form-label">${isIn ? 'Money went to' : 'Paid from'}</div>
@@ -983,6 +985,7 @@ function saveTx() {
       rec.forMonth = d.forMonth || rec.date.slice(0, 7);
       if (d.studentId && grp(d.groupId).students.some((s) => s.id === d.studentId)) rec.studentId = d.studentId;
     }
+    if (d.loan && !rec.groupId && LOAN_KINDS[d.type].includes(d.loan)) { rec.loan = d.loan; if (rec.type === 'in') rec.noSplit = true; } // lent / borrowed: never shared out to goals
     UI.lastType = d.type;
     UI.lastAcc[d.type] = d.account;
   }

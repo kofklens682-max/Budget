@@ -230,3 +230,14 @@ html.glass .g2-edge { display: block; position: fixed; left: 0; right: 0; pointe
 html.glass .g2-edge.b { bottom: 0; height: 64px; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); -webkit-mask-image: linear-gradient(to top, #000 25%, transparent); mask-image: linear-gradient(to top, #000 25%, transparent); }
 html.glass .g2-edge.t { top: 0; height: 64px; opacity: 0; transition: opacity .25s ease-out; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 45%, transparent); }
 html.glass.g2-scrolled .g2-edge.t { opacity: 1; }
+
+/* 11 Nov 2026 (user: "the icons and the names on the bar below are not that visible"): Glass tab bar, easier to read (the same as in Teacher) */
+html.glass:root .tabs { background: rgba(255, 255, 255, .46) !important; }
+html.glass.g2-lens:root .tabs { -webkit-backdrop-filter: url(#g2lens-tabs) blur(7px) saturate(1.7) !important; backdrop-filter: url(#g2lens-tabs) blur(7px) saturate(1.7) !important; }
+html.glass:root .tabs button { color: #15171C !important; text-shadow: 0 0 3px #fff, 0 0 8px rgba(255, 255, 255, .95); }
+html.glass:root .tabs button.on { color: color-mix(in srgb, var(--accent) 68%, #000) !important; }
+html.glass:root .tabs button svg { stroke-width: 2.3px; filter: drop-shadow(0 0 2px rgba(255, 255, 255, .9)); }
+html.glass:root .tabs button span { font-weight: 700; }
+html.glass.g2-down:root .tabs button span { opacity: 1; }
+/* 11 Nov (user): the blur at the top is lighter */
+html.glass .g2-edge.t { height: 56px; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }

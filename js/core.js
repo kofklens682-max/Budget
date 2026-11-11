@@ -399,6 +399,7 @@ function totals(cur, from, to) {
   let i = 0, o = 0;
   for (const t of txBetween(from, to)) {
     if (t.date < from || t.date >= to) continue;
+    if (t.loan) continue; // lent / borrowed money is not income or spending (js/loans.js)
     if (t.type === 'in') i += convT(t, cur);
     else if (t.type === 'out') o += convT(t, cur);
   }
