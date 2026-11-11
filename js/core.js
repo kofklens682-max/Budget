@@ -307,6 +307,7 @@ let S = load();
 let topRev = S.rev; // highest save number so far: a fresh start (Erase, a restored backup) still counts as newest
 let persistAsked = false;
 function save() {
+  stampRates();
   S.rev = Math.max(S.rev || 0, topRev) + 1;
   topRev = S.rev;
   const json = JSON.stringify(S);
@@ -398,8 +399,8 @@ function totals(cur, from, to) {
   let i = 0, o = 0;
   for (const t of txBetween(from, to)) {
     if (t.date < from || t.date >= to) continue;
-    if (t.type === 'in') i += conv(t.amount, t.currency, cur);
-    else if (t.type === 'out') o += conv(t.amount, t.currency, cur);
+    if (t.type === 'in') i += convT(t, cur);
+    else if (t.type === 'out') o += convT(t, cur);
   }
   return { in: i, out: o };
 }
@@ -414,6 +415,16 @@ function conv(v, from, to = UI.cur) {
   if (!r) return 0; // no rate yet: the other currency can't be counted
   return from === 'USD' ? v * r : v / r;
 }
+// 11 Nov 2026 (audit B2): every entry remembers the dollar rate of the day it was written (t.rate). The months that are over are
+// counted at their own rate, so last month's "Money in / out" no longer changes each time the rate moves. This month, and what you
+// HAVE now (balances), still use today's rate. Entries from before this change get today's rate once, and keep it.
+function convT(t, to = UI.cur) {
+  const v = t.amount, from = t.currency; if (!v || from === to) return v;
+  const r = t.rate > 0 && (t.date || '').slice(0, 7) < todayIso().slice(0, 7) ? t.rate : somRate();
+  if (!r) return 0;
+  return from === 'USD' ? v * r : v / r;
+}
+function stampRates() { const r = somRate(); if (!r) return; for (const t of S.tx) if (!(t.rate > 0)) t.rate = r; }
 const inSom = (v, cur) => conv(v, cur, 'UZS');
 const fmtIn = (v, from, o) => fmt(conv(v, from), UI.cur, o);
 // The currency an amount kept in `from` is shown in: the chosen one, or its own while there's no rate.

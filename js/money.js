@@ -163,7 +163,7 @@ function breakdown(type, cur, from, to) {
       else { key = 'c:' + c.id; e = { name: c.name, g: c.g, c: c.c }; }
     }
     const cur0 = map.get(key) || { ...e, v: 0 };
-    cur0.v += conv(t.amount, t.currency, cur);
+    cur0.v += convT(t, cur);
     map.set(key, cur0);
   }
   // (with no dollar rate, entries in the other currency count as 0: they are left out here instead of making 0/0 = NaN% — audit B4)
@@ -425,7 +425,7 @@ function calSpent(from, to) {
   for (const x of txBetween(from, to)) {
     if (x.date < from || x.date >= to || x.type === 'transfer') continue;
     const d = byDay[x.date] || (byDay[x.date] = { out: 0, in: false });
-    if (x.type === 'out') d.out += conv(x.amount, x.currency); else d.in = true;
+    if (x.type === 'out') d.out += convT(x); else d.in = true;
   }
   return byDay;
 }
@@ -605,7 +605,7 @@ function spendRing(cur, info) {
 function openCatEntries(id) {
   const cur = UI.cur, info = periodInfo(UI.period, UI.offset), c = cat('out', id);
   const list = S.tx.filter((t) => t.type === 'out' && t.category === id && t.date >= info.from && t.date < info.to).sort(sortTx);
-  const sum = list.reduce((a, t) => a + conv(t.amount, t.currency, cur), 0); // (so'm and $ entries together, in the chosen currency)
+  const sum = list.reduce((a, t) => a + convT(t, cur), 0); // (so'm and $ entries together, in the chosen currency)
   openSheet(sheetHead(esc(c.name), '', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body">
     <div class="gd-hero">${ic(c.g, c.c, 'lg')}<div class="gd-name num">${fmt(sum, cur)}</div><div class="gd-amt">${info.title} · ${list.length === 1 ? '1 entry' : list.length + ' entries'}</div></div>
     <div class="group" style="margin-top:16px">${list.map((t) => txRow(t, true)).join('')}</div></div>`, null);
@@ -971,6 +971,7 @@ function saveTx() {
   if (d.type === 'in' && d.lesson && BR.on()) return BR.save(); // student fee: one entry per child, with the months it pays for
   const was = d.id ? S.tx.find((t) => t.id === d.id) : null;
   const base = { id: d.id || uid(), type: d.type, amount: roundCur(d.amount, d.currency), currency: d.currency, account: d.account, date: d.date && d.date <= todayIso() ? d.date : todayIso(), note: (d.note || '').trim(), createdAt: d.createdAt || Date.now() };
+  { const was = d.id && S.tx.find((t) => t.id === d.id); if (was && was.rate > 0) base.rate = was.rate; } // 11 Nov: an edited entry keeps the dollar rate of its day (see convT)
   let rec;
   if (d.type === 'transfer') {
     const exch = d.toCurrency !== d.currency;
