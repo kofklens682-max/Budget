@@ -21,9 +21,12 @@
   var root = document.documentElement, lastY = 0;
   window.addEventListener('scroll', function () {
     var y = window.scrollY || 0; if (Math.abs(y - lastY) < 4) return;
-    root.classList.toggle('g2-down', y > lastY && y > 60); lastY = y;
+    root.classList.toggle('g2-down', y > lastY && y > 60); root.classList.toggle('g2-scrolled', y > 12); lastY = y;
   }, { passive: true });
   document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tabs')) root.classList.remove('g2-down'); }, true);
+  // 11 Nov: the soft screen edges of the Glass look (styles: the end of ios.css)
+  function edges() { if (!document.body || document.querySelector('.g2-edge')) return; ['t', 'b'].forEach(function (k) { var e = document.createElement('div'); e.className = 'g2-edge ' + k; document.body.appendChild(e); }); }
+  if (document.body) edges(); else document.addEventListener('DOMContentLoaded', edges);
   function lens() {
     var tabs = document.querySelector('.tabs'); if (!tabs) return;
     var w = Math.round(tabs.offsetWidth), h = Math.round(tabs.offsetHeight), r = Math.min(h / 2, 36), band = 14;
