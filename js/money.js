@@ -1267,13 +1267,14 @@ function catFormHtml() {
     <div class="form-label">Name</div>
     <div class="group"><label class="field"><input id="c-name" style="text-align:left" placeholder="e.g. Tutoring, Sadaqa, To'y gifts" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done" maxlength="30"></label></div>
     <p class="hint">For money ${d.type === 'in' ? 'coming in' : 'going out'}.</p>
+    ${editing && !isOther ? '<button class="btn danger" data-act="del-cat" style="margin:4px 0 6px">Delete category</button>' : ''}<!-- 11 Nov 2026: Delete sits right under the name, not below the long icon list -->
     <div class="form-label">Icon</div>
     ${iconPickerHtml(d)}
     <div class="form-label">Colour</div>
     ${swatches('cat-color', d.c)}
     <div class="actions">
       <button class="btn" data-act="save-cat">${editing ? 'Save changes' : 'Create category'}</button>
-      ${editing && !isOther ? '<button class="btn danger" data-act="del-cat">Delete category</button>' : ''}
+      
     </div>
   </div>`;
 }
