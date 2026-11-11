@@ -2,7 +2,7 @@
 /* Icon motion (6 Nov 2026). The look of the motion is in iconfx.css; this file only says WHEN to play it:
    - an icon is tapped,
    - an icon or category is picked in a pop-up,
-   - the big icons (empty pages, pop-up headers) every few seconds, so they feel alive,
+   - once when the app opens, and when an entry's pop-up opens or closes (11 Nov 2026: no more replay every few seconds),
    - a new entry's row plays by itself (the .flash class from the app). */
 (function () {
   const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -39,12 +39,14 @@
     }, 40);
   }, true);
 
-  // the big icons keep a little life: one play every ~5 s, only the ones on screen
-  setInterval(() => {
-    if (document.hidden || still()) return;
-    document.querySelectorAll('.ic.xl, .empty .ic').forEach((el, i) => {
-      const r = el.getBoundingClientRect();
-      if (r.bottom > 0 && r.top < innerHeight) setTimeout(() => play(el), i * 350);
-    });
-  }, 5200);
+  // 11 Nov 2026 (user): no replay every 5 seconds. The icons on screen play ONCE when the app opens, and the icons of an entry
+  // play when its pop-up opens and when it closes (saved or not), so it feels alive only when something happens.
+  const onScreen = (el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
+  const playAll = (root, sel) => { if (document.hidden || still()) return; [...root.querySelectorAll(sel)].filter(onScreen).slice(0, 12).forEach((el, i) => setTimeout(() => play(el), i * 60)); };
+  setTimeout(() => playAll(document, '#view .ic'), 700);
+  const sr = document.getElementById('sheet-root');
+  if (sr) new MutationObserver((ms) => ms.forEach((m) => {
+    m.addedNodes.forEach((n) => { if (n.nodeType === 1 && n.classList.contains('sheet')) setTimeout(() => playAll(n, '.cat.on .ic, .gd-hero .ic, .ic.xl'), 380); });
+    m.removedNodes.forEach((n) => { if (n.nodeType === 1 && n.classList.contains('sheet')) playAll(document, '#view .flash .ic, #view .ic.xl'); });
+  })).observe(sr, { childList: true });
 })();
