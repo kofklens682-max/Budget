@@ -1226,7 +1226,7 @@ let catType = 'out';
 function openCats(type) { catType = type || catType; openSheet(catsHtml(), mountCats); }
 function catsHtml() {
   const count = (id) => S.tx.filter((t) => t.type === catType && t.category === id).length;
-  return sheetHead('Categories', '<button data-act="settings">Settings</button>', '<button data-act="close-sheet">Done</button>') + `
+  return sheetHead('Categories', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>') + `
   <div class="sheet-body">
     <div class="seg full">${segButtons('cats-type', [['in', 'Money in'], ['out', 'Money out']], catType)}</div>
     <div class="group sort-list" id="cat-list" style="margin-top:14px">
@@ -1787,7 +1787,7 @@ function syncSplitBox(sh) {
 function openSplit() { openSheet(splitHtml(), (sh) => syncSplit(sh)); }
 function splitHtml() {
   const gs = [...S.goals].sort(goalSort);
-  const head = sheetHead('Split money in', '<button data-act="settings">Settings</button>', '<button data-act="close-sheet">Done</button>');
+  const head = sheetHead('Split money in', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>');
   if (!gs.length) {
     return head + `<div class="sheet-body"><section class="card empty"><div class="big">${ic('split', '#FF9500', 'xl')}</div><h3>No goals yet</h3><p>Make a goal first — then choose how much of every money in goes into it by itself.</p><button class="btn" data-act="new-goal">Create a goal</button></section></div>`;
   }

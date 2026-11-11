@@ -491,9 +491,18 @@ let pendingReload = false;
 function sheetHead(title, left, right) {
   return `<div class="sheet-grab"><i></i></div><div class="sheet-head"><div class="l">${left || ''}</div><h3>${title}</h3><div class="r">${right || ''}</div></div>`;
 }
+// 11 Nov 2026 (user: "I open Settings, then Split money in, I go back and the whole Settings closes"): a page opened inside an open
+// sheet is a STEP. The phone's Back (button or swipe) goes one step back; a button that opens a page already under this one goes back
+// to it; Done / pull down / tap outside close everything. sheetSteps = the pages of the open sheet, oldest first.
+let sheetSteps = [], sheetSkip = 0;
+const sheetKey = (html) => { const m = /<h3[^>]*>([\s\S]*?)<\/h3>/.exec(html); return (m && m[1].replace(/<[^>]+>/g, '').trim()) || 'detail'; };
 function openSheet(html, mount) {
   if (sheet) {
-    // Swap the content of the open sheet (keeps one history entry) with a soft cross-fade.
+    const key = sheetKey(html), at = sheetSteps.findIndex((p) => p.key === key), last = sheetSteps.length - 1;
+    if (at >= 0 && at < last) { sheetSteps.length = at + 1; sheetSteps[at] = { key, html, mount }; if (history.state && history.state.sheet === sheet.hid) { sheetSkip++; history.go(at - last); } } // back to a page under this one
+    else if (at === last && at >= 0) sheetSteps[at] = { key, html, mount }; // the same page again
+    else { sheetSteps.push({ key, html, mount }); if (history.state && history.state.sheet === sheet.hid) history.pushState({ tab: UI.tab, sheet: sheet.hid, step: sheetSteps.length - 1 }, ''); } // one step deeper
+    // Swap the content of the open sheet with a soft cross-fade.
     sheet.sh.innerHTML = html;
     sheet.sh.classList.remove('swap');
     void sheet.sh.offsetWidth;
@@ -514,8 +523,9 @@ function openSheet(html, mount) {
   sh.innerHTML = html;
   root.append(ov, sh);
   sheet = { ov, sh, hid: uid() };
+  sheetSteps = [{ key: sheetKey(html), html, mount }];
   requestAnimationFrame(() => requestAnimationFrame(() => { ov.classList.add('show'); sh.classList.add('show'); }));
-  history.pushState({ tab: UI.tab, sheet: sheet.hid }, '');
+  history.pushState({ tab: UI.tab, sheet: sheet.hid, step: 0 }, '');
   // (The page behind isn't locked with overflow: hidden — that made the whole page lay itself out
   // again on every open and close. The dimmed layer takes the touches instead.)
   bindSheetGestures(sh, ov);
@@ -524,6 +534,7 @@ function openSheet(html, mount) {
 function refreshSheet(html, mount) {
   if (!sheet) return;
   const b = $('.sheet-body', sheet.sh), top = b ? b.scrollTop : 0;
+  if (sheetSteps.length) sheetSteps[sheetSteps.length - 1] = { key: sheetSteps[sheetSteps.length - 1].key, html, mount }; // the step keeps its newest content
   sheet.sh.innerHTML = html;
   mount && mount(sheet.sh);
   const nb = $('.sheet-body', sheet.sh);
@@ -531,13 +542,13 @@ function refreshSheet(html, mount) {
 }
 function closeSheet() {
   if (!sheet) return;
-  if (history.state && history.state.sheet === sheet.hid) history.back();
+  if (history.state && history.state.sheet === sheet.hid) history.go(-((history.state.step || 0) + 1)); // every step of this sheet at once
   else closeSheetNow();
 }
 function closeSheetNow() {
   if (!sheet) return;
   const { ov, sh } = sheet;
-  sheet = null;
+  sheet = null; sheetSteps = [];
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   sh.classList.remove('dragging');
   sh.style.transform = '';
@@ -1131,6 +1142,12 @@ function showTab(tab) {
 }
 window.addEventListener('popstate', (e) => {
   const st = e.state || {};
+  if (sheetSkip) { sheetSkip--; return; } // our own jump back to an earlier step: the page is already on screen
+  if (sheet && st.sheet === sheet.hid && !st.pic) { // one step back inside the open sheet
+    const step = st.step || 0;
+    if (step < sheetSteps.length - 1) { sheetSteps.length = step + 1; const p = sheetSteps[step]; sheet.sh.innerHTML = p.html; sheet.sh.classList.remove('swap'); void sheet.sh.offsetWidth; sheet.sh.classList.add('swap'); p.mount && p.mount(sheet.sh); }
+    return;
+  }
   if (sheet && st.sheet !== sheet.hid) closeSheetNow();
   const tab = st.tab || 'home';
   if (tab === 'home') pushedTab = false;
