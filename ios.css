@@ -271,7 +271,7 @@ html.glass:root .lt-right > .icon-btn:not(.solid),html.glass:root .icon-btn.glas
   -webkit-backdrop-filter:none !important;backdrop-filter:none !important;
   box-shadow:var(--g3-rim),0 6px 16px -8px rgba(20,40,80,.32) !important;border:0 !important}
 /* the lens edge */
-html.glass:root .tabs::after,html.glass:root .lt-right > .icon-btn:not(.solid)::after,html.glass:root .icon-btn.glassy::after{
+html.glass:root .tabs::after{
   content:"";position:absolute;inset:0;border-radius:inherit;padding:1.3px;background:var(--g3-fringe);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.85;z-index:1}
 /* the small title at the top while the page is scrolled: a soft fade of the page color, no blur and no mask */
@@ -286,3 +286,11 @@ button,a{-webkit-tap-highlight-color:transparent}
 /* three small buttons that had no tall tap area yet (Transfer / See all, Filter, the account chips): an invisible 44px area, they look the same */
 .link,.hfbtn,.acc-pick button{position:relative}
 .link::before,.hfbtn::before,.acc-pick button::before{content:"";position:absolute;inset:min(0px,calc((100% - var(--tap)) / 2))}
+
+/* The real lens is back on the tab bar (11 Nov, evening), only while the page stands still ("mv" = something moves, set by liquid.js). */
+html.glass.g2-lens:root .tabs:not(.mv){-webkit-backdrop-filter:url(#g2lens-tabs) blur(7px) saturate(1.7) !important;backdrop-filter:url(#g2lens-tabs) blur(7px) saturate(1.7) !important}
+html.glass.g2-lens:root .tabs{background:rgba(255,255,255,.46) !important}
+html.glass.g2-lens:root .tabs::after{display:none}
+/* 11 Nov, evening (user): no rainbow edge on the buttons; the names on the tab bar are not extra bold */
+html.glass:root .tabs button span{font-weight:600 !important}
+html.glass:root .tabs button svg{stroke-width:2px !important}

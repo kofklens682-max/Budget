@@ -30,8 +30,13 @@
   const MONEY = /[−+-]?\s?\$?\d[\d\s.,\u00a0\u202f]*(?:[kKMB](?![a-z]))?/g;
   // 10 Nov 2026 (user): the eye hides ONLY the totals: the total balance on Home (with its so'm + dollars line), each account's total on Home,
   // and the totals on an account's page. Everything else (history, goals, groups, charts, money in / out) stays readable.
-  const TOTALS = '.hero-card .hero, .hero-card .hero-meta, .acc-card .acc-bal, .acc-card .acc-sub, .acc-hero-bal, .sp-card';
-  const wants = (t) => { const el = t.parentElement; if (!el || !/\d/.test(t.nodeValue)) return false; if (el.closest(TOTALS)) return true;
+  // 11 Nov 2026 (user): also EVERY number in the Total balance card (the split lines, the envelope amounts, the chart's scale) and the
+  // amounts of the goals (Home's goal cards and the Goals tab). Dates and the "1 month / 3 months" buttons are never touched.
+  const TOTALS = '.hero-card, .goal-mini, .alloc, .goal-card, .acc-card .acc-bal, .acc-card .acc-sub, .acc-hero-bal, .sp-card';
+  const NEVER = '.seg, .gc-date, .label';
+  const wants = (t) => { const el = t.parentElement; if (!el || !/\d/.test(t.nodeValue)) return false; if (el.closest(NEVER)) return false;
+    if (el.closest('svg') && !/^[\s\d.,−+-]+[kKMB]?$/.test(t.nodeValue)) return false; // in a chart only the money scale, not the dates
+    if (el.closest(TOTALS)) return true;
     const g = el.closest('.gd-amt'); return !!(g && g.parentElement && g.parentElement.querySelector('.acc-hero-bal')); }; // the second currency line under an account's total
   function maskText(t) { const v = t.nodeValue; masked.set(t, v); busy = true; t.nodeValue = v.replace(MONEY, (m) => (/\d/.test(m) ? (m.match(/^\s/) ? ' ' : '') + STAR + (m.match(/\s$/) ? ' ' : '') : m)); shown.set(t, t.nodeValue); busy = false; }
   function maskIn(root) {
