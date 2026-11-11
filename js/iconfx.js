@@ -5,7 +5,7 @@
    - once when the app opens, and when an entry's pop-up opens or closes (11 Nov 2026: no more replay every few seconds),
    - a new entry's row plays by itself (the .flash class from the app). */
 (function () {
-  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = () => false; // 11 Nov 2026: not tied to the phone's "reduce motion" any more
   // the soft white used by every symbol (ios fills are url(#ic-white))
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   defs.setAttribute('width', '0'); defs.setAttribute('height', '0'); defs.setAttribute('aria-hidden', 'true');

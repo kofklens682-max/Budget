@@ -30,7 +30,7 @@ html .tabs.press .tab-ind {
 }
 /* Instant taps: no 300 ms wait, no grey flash */
 html, button, a, [data-act], [data-tab], [data-sheet], [data-push] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-@media (prefers-reduced-motion: reduce) { html .tab-ind { transition-duration: .01s !important; } }
+/* 11 Nov 2026: the "reduce motion" switch-off was removed. Battery Saver on the phone reports "reduce motion", and then every page and pop-up appeared at once with no slide. The app always moves the same way now. */
 
 /* ===== The same glass for every sliding highlight: segmented controls and the week strip ===== */
 html .seg-thumb { background: none !important; box-shadow: none !important; }

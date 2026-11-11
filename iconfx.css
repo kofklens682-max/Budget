@@ -101,6 +101,4 @@ html .ic svg .f { fill: url(#ic-white) #fff; }
 .icon-grid button .ic svg { width: 62%; height: 62%; }
 .icon-grid button.on .ic { opacity: 1; transform: scale(1.06); box-shadow: 0 0 0 2.5px var(--card), 0 0 0 4.5px var(--c), 0 6px 14px -4px color-mix(in srgb, var(--c) 60%, transparent); }
 
-@media (prefers-reduced-motion: reduce) {
-  .ic.play, .ic.play svg, .row.flash .ic, .row.flash .ic svg, .ic svg g { animation: none !important; }
-}
+/* 11 Nov 2026: the "reduce motion" switch-off was removed. Battery Saver on the phone reports "reduce motion", and then every page and pop-up appeared at once with no slide. The app always moves the same way now. */

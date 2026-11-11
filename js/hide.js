@@ -43,7 +43,7 @@
   // the balance counts up when Home is drawn fresh (not when hidden)
   function countHero() {
     const h = document.getElementById('hero'); if (!h || h.dataset.cu === h.dataset.v || hidden()) { if (h) h.dataset.cu = h.dataset.v; return; }
-    const v = +h.dataset.v; h.dataset.cu = h.dataset.v; if (!isFinite(v) || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const v = +h.dataset.v; h.dataset.cu = h.dataset.v; if (!isFinite(v) ) return;
     const n = [...h.childNodes].find((x) => x.nodeType === 3 && /\d/.test(x.textContent)); if (!n) return;
     const final = n.textContent, digits = final.replace(/\D/g, ''); if (digits.length < 3) return;
     const sep = (final.match(/\d([^\d])\d{3}/) || [])[1] || ' ', fmtN = (x) => String(x).replace(/\B(?=(\d{3})+(?!\d))/g, sep);

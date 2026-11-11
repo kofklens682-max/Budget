@@ -1002,7 +1002,7 @@ button.leg-row:active { opacity: .6; }
 .yr-g b { font-size: 12px; font-weight: 500; text-align: center; height: 13px; line-height: 13px; border-radius: 50%; }
 .yr-g b.h { color: var(--danger); font-weight: 700; }
 .yr-g b.t { background: var(--accent); color: #fff; font-weight: 700; }
-@media (prefers-reduced-motion: reduce) { .cal-fade, .cal-zoom-in, .cal-zoom-out { animation: none; } }
+/* 11 Nov 2026: the "reduce motion" switch-off was removed. Battery Saver on the phone reports "reduce motion", and then every page and pop-up appeared at once with no slide. The app always moves the same way now. */
 .cal-t { text-align: center; }
 .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .cal-h { font-size: 12px; font-weight: 600; color: var(--text-2); text-align: center; padding: 0 0 4px; }
@@ -1035,9 +1035,7 @@ button.leg-row:active { opacity: .6; }
   .view { padding-bottom: calc(env(safe-area-inset-bottom) + 90px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
-}
+
 
 /* Split money in: the bar in its sheet glides to new sizes; the box in the Money in form */
 .split.still i { animation: none; transition: width .35s cubic-bezier(.2, .9, .3, 1), min-width .35s; }

@@ -106,7 +106,7 @@ const groupDigits = (s, sep) => s.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
 const ceilTo = (x, step) => Math.ceil(x / step) * step;
 const roundCur = (n, cur) => (cur === 'USD' ? Math.round(n * 100) / 100 : Math.round(n));
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduceMotion = () => false; // 11 Nov 2026: Battery Saver reports "reduce motion"; the app keeps its movement (see style.css)
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(12); } catch (e) { /* no haptics */ } };
 
 const ic = (g, c, cls = '') => `<span class="ic ${cls}" data-g="${g}" data-m="${(window.ICON_MOTION && window.ICON_MOTION[g]) || 'pulse'}" style="--c:${fixC(c)}"><svg viewBox="0 0 24 24" aria-hidden="true">${(window.GLYPHS_IOS && window.GLYPHS_IOS[g]) || G[g] || ''}</svg></span>`; // 4 Nov 2026: iPhone-style filled symbols (icons-ios.js)
