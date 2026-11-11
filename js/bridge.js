@@ -310,7 +310,7 @@ const BR = (() => {
     const batch = d.lines.length > 1 ? uid() : (d.batch || null), made = [];
     d.lines.forEach((l) => {
       const f = findStu(l.sid), al = plan(l, l.txId); if (!al.length) return;
-      const rec = { id: l.txId || uid(), type: 'in', amount: roundCur(l.amount, 'UZS'), currency: 'UZS', account: d.account, date: d.date || todayIso(), note: (d.note || '').trim(), createdAt: l.created || Date.now(),
+      const rec = { id: l.txId || uid(), type: 'in', amount: roundCur(l.amount, 'UZS'), currency: 'UZS', account: d.account, date: d.date && d.date <= todayIso() ? d.date : todayIso(), note: (d.note || '').trim(), createdAt: l.created || Date.now(),
         person: f.s.name, category: lessonCat() || OTHER_CAT.in, groupId: f.g.id, studentId: f.s.id, forMonth: al[0].m, alloc: al, by: d.by || '' };
       if (batch) rec.batch = batch;
       if (d.noSplit) rec.noSplit = true;

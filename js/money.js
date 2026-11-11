@@ -68,9 +68,13 @@ const goalSort = (a, b) => {
   return rank(a) - rank(b) || (a.deadline || '').localeCompare(b.deadline || '');
 };
 
+// An exchange (dollars changed to so'm, or back): the money only changed its currency. With both currencies counted
+// together it is never a gain or a loss on its day (audit B3).
+const isExch = (t) => t.type === 'transfer' && t.toCurrency !== t.currency;
+const flowIn = (t) => (isExch(t) ? 0 : deltaIn(t));
 // cur 'ALL' = both currencies together, in the chosen currency (at the dollar rate).
 function balanceSeries(cur, range) {
-  const dv = cur === 'ALL' ? (t) => deltaIn(t) : (t) => delta(t, cur);
+  const dv = cur === 'ALL' ? flowIn : (t) => delta(t, cur);
   const txs = (memo ? byDate() : S.tx.slice().sort(cmpDate)).filter((t) => dv(t) !== 0);
   const lastDate = txs.length ? txs[txs.length - 1].date : todayIso();
   const end = parseD(lastDate > todayIso() ? lastDate : todayIso());
@@ -82,7 +86,8 @@ function balanceSeries(cur, range) {
   if (daysBetween(iso(start), iso(end)) < 7) start = addDays(end, -7);
   const span = daysBetween(iso(start), iso(end));
   const step = span > 400 ? 7 : 1;
-  let bal = cur === 'ALL' ? conv(openingTotal('UZS'), 'UZS') + conv(openingTotal('USD'), 'USD') : openingTotal(cur), i = 0;
+  // (what exchanges change at today's rate is counted from the start, so the line has no step on exchange days and still ends at the total)
+  let bal = cur === 'ALL' ? conv(openingTotal('UZS'), 'UZS') + conv(openingTotal('USD'), 'USD') + S.tx.reduce((a, t) => a + (isExch(t) ? deltaIn(t) : 0), 0) : openingTotal(cur), i = 0;
   // money in goals left out of the total, as it was on each day
   const apart = S.goals.filter((g) => g.apart && (cur === 'ALL' || g.currency === cur))
     .flatMap((g) => g.contribs.map((c) => ({ date: c.date, v: cur === 'ALL' ? conv(c.amount, g.currency) : c.amount })))
@@ -161,7 +166,8 @@ function breakdown(type, cur, from, to) {
     cur0.v += conv(t.amount, t.currency, cur);
     map.set(key, cur0);
   }
-  let arr = [...map.values()].sort((a, b) => b.v - a.v);
+  // (with no dollar rate, entries in the other currency count as 0: they are left out here instead of making 0/0 = NaN% — audit B4)
+  let arr = [...map.values()].filter((r) => r.v > 0).sort((a, b) => b.v - a.v);
   if (arr.length > 7) {
     const rest = arr.slice(6);
     arr = arr.slice(0, 6);
@@ -251,10 +257,10 @@ function renderHome() {
     // One total: so'm and dollars added together in the chosen currency, at the dollar rate.
     const rate = somRate(), apart = apartIn(cur), bal = balanceIn(cur) - apart;
     const meta = [];
-    if (usesCur('UZS') && usesCur('USD')) {
-      if (rate) meta.push(`<span><b class="num">${fmt(balance('UZS'), 'UZS')}</b> + <b class="num">${fmt(balance('USD'), 'USD')}</b> · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
-      else meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(balance(other), other)} — set the dollar rate in Settings to count it in</button>`);
-    } else if (usesCur(other) && rate) meta.push(`<span>${fmt(balance(other), other)} · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
+    // (no rate: the other currency can't be added in — say so, also when only the other currency is used, audit B4)
+    if (usesCur(other) && !rate) meta.push(`<button class="link" data-act="settings" style="font-size:13px">Also ${fmt(balance(other), other)} — set the dollar rate in Settings to count it in</button>`);
+    else if (usesCur('UZS') && usesCur('USD')) meta.push(`<span><b class="num">${fmt(balance('UZS'), 'UZS')}</b> + <b class="num">${fmt(balance('USD'), 'USD')}</b> · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
+    else if (usesCur(other) && rate) meta.push(`<span>${fmt(balance(other), other)} · 1 $ = ${fmt(rate, 'UZS', { bare: true })} so'm</span>`);
     const apartGoals = S.goals.filter((g) => g.apart && goalSaved(g) > 0 && (g.currency === cur || rate));
     if (apartGoals.length) meta.push(`<span class="apart-note">${glyph('shield')}Not counted: ${apartGoals.map((g) => esc(g.name)).join(', ')} · <b class="num">${fmt(apart, cur)}</b></span>`);
     // How it's split: money free to spend, and what each goal's envelope holds.
@@ -386,7 +392,7 @@ function histList() {
     const date = shown[i].date, day = [];
     while (i < shown.length && shown[i].date === date) day.push(shown[i++]);
     // The day's total, both currencies together in the chosen one.
-    const nv = day.reduce((a, t) => a + deltaIn(t), 0);
+    const nv = day.reduce((a, t) => a + flowIn(t), 0); // (an exchange is not a gain or a loss)
     const net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
     html += `<div class="day-head"><span>${dayLabel(date)}</span><span class="num">${net}</span></div><div class="group">${day.map((t) => txRow(t, false)).join('')}</div>`;
   }
@@ -456,7 +462,7 @@ function calBody(ym, sel) {
   if (hol) h += `<div class="cal-hol">🎉<span><b>${hol}</b> · day off${/Hayit/.test(hol) && Number(sel.slice(0, 4)) > 2026 ? ' (expected date — it can move by a day)' : ''}</span></div>`;
   const list = S.tx.filter((x) => x.date === sel).sort(sortTx);
   if (!list.length) return h + `<div class="day-head"><span>${dayLabel(sel)}</span></div><p class="hint cal-none">Nothing on this day.</p>`;
-  const nv = list.reduce((a, x) => a + deltaIn(x), 0), net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
+  const nv = list.reduce((a, x) => a + flowIn(x), 0), net = Math.abs(nv) >= (UI.cur === 'USD' ? 0.005 : 0.5) ? fmt(nv, UI.cur, { sign: true }) : '';
   return h + `<div class="day-head"><span>${dayLabel(sel)}</span><span class="num">${net}</span></div><div class="group">${list.map((x) => txRow(x, false)).join('')}</div>`;
 }
 // The whole year: twelve small months (today ringed, holidays red, what went out each month); tap one to open it.
@@ -546,6 +552,7 @@ function statsBody(offset) {
       <div class="pn-title">${info.title}</div>
       <button class="icon-btn" data-act="shift" data-v="1" aria-label="Next" ${offset >= 0 ? 'disabled' : ''}>${I.right}</button>
     </div>
+    ${!somRate() && usesCur(OTHER[cur]) ? `<p class="hint"><button class="link" data-act="settings" style="font-size:13px">Entries in ${cur === 'UZS' ? 'dollars' : "so'm"} are not counted here. Set the dollar rate in Settings to count them in.</button></p>` : ''}
     ${info.ym ? `<button class="card report-cta" data-act="report" data-v="${info.ym}">${ic('report', '#5856D6')}<div class="row-main"><b>${MONTHS[parseD(info.from).getMonth()]} report</b><span>Summary, comparison, share as a picture</span></div>${I.chev}</button>` : ''}
     <section class="card">
       <div class="sl-row"><span class="sl-label"><span class="key in"></span>Money in</span><b class="num">${fmt(t.in, cur)}</b></div>
@@ -783,6 +790,10 @@ function openTx(id, preset = {}) {
   openSheet(txHtml(), mountTx);
 }
 function reopenTx() { openSheet(txHtml(), mountTx); }
+// An entry other things point to keeps its type (audit B5): a Teacher payment, a student fee or record, an entry a goal
+// line belongs to, or a monthly one — turning it into another type would leave those links pointing at the wrong thing.
+const typeLocked = (d) => !!d.id && !!(d.tpid || d.groupId || d.studentId || d.record || d.lesson || d.repeat || d.fromRepeat
+  || S.goals.some((g) => g.contribs.some((c) => c.txId === d.id || c.auto === d.id || c.spent === d.id || c.left === d.id)));
 function draftOk(d) {
   if (d.type === 'in' && d.lesson && BR.on()) return BR.ok(d);
   if (!(d.amount > 0)) return false;
@@ -845,7 +856,8 @@ function txHtml() {
   <div class="sheet-body">
     ${d.goalSpend && goalById(d.goalSpend) && !editing ? `<div class="blk-warn good" style="margin:0 0 12px">${glyph('receipt')}<div style="flex:1"><b>Paying for “${esc(goalById(d.goalSpend).name)}”</b><span>The expense is recorded and taken from the envelope (${fmt(goalSaved(goalById(d.goalSpend)), goalById(d.goalSpend).currency)} in it). Pay all of it, or just a part.</span>
       <div class="gl-last"><span>This payment finishes the goal</span><label class="switch"><input type="checkbox" id="tx-goal-last" ${d.goalLast ? 'checked' : ''} aria-label="This payment finishes the goal"><i></i></label></div></div></div>` : ''}
-    <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']], d.type)}</div>
+    <div class="seg full">${segButtons('tx-type', [['in', 'Money in'], ['out', 'Money out'], ['transfer', 'Transfer']].filter(([v]) => !typeLocked(d) || v === d.type), d.type)}</div>
+    ${typeLocked(d) ? '<p class="hint">Linked to the Teacher app, a goal or a monthly entry, so the type stays. To change it, delete this entry and add a new one.</p>' : ''}
     <div class="amount-box">
       <input class="amount-input num" id="amt" inputmode="decimal" placeholder="0" value="${shownAmount(d.amount, d.currency)}" autocomplete="off" enterkeyhint="done" aria-label="Amount" ${d.lesson && d.lines && d.lines.length > 1 ? 'readonly' : ''}>
       <div class="cur-pill"><div class="seg sm">${segButtons('tx-cur', curItems, d.currency)}</div></div>
@@ -856,7 +868,7 @@ function txHtml() {
     ${body}
     <div class="form-label">Details</div>
     <div class="group plain">
-      <label class="row field"><span>Date</span><input type="date" id="date" value="${d.date}"></label>
+      <label class="row field"><span>Date</span><input type="date" id="date" value="${d.date}" max="${todayIso()}"></label>
       <label class="row field"><span>Note</span><input id="note" placeholder="Optional" value="${esc(d.note)}" autocomplete="off" enterkeyhint="done"></label>
       ${canRepeat(d) ? `<div class="row field"><span style="flex:1">Every month</span><label class="switch"><input type="checkbox" id="tx-repeat" ${d.repeatOn ? 'checked' : ''} aria-label="Add this every month"><i></i></label></div>` : ''}
       ${picRow(d)}
@@ -899,13 +911,17 @@ function mountTx(sh) {
     const th = $('#tr-hint', sh);
     if (th) th.textContent = draft.type === 'transfer' && draft.account === draft.toAccount && draft.toCurrency === draft.currency ? 'Pick two different accounts — or choose “Exchanged” to change currency inside one account.' : '';
     const rh = $('#rate-hint', sh);
-    if (rh) rh.textContent = rateText(draft.amount, draft.currency, draft.toAmount, draft.toCurrency);
+    if (rh) rh.textContent = exchHint(draft);
     syncSplitBox(sh);
     syncTake(sh);
     if (draft.lesson && BR.on()) BR.refresh(sh);
   };
   BR.mount(sh);
-  amt.addEventListener('input', () => { const r = typedAmount(amt.value, draft.currency); amt.value = r.shown; draft.amount = r.value; syncTx(); });
+  amt.addEventListener('input', () => {
+    const r = typedAmount(amt.value, draft.currency); amt.value = r.shown; draft.amount = r.value;
+    if (draft.toAuto) { fillToAmount(); const ta = $('#to-amt', sh); if (ta) ta.value = shownAmount(draft.toAmount, draft.toCurrency); }
+    syncTx();
+  });
   const person = $('#person', sh);
   if (person) person.addEventListener('input', () => {
     draft.person = person.value;
@@ -917,8 +933,13 @@ function mountTx(sh) {
     } else sh.querySelectorAll('.quick button').forEach((b) => b.classList.toggle('on', b.dataset.v === draft.person));
   });
   const toAmt = $('#to-amt', sh);
-  if (toAmt) toAmt.addEventListener('input', () => { const r = typedAmount(toAmt.value, draft.toCurrency); toAmt.value = r.shown; draft.toAmount = r.value; syncTx(); });
-  $('#date', sh).addEventListener('change', (e) => { draft.date = e.target.value || todayIso(); if (draft.repeatOn) refreshSheet(txHtml(), mountTx); });
+  if (toAmt) toAmt.addEventListener('input', () => { const r = typedAmount(toAmt.value, draft.toCurrency); toAmt.value = r.shown; draft.toAmount = r.value; draft.toAuto = false; syncTx(); });
+  $('#date', sh).addEventListener('change', (e) => {
+    let v = e.target.value || todayIso();
+    if (v > todayIso()) { v = todayIso(); e.target.value = v; toast('The date can’t be after today'); } // (a typo year like 2062 would count at once and stretch the chart — audit B11)
+    draft.date = v;
+    if (draft.repeatOn) refreshSheet(txHtml(), mountTx);
+  });
   $('#note', sh).addEventListener('input', (e) => { draft.note = e.target.value; });
   const rep = $('#tx-repeat', sh);
   if (rep) rep.addEventListener('change', () => { draft.repeatOn = rep.checked; refreshSheet(txHtml(), mountTx); });
@@ -931,13 +952,25 @@ function mountTx(sh) {
   picFill(sh);
   if (!draft.id && !draft.amount && !draft.pic) setTimeout(() => amt.focus({ preventScroll: true }), 420);
 }
+// An exchange: what you get at the bank rate (only while "You got" was not typed by hand).
+function fillToAmount() {
+  if (!draft.toAuto || draft.toCurrency === draft.currency) return;
+  draft.toAmount = somRate() && draft.amount > 0 ? roundCur(conv(draft.amount, draft.currency, draft.toCurrency), draft.toCurrency) : 0;
+}
+// "1 $ = …" under the amounts, with a warning when it is far (over 10%) from the bank rate — usually a typo.
+function exchHint(d) {
+  const t = rateText(d.amount, d.currency, d.toAmount, d.toCurrency), r = somRate();
+  const usd = d.currency === 'USD' ? d.amount : d.toAmount, uzs = d.currency === 'UZS' ? d.amount : d.toAmount;
+  const off = t && r && usd > 0 && Math.abs(uzs / usd - r) / r > 0.1;
+  return t + (off ? ` · the bank rate is ${fmt(r, 'UZS')}: check the amounts` : '');
+}
 function txDone() { if (draft && draft.back) draft.back(); else closeSheet(); }
 function saveTx() {
   const d = draft;
   if (!draftOk(d)) return;
   if (d.type === 'in' && d.lesson && BR.on()) return BR.save(); // student fee: one entry per child, with the months it pays for
   const was = d.id ? S.tx.find((t) => t.id === d.id) : null;
-  const base = { id: d.id || uid(), type: d.type, amount: roundCur(d.amount, d.currency), currency: d.currency, account: d.account, date: d.date || todayIso(), note: (d.note || '').trim(), createdAt: d.createdAt || Date.now() };
+  const base = { id: d.id || uid(), type: d.type, amount: roundCur(d.amount, d.currency), currency: d.currency, account: d.account, date: d.date && d.date <= todayIso() ? d.date : todayIso(), note: (d.note || '').trim(), createdAt: d.createdAt || Date.now() };
   let rec;
   if (d.type === 'transfer') {
     const exch = d.toCurrency !== d.currency;
@@ -1313,6 +1346,10 @@ function syncGoalAuto(sh) {
   plus.disabled = (gdraft.auto || 0) >= goalAutoMax();
   $('#g-auto-hint', sh).innerHTML = goalAutoHint(gdraft);
 }
+// A goal with lines keeps its currency: its lines would keep their numbers under the new sign (5 000 000 so'm would become
+// $5,000,000 — audit B1). Only that one currency is offered then.
+const goalCurLocked = (d) => !!d.id && !!goalById(d.id) && goalById(d.id).contribs.length > 0;
+const goalCurItems = (d) => (goalCurLocked(d) ? curItems.filter(([v]) => v === d.currency) : curItems);
 function goalFormHtml() {
   const d = gdraft, editing = !!d.id;
   return sheetHead(editing ? 'Edit goal' : 'New goal',
@@ -1326,11 +1363,11 @@ function goalFormHtml() {
     <div class="form-label">How much do you need?</div>
     <div class="seg full" style="margin-bottom:10px">${segButtons('goal-kind', [['target', 'A set amount'], ['open', 'No limit']], d.open ? 'open' : 'target')}</div>
     ${d.open ? `<div class="group plain">
-      <div class="row field"><span style="flex:1">Saved in</span><div class="seg sm">${segButtons('goal-cur', curItems, d.currency)}</div></div>
+      <div class="row field"><span style="flex:1">Saved in</span><div class="seg sm">${segButtons('goal-cur', goalCurItems(d), d.currency)}</div></div>
       ${editing ? '' : `<label class="row field"><span>Put aside now</span><input id="g-init" inputmode="decimal" placeholder="0 (optional)" value="${shownAmount(d.initial, d.currency)}" autocomplete="off"></label>`}
     </div>` : `<div class="card amount-box" style="padding:14px 12px 12px">
       <input class="amount-input num" id="g-target" inputmode="decimal" placeholder="0" value="${shownAmount(d.target, d.currency)}" autocomplete="off" style="font-size:38px" aria-label="Target amount">
-      <div class="cur-pill"><div class="seg sm">${segButtons('goal-cur', curItems, d.currency)}</div></div>
+      <div class="cur-pill"><div class="seg sm">${segButtons('goal-cur', goalCurItems(d), d.currency)}</div></div>
     </div>
     <div class="form-label">By when?</div>
     <div class="group plain">
@@ -1340,6 +1377,7 @@ function goalFormHtml() {
     ${editing ? '' : `<div class="quick" id="g-free-chip"></div><p class="hint" id="g-free"></p>
     <div class="group plain" style="margin-top:12px"><div class="row field"><span style="flex:1">Leave out of my total</span><label class="switch"><input type="checkbox" id="g-apart-new" ${d.apart ? 'checked' : ''} aria-label="Leave this goal out of my total balance"><i></i></label></div></div>
     <p class="hint">On: the money stays in this goal, but your total balance on Overview doesn't count it.</p>`}
+    ${goalCurLocked(d) ? `<p class="hint">This goal already holds money, so it stays in ${d.currency === 'UZS' ? "so'm" : 'dollars'}.</p>` : ''}
     <p class="hint" id="g-preview"></p>
     ${d.paid ? '' : `<div class="form-label">Of every money in</div>
     <div class="group plain"><div class="row field"><span style="flex:1">Goes here by itself</span><div class="stepper" id="g-auto"><button data-act="g-auto" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${d.auto || 0}%</b><button data-act="g-auto" data-v="2.5" aria-label="More">${glyph('plus')}</button></div></div></div>
@@ -1390,7 +1428,7 @@ function saveGoal() {
   const auto = clamp(Math.round((d.auto || 0) * 2) / 2, 0, goalAutoMax());
   if (d.id) {
     const g = S.goals.find((x) => x.id === d.id);
-    Object.assign(g, { name: d.name.trim(), icon: d.icon, currency: d.currency }, kind);
+    Object.assign(g, { name: d.name.trim(), icon: d.icon, currency: goalCurLocked(d) ? g.currency : d.currency }, kind);
     if (d.open) delete g.paid; else delete g.open;
     if (!g.paid) { if (auto > 0) g.auto = auto; else delete g.auto; }
     save(); render();
@@ -1885,8 +1923,10 @@ function reportData(ym, cur) {
   const txs = S.tx.filter((x) => x.type !== 'transfer' && x.date >= from && x.date < to);
   const outs = txs.filter((x) => x.type === 'out').sort((a, b) => conv(b.amount, b.currency, cur) - conv(a.amount, a.currency, cur));
   const change = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
-  // What was put aside that month (payments made from a goal are spending, not saving)
-  const goalsMonth = S.goals.map((g) => ({ g, added: g.contribs.filter((c) => c.date >= from && c.date < to && !c.txId).reduce((a, c) => a + c.amount, 0) })).filter((x) => x.added);
+  // What was put aside that month: only money that came into the goal from free money or a money in (audit B24) — not moves
+  // between goals (pair), not payments or spending from it (txId, spent), not money taken back out
+  const saved = (c) => c.amount > 0 && !c.pair && !c.txId && !c.spent;
+  const goalsMonth = S.goals.map((g) => ({ g, added: g.contribs.filter((c) => c.date >= from && c.date < to && saved(c)).reduce((a, c) => a + c.amount, 0) })).filter((x) => x.added > 0);
   return {
     ym, cur, prevYm, from, to, t, p,
     net: t.in - t.out,
@@ -2333,7 +2373,7 @@ Object.assign(ACTIONS, {
   'new-transfer': () => openTx(null, { type: 'transfer' }),
   'tx-cancel': () => txDone(),
   'tx-type': (a, v) => {
-    if (draft.type === v) return;
+    if (draft.type === v || typeLocked(draft)) return;
     draft.type = v;
     draft.category = null;
     if (v !== 'in') { draft.groupId = null; draft.studentId = null; draft.lesson = false; }
@@ -2341,13 +2381,26 @@ Object.assign(ACTIONS, {
     refreshSheet(txHtml(), mountTx);
   },
   'tx-cur': (a, v) => {
-    const exch = draft.toCurrency !== draft.currency;
+    const was = draft.currency, exch = draft.toCurrency !== draft.currency;
+    if (was === v) return;
+    let note = '';
+    if (exch) { const t = draft.toAmount; draft.toAmount = draft.amount; draft.amount = t; } // an exchange turned around: what you got is now what you give
+    else if (draft.amount > 0) { // 100 000 so'm never silently becomes $100,000 (audit B15)
+      const old = draft.amount;
+      draft.amount = somRate() ? roundCur(conv(old, was, v), v) : 0;
+      note = draft.amount ? `${fmt(old, was)} is ${fmt(draft.amount, v)} at the bank rate` : 'No dollar rate yet: type the amount again';
+    }
     draft.currency = v;
-    draft.amount = roundCur(draft.amount, v);
     draft.toCurrency = exch ? OTHER[v] : v;
     refreshSheet(txHtml(), mountTx);
+    if (note) toast(note);
   },
-  'tx-exch': (a, v) => { draft.toCurrency = v === 'other' ? OTHER[draft.currency] : draft.currency; refreshSheet(txHtml(), mountTx); },
+  'tx-exch': (a, v) => {
+    draft.toCurrency = v === 'other' ? OTHER[draft.currency] : draft.currency;
+    // "You got" is filled in from the bank rate until you type it yourself (audit B14)
+    if (v === 'other' && !(draft.toAmount > 0)) { draft.toAuto = true; fillToAmount(); }
+    refreshSheet(txHtml(), mountTx);
+  },
   'pick-acc': (a, v) => { draft.account = v; pick(a, '.acc-pick'); },
   'pick-from': (a, v) => { draft.account = v; pick(a, '.acc-pick'); syncTx(); },
   'pick-to': (a, v) => { draft.toAccount = v; pick(a, '.acc-pick'); syncTx(); },
@@ -2458,10 +2511,15 @@ Object.assign(ACTIONS, {
   },
   'pick-icon': (a, v) => { gdraft.icon = v; pick(a, '.emojis'); },
   'goal-cur': (a, v) => {
+    if (gdraft.currency === v || goalCurLocked(gdraft)) return;
+    // typed amounts are changed at the bank rate, never kept as the same digits (audit B15)
+    const was = gdraft.currency, r = somRate(), had = gdraft.target > 0 || gdraft.initial > 0;
+    const cv = (x) => (x > 0 && r ? roundCur(conv(x, was, v), v) : 0);
+    gdraft.target = cv(gdraft.target);
+    gdraft.initial = cv(gdraft.initial);
     gdraft.currency = v;
-    gdraft.target = roundCur(gdraft.target, v);
-    gdraft.initial = roundCur(gdraft.initial, v);
     refreshSheet(goalFormHtml(), mountGoalForm);
+    if (had) toast(r ? `Changed to ${v === 'UZS' ? "so'm" : 'dollars'} at the bank rate` : 'No dollar rate yet: type the amount again');
   },
   'save-goal': () => saveGoal(),
   'del-goal': async (a, v, id) => {

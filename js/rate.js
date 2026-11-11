@@ -127,11 +127,19 @@ function bindRateBox(sh) {
   }
   const rate = $('#rate', sh);
   if (rate) {
-    rate.addEventListener('input', () => {
-      const r = typedAmount(rate.value, 'UZS');
-      rate.value = r.shown;
-      S.settings.rate = r.value || null;
-      S.settings.rateManual = S.settings.rate;
+    // (audit B17) typing only formats the number; it is checked and saved once, when you leave the field or tap Done —
+    // not on every key (each save wrote all the data and redrew the page), and a rate no bank would give is refused
+    rate.addEventListener('input', () => { rate.value = typedAmount(rate.value, 'UZS').shown; });
+    rate.addEventListener('change', () => {
+      const v = typedAmount(rate.value, 'UZS').value || null;
+      if (v === S.settings.rate) return;
+      if (v && (v < RATE_MIN || v > RATE_MAX)) {
+        rate.value = S.settings.rate ? shownAmount(S.settings.rate, 'UZS') : '';
+        toast(`A dollar is between ${fmt(RATE_MIN, 'UZS')} and ${fmt(RATE_MAX, 'UZS')}. Check the rate.`);
+        return;
+      }
+      S.settings.rate = v;
+      S.settings.rateManual = v;
       save();
       render();
     });

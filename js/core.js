@@ -135,15 +135,19 @@ function compact(n, cur) {
 const compactU = (n, cur) => compact(n, cur) + (cur === 'UZS' ? NBSP + "so'm" : '');
 
 // Live formatting for amount fields: spaces between thousands, "," or "." as decimal point.
+// (audit B13) "1,000" with no dot is one thousand, not 1.000; at most 12 digits before the point (more would print as 1e+21).
 function typedAmount(raw, cur) {
-  let v = String(raw).replace(/,/g, '.').replace(/[^\d.]/g, '');
+  let s = String(raw);
+  if (/,\d{3}(?!\d)/.test(s) && (!s.includes('.') || s.indexOf(',') < s.indexOf('.'))) s = s.replace(/,/g, ''); // ("1,000.50" too)
+  let v = s.replace(/,/g, '.').replace(/[^\d.]/g, '');
   if (cur === 'UZS') v = v.replace(/\./g, '');
   else {
     const i = v.indexOf('.');
     if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '').slice(0, 2);
   }
   v = v.replace(/^0+(?=\d)/, '');
-  const [w, f] = v.split('.');
+  let [w, f] = v.split('.');
+  if (w.length > 12) { w = w.slice(0, 12); v = w + (f !== undefined ? '.' + f : ''); }
   const shown = (w ? groupDigits(w, ' ') : f !== undefined ? '0' : '') + (f !== undefined ? '.' + f : '');
   return { shown, value: v && v !== '.' ? parseFloat(v) || 0 : 0 };
 }
