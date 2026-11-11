@@ -843,7 +843,7 @@ function animateChange(root, change) {
 function draw(animate, dir, keep, fromTab) {
   const v = $('#view');
   const page = PAGES[UI.tab];
-  if (!fromTab) { dropKept(); keepEpoch++; soonPrewarm(); } // something changed: pages kept from before are out of date
+  if (!fromTab && !clockDraw) { dropKept(); keepEpoch++; soonPrewarm(); } // something changed: pages kept from before are out of date (clockDraw: only the clock moved, nothing changed)
   memo = {}; // totals are worked out once for this draw (see sums())
   let html;
   try { html = page.render(); } catch (err) { console.error(err); html = pageError(err); }
@@ -981,7 +981,10 @@ function prewarmPages() {
 }
 let lastTouch = 0, prewarmT = 0;
 // After a change, build the other pages again a little later (when you've stopped tapping).
-function soonPrewarm() { clearTimeout(prewarmT); prewarmT = setTimeout(prewarmPages, 2000); }
+// 11 Nov 2026: the other tabs are built in the background only when the phone has been left alone for a moment, never right under a finger
+let clockDraw = false, lastTouchAt = 0;
+['pointerdown', 'pointerup', 'scroll'].forEach((t) => window.addEventListener(t, () => { lastTouchAt = Date.now(); }, { capture: true, passive: true }));
+function soonPrewarm() { clearTimeout(prewarmT); prewarmT = setTimeout(function go() { if (Date.now() - lastTouchAt < 2500) { prewarmT = setTimeout(go, 1500); return; } prewarmPages(); }, 3000); }
 ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => window.addEventListener(t, () => { lastTouch = Date.now(); }, { passive: true, capture: true }));
 window.addEventListener('resize', () => { dropKept(); }); // kept charts were drawn for the old width
 // Re-render after a choice in a segmented control (or the ‹ › arrows next to it): what's above

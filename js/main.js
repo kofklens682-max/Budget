@@ -25,7 +25,7 @@ window.addEventListener('pagehide', () => { keepNow(); });
 // Keep the schedule's "Now" card fresh — but never redraw under a finger that's touching the screen.
 let touchedAt = 0;
 ['pointerdown', 'pointerup'].forEach((t) => document.addEventListener(t, () => { touchedAt = Date.now(); }, { capture: true, passive: true }));
-setInterval(() => { if (UI.tab === 'schedule' && !sheet && !document.hidden && Date.now() - touchedAt > 2000) render(); }, 60000);
+setInterval(() => { if (UI.tab === 'schedule' && !sheet && !document.hidden && Date.now() - touchedAt > 2000) { clockDraw = true; try { render(); } finally { clockDraw = false; } } }, 60000); // 11 Nov: only the clock moved, so the other tabs are not thrown away and rebuilt every minute
 
 // Runs now, or right after the passcode is entered.
 const whenOpen = (f) => { if (locked) onUnlock.push(f); else f(); };
