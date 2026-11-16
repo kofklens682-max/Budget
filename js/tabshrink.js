@@ -11,7 +11,7 @@
     const b = e.target.closest && e.target.closest('[data-tabshrink]'); if (!b) return;
     e.preventDefault(); e.stopPropagation();
     const v = !on(); try { localStorage.setItem(K, v ? 'on' : 'off'); } catch (err) { /* private mode */ }
-    if (!v) root.classList.remove('g2-down');
+    if (!v) { root.classList.remove('g2-down'); document.querySelectorAll('.g2d').forEach((x) => x.classList.remove('g2d')); }
     b.setAttribute('aria-checked', String(v)); b.querySelectorAll('.ts-sw').forEach((s) => s.classList.toggle('on', v));
   }, true);
   const st = document.createElement('style');

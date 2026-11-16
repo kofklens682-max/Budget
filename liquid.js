@@ -18,12 +18,15 @@
 /* 10 Nov 2026: the Glass look (html.glass), the same as in the Teacher app: the tab bar gets a little smaller while the page goes down,
    and a lens bends the picture at the edge of the tab bar (Chrome; other browsers keep the plain glass). Styles: the end of ios.css. */
 (function () {
-  var root = document.documentElement, lastY = 0;
+  var root = document.documentElement, a = 0, bar0 = null, down = false;
+  // fix19: one class on the bar itself (not on <html>), and only after 28px in one direction: small moves no longer restyle the app
+  function setDown(v) { if (v === down) return; down = v; bar0 = bar0 || document.querySelector('.tabs'); if (bar0) bar0.classList.toggle('g2d', v && (!window.tabShrinkOn || window.tabShrinkOn())); }
   window.addEventListener('scroll', function () {
-    var y = window.scrollY || 0; if (Math.abs(y - lastY) < 4) return;
-    root.classList.toggle('g2-down', y > lastY && y > 60); lastY = y;
+    var y = window.scrollY || 0;
+    if (down) { if (y > a) a = y; else if (a - y > 28 || y <= 60) { setDown(false); a = y; } }
+    else if (y < a) a = y; else if (y - a > 28 && y > 60) { setDown(true); a = y; }
   }, { passive: true });
-  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tabs')) root.classList.remove('g2-down'); }, true);
+  document.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tabs')) setDown(false); }, true);
   // 11 Nov: the soft screen edges of the Glass look (styles: the end of ios.css)
   function edges() { if (!document.body || document.querySelector('.g2-edge')) return; ['t', 'b'].forEach(function (k) { var e = document.createElement('div'); e.className = 'g2-edge ' + k; document.body.appendChild(e); }); }
   // 11 Nov (later): the edge strips are not added any more (lag on the phone)

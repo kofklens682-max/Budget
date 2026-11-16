@@ -64,7 +64,7 @@ window.addEventListener('popstate', () => { const h = document.querySelector('.s
 
 /* ---------- start-up: copy before the update, and the damaged-data message ---------- */
 setTimeout(() => { try {
-  const V = 'budget-v67';
+  const V = 'budget-v68';
   if (localStorage.getItem('app-ver-seen-budget') !== V) { if (typeof keepCopy === 'function') keepCopy('before', 'Before the update'); localStorage.setItem('app-ver-seen-budget', V); }
   if (window.quickBad && typeof ask === 'function') {
     const ok = S.tx.length > 0 || S.goals.length > 0;
