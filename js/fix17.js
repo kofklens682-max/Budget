@@ -50,21 +50,21 @@ document.addEventListener('pointerdown', (e) => { if (!F17.el || (e.target.close
 document.addEventListener('scroll', (e) => { if (F17.el && Date.now() - (F17.t || 0) > 500 && !(e.target.closest && e.target.closest('.fm-menu'))) f17MenuClose(); }, true);
 window.addEventListener('popstate', () => f17MenuClose(true));
 
-/* ---------- Settings: menu of sections ---------- */
+/* ---------- Settings: menu of sections ----------
+   A section opens as its own step of the Settings sheet (core.js keeps sheet steps by their title), so the phone's back gesture and
+   the "< Settings" button both go back exactly one step: section -> Settings list -> the page. ---------- */
 document.addEventListener('click', (e) => {
   const t = e.target.closest && e.target.closest('[data-stsec],[data-stback],[data-act="settings"]'); if (!t) return;
   if (t.dataset.act === 'settings') { if (!t.closest('.sheet')) window.ST_OPEN = null; return; }
-  const body = t.closest('.sheet-body'); if (!body) return; e.preventDefault(); e.stopPropagation();
-  window.ST_OPEN = t.dataset.stsec || null;
-  body.querySelectorAll('.st-pane').forEach((p) => { p.hidden = p.dataset.pane !== window.ST_OPEN; });
-  const m = body.querySelector('.st-menu'); if (m) m.hidden = !!window.ST_OPEN;
-  [...body.children].forEach((c) => { if (!c.matches('.st-pane,.st-menu')) c.style.display = window.ST_OPEN ? 'none' : ''; });
-  body.scrollTop = 0; const sc = body.closest('.sheet'); if (sc) sc.scrollTop = 0;
+  e.preventDefault(); e.stopPropagation();
+  if (t.dataset.stsec) { window.ST_OPEN = t.dataset.stsec; openSettings(); return; }
+  if (history.state && history.state.step > 0) history.back(); else { window.ST_OPEN = null; openSettings(); }
 }, true);
+window.addEventListener('popstate', () => { const h = document.querySelector('.sheet h3'); if (!h || h.textContent.trim() === 'Settings') window.ST_OPEN = null; });
 
 /* ---------- start-up: copy before the update, and the damaged-data message ---------- */
 setTimeout(() => { try {
-  const V = 'budget-v64';
+  const V = 'budget-v65';
   if (localStorage.getItem('app-ver-seen-budget') !== V) { if (typeof keepCopy === 'function') keepCopy('before', 'Before the update'); localStorage.setItem('app-ver-seen-budget', V); }
   if (window.quickBad && typeof ask === 'function') {
     const ok = S.tx.length > 0 || S.goals.length > 0;

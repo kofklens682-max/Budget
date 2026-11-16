@@ -75,7 +75,7 @@
     return tpl.innerHTML;
   }
   const _s = settingsHtml;
-  settingsHtml = function () { const h = _s.apply(this, arguments); try { return tidy(h); } catch (e) { console.error(e); return h; } };
+  settingsHtml = function () { const h = _s.apply(this, arguments); try { let t = tidy(h); /* an open section is its own page (its name is the title), so the Android back gesture goes back ONE step, to the Settings list */ if (window.ST_OPEN) t = t.replace(/<h3([^>]*)>[^<]*<\/h3>/,(m, a) => `<h3${a}>${window.ST_OPEN}</h3>`); return t; } catch (e) { console.error(e); return h; } };
 }
 
 /* ---------- 16 Nov (user): daily online copies. Settings → Account → "Copies from the last 7 days": one copy per day (account.js),

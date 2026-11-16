@@ -35,3 +35,6 @@ html[data-theme="dark"] .fm-menu{background:rgba(44,44,46,.9)}
 .st-back svg{width:22px;height:22px;transform:rotate(180deg);fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .st-h{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:6px 2px 12px}
 .st-menu .row{min-height:58px}
+
+/* the section name is the sheet title now */
+.st-h{display:none}
