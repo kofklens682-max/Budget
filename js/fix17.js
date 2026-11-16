@@ -15,7 +15,7 @@ function f17MenuHtml() {
   return `${it('clear', '1', 'Everything', none)}${it('transfer', '1', 'Transfers only', UI.hType === 'transfer')}
     <em>Money</em>${F17.cur.map(([v, l]) => it('cur', v, l, UI.hCur === v)).join('')}
     <em>Account</em>${S.accounts.map((a) => it('acc', a.id, esc(a.name), UI.hAcc === a.id)).join('')}
-    ${S.groups.length ? '<em>Group</em>' + S.groups.map((g) => it('group', g.id, esc(g.name), UI.hGroup === g.id, g.color)).join('') : ''}`;
+    ${S.groups.some((g) => !g.gone) ? '<em>Group</em>' + S.groups.filter((g) => !g.gone).map((g) => it('group', g.id, esc(g.name), UI.hGroup === g.id, g.color)).join('') : ''}`;
 }
 function f17MenuOpen() {
   f17MenuClose(true);
