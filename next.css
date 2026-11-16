@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&display=swap');
+/* NEXT — 15 Nov 2026 (draft): the entry detail page, the notepad diary, the History buttons */
+.fchips[hidden]{display:flex !important}
+.hfbtn{display:none !important}
+.nx-dbtn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.nx-detail{display:flex;flex-direction:column;align-items:center;text-align:center;padding:6px 0 18px;gap:4px}
+.nx-detail .ic.xl{margin-bottom:8px}
+.nx-damt{font-size:40px;font-weight:700;letter-spacing:-.035em}
+.nx-damt.in{color:var(--in-text, #1E9E46)}
+.nx-dtitle{font-size:17px;color:var(--muted)}
+.nx-dv{max-width:60%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* the notepad: spiral on top, cream lined paper, dark blue handwriting, pages flip up */
+.nx-dsheet{padding-top:18px}
+.np{position:relative;height:560px;perspective:1600px;margin-top:6px}
+.np-spiral{position:absolute;top:-12px;left:16px;right:16px;display:flex;justify-content:space-between;z-index:300;pointer-events:none}
+.np-spiral i{width:11px;height:28px;border-radius:7px;border:3px solid #9aa0aa;border-bottom-color:#c9ced6;box-shadow:0 2px 2px rgba(0,0,0,.15)}
+.np-page{position:absolute;inset:0;border-radius:6px 6px 14px 14px;padding:48px 16px 20px 50px;color:#1b2f72;font-family:Caveat,'Segoe Print',cursive;overflow:hidden;
+  background:linear-gradient(90deg,transparent 38px,rgba(255,80,80,.5) 38px,rgba(255,80,80,.5) 39.5px,transparent 39.5px),repeating-linear-gradient(180deg,transparent 0 33px,#bcd0e8 33px 34px),#fdfbf3;
+  background-position:0 0,0 44px,0 0;box-shadow:0 12px 30px rgba(0,0,0,.14),0 1px 0 #e9e3cf;transform-origin:50% 0;transition:transform .7s cubic-bezier(.3,.7,.2,1),opacity .6s;backface-visibility:hidden}
+.np-page.flip{transform:rotateX(105deg);opacity:0;pointer-events:none}
+.np-holes{position:absolute;top:8px;left:16px;right:16px;display:flex;justify-content:space-between}
+.np-holes i{width:11px;height:8px;border-radius:50%;background:#d8d3c4;box-shadow:inset 0 1px 2px rgba(0,0,0,.3)}
+.np-page h4{font-size:26px;font-weight:700;line-height:34px;margin:0}
+.np-page p{font-size:21px;line-height:34px;font-weight:500;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-page .tm{color:#5871b3;font-size:18px}
+.np-page s{color:#7f8fbb}
+.np-n{position:absolute;right:16px;bottom:8px;font-size:20px;color:#7f8fbb}
+.np-nav{display:flex;align-items:center;justify-content:space-between;margin:14px 2px 4px}
+.np-nav span{font-size:14px;color:var(--muted);font-weight:600}
+.np-nav .icon-btn{font-size:26px;line-height:1}
+/* the pop-up from Teacher: cards like iPhone notifications */
+#br-banner button{border-radius:22px !important;padding:14px 16px !important;background:rgba(255,255,255,.82) !important;-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);box-shadow:0 12px 30px -10px rgba(20,40,80,.3),inset 0 0 0 .5px rgba(255,255,255,.8) !important}
+.sheet .br-line{border-radius:22px;padding:14px;box-shadow:0 1px 2px rgba(20,40,80,.05),0 10px 24px -14px rgba(20,40,80,.25)}
+.sheet .br-lh b{font-size:17px}
+.sheet .br-two{grid-template-columns:1.3fr 1fr}
+.sheet .br-two button{border-radius:999px;padding:12px 10px;font-size:14.5px}
+.sheet .br-two .br-yes{background:radial-gradient(120% 120% at 30% 0%,#5BE07F,#30D158 60%,#22B04A);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 18px -8px rgba(48,209,88,.7)}
+.sheet .br-two .br-no{background:radial-gradient(120% 120% at 30% 0%,#FF7B72,#FF453A 60%)}
+/* one colour pattern (15 Nov): green = tap / money in, orange = money out, red = holidays and warnings, grey = the rest */
+.cal-h.we{color:var(--text-2,#8E8E93) !important}
+/* the same Liquid Glass as Teacher (16 Nov): lens always on, little blur in the middle, a bright rim, a sheen when pressed */
+html.glass.g2-lens:root .tabs,html.glass.g2-lens:root .tabs.mv,html.glass.g2-lens:root .tabs:not(.mv){
+  -webkit-backdrop-filter:url(#g2lens-tabs) blur(2.5px) saturate(1.8) brightness(1.06) !important;backdrop-filter:url(#g2lens-tabs) blur(2.5px) saturate(1.8) brightness(1.06) !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,.14) 55%,rgba(255,255,255,.26)) !important;
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(255,255,255,.45),inset 1.5px 0 0 rgba(255,255,255,.35),inset -1.5px 0 0 rgba(255,255,255,.35),inset 0 0 18px rgba(255,255,255,.18),0 14px 34px -10px rgba(20,40,80,.28),0 2px 6px rgba(20,40,80,.08) !important}
+html.glass .tabs::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.45) 45%,transparent 60%);background-size:250% 100%;background-position:120% 0;opacity:0;transition:opacity .3s;z-index:2}
+html.glass .tabs.press::before{opacity:1;animation:nxSheen .9s cubic-bezier(.3,.7,.2,1)}
+@keyframes nxSheen{from{background-position:120% 0}to{background-position:-30% 0}}
+/* "From Teacher" pop-up, iPhone style (16 Nov): one rounded list, small pill buttons on the right, iPhone text sizes */
+.sheet:has(.br-line) .sheet-body>.hint{font-size:13px;line-height:1.4;color:var(--text-2)}
+.sheet:has(.br-line) .quick{display:flex;gap:2px;margin:6px 0 12px;padding:2px;background:rgba(118,118,128,.12);border-radius:10px;overflow:visible}
+.sheet:has(.br-line) .quick button{flex:1;box-shadow:none;background:none;border-radius:8px;padding:7px 0;font-size:14px;font-weight:600;color:var(--text)}
+.sheet:has(.br-line) .quick button.on{background:#fff;color:#000;box-shadow:0 1px 4px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+.sheet:has(.br-line) .sheet-body>.br-two{display:flex;gap:10px;margin:0 0 14px !important}
+.sheet:has(.br-line) .sheet-body>.br-two button{flex:1;padding:11px 12px;border-radius:999px;font-size:15px;font-weight:600;min-height:0}
+.sheet:has(.br-line) .sheet-body>.br-two .br-yes{background:var(--accent,#30D158);color:#fff;box-shadow:none}
+.sheet:has(.br-line) .sheet-body>.br-two button:not(.br-yes){background:rgba(118,118,128,.12);color:var(--text)}
+.sheet .br-line{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;background:var(--card);border-radius:0;box-shadow:none !important;margin:0;padding:11px 14px;position:relative}
+.sheet .br-line:first-of-type{border-radius:16px 16px 0 0}
+.sheet .br-line:last-of-type{border-radius:0 0 16px 16px}
+.sheet .br-line:only-of-type{border-radius:16px}
+.sheet .br-line+.br-line::before{content:"";position:absolute;top:0;left:58px;right:0;border-top:.5px solid var(--sep)}
+.sheet .br-line .br-lh{margin:0;gap:12px;min-width:0}
+.sheet .br-line .ic.letter{width:34px;height:34px;border-radius:50%;font-size:15px}
+.sheet .br-lh b{font-size:16px !important;font-weight:600 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet .br-lh small{font-size:13px !important}
+.sheet .br-line .br-two{display:flex;gap:6px;margin:0;grid-template-columns:none}
+.sheet .br-line .br-two button{padding:6px 12px !important;border-radius:999px !important;font-size:13px !important;font-weight:600 !important;min-height:0 !important;box-shadow:none !important;white-space:nowrap}
+.sheet .br-line .br-two .br-yes{background:var(--accent,#30D158) !important;color:#fff !important}
+.sheet .br-line .br-two .br-no{background:#FF453A !important;color:#fff !important}
+.sheet .br-line .br-two button:not(.br-yes):not(.br-no){background:rgba(118,118,128,.12) !important;color:var(--text) !important}
+.sheet .br-line .br-lh small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 16 Nov (user): the tab indicator was white on the white glass bar (invisible) -> a clear green tint (Budget's colour) */
+html body .tabs .tab-ind{background:linear-gradient(180deg,rgba(48,209,88,.26),rgba(48,209,88,.16)) !important;box-shadow:inset 0 0 0 .8px rgba(48,209,88,.28),inset 0 1px 0 rgba(255,255,255,.7),0 4px 12px -4px rgba(30,160,70,.4) !important}
+html body .tabs.press .tab-ind,html body .tabs.sliding .tab-ind{background:linear-gradient(180deg,rgba(48,209,88,.34),rgba(48,209,88,.22)) !important}
+@media (prefers-color-scheme: dark){html:not([data-theme="light"]) body .tabs .tab-ind{background:linear-gradient(180deg,rgba(48,209,88,.34),rgba(48,209,88,.22)) !important;box-shadow:inset 0 0 0 .8px rgba(48,209,88,.35),inset 0 1px 0 rgba(255,255,255,.18) !important}}
+html[data-theme="dark"] body .tabs .tab-ind{background:linear-gradient(180deg,rgba(48,209,88,.34),rgba(48,209,88,.22)) !important;box-shadow:inset 0 0 0 .8px rgba(48,209,88,.35),inset 0 1px 0 rgba(255,255,255,.18) !important}
+/* Settings, iPhone style (settings2.js) */
+.st2 .row.field{gap:12px}
+.st2 .row .ic.sm{flex:none}
+.st2 .form-label.st-sub{margin-top:12px;font-size:12px;opacity:.8}
+.st2 .row .ts-sw{margin-left:auto}
+.st2 .hint{margin-top:6px}

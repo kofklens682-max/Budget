@@ -1,0 +1,47 @@
+/* ---------- iPhone date / time picker ---------- */
+input.dp-hide{position:absolute !important;opacity:0 !important;pointer-events:none !important;width:1px !important;height:1px !important;min-height:0 !important;padding:0 !important;border:0 !important;overflow:hidden}
+.dp-btn{appearance:none;-webkit-appearance:none;border:0;background:rgba(118,118,128,.12);color:#1C1C1E;font:inherit;font-size:17px;font-weight:500;padding:7px 13px;border-radius:9px;min-height:38px;width:max-content;max-width:100%;justify-self:start;align-self:flex-start;cursor:pointer;transition:background .2s}
+.dp-btn:active{background:rgba(118,118,128,.22)}
+.dp-btn.empty{color:rgba(60,60,67,.55)}
+.dp-wrap{position:fixed;inset:0;z-index:2000;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0);transition:background .32s}
+.dp-wrap.show{background:rgba(0,0,0,.22)}
+.dp-card{width:min(380px,calc(100% - 20px));margin-bottom:calc(12px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(30px) saturate(1.8);backdrop-filter:blur(30px) saturate(1.8);border-radius:28px;padding:14px 14px 10px;box-shadow:0 24px 60px -14px rgba(0,0,0,.4),inset 0 0 0 .5px rgba(255,255,255,.7);transform:translateY(115%);transition:transform .46s cubic-bezier(.32,.72,0,1)}
+.dp-wrap.show .dp-card{transform:none}
+.dp-h{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 6px 8px}
+.dp-h b{font-size:17px;font-weight:600;color:#1C1C1E}
+.dp-h span{display:flex}
+.dp-h button,.dp-g button,.dp-foot button{-webkit-tap-highlight-color:transparent}
+.dp-h button{width:38px;height:38px;border:0;background:none;color:#0A84FF;display:grid;place-items:center;border-radius:50%;padding:0}
+.dp-h svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.dp-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));row-gap:2px;text-align:center}
+.dp-g span{font-size:12px;font-weight:600;color:rgba(60,60,67,.32);padding:4px 0}
+.dp-g button{width:100%;max-width:44px;aspect-ratio:1;margin:0 auto;border:0;background:none;border-radius:50%;font:inherit;font-size:19px;color:#1C1C1E;padding:0;transition:background .18s,color .18s}
+.dp-g button.today{color:#0A84FF;font-weight:600}
+.dp-g button.on{background:#0A84FF;color:#fff;font-weight:600}
+.dp-g button:disabled{color:rgba(60,60,67,.22)}
+.dp-foot{display:flex;justify-content:space-between;align-items:center;padding:8px 6px 2px;border-top:.5px solid rgba(60,60,67,.14);margin-top:6px}
+.dp-foot button{border:0;background:none;color:#0A84FF;font:inherit;font-size:17px;padding:8px 6px}
+.dp-foot button.strong{font-weight:600}
+.dp-foot button:disabled{color:rgba(60,60,67,.3)}
+.dp-title{text-align:center;font-size:15px;font-weight:600;color:rgba(60,60,67,.6);padding:2px 0 6px}
+.dp-whs{display:flex;justify-content:center;align-items:center;gap:4px;position:relative;height:216px;-webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent)}
+.dp-whs::before{content:"";position:absolute;left:4px;right:4px;top:90px;height:36px;border-radius:10px;background:rgba(118,118,128,.13);pointer-events:none}
+.dp-wh{height:216px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;padding:90px 0;box-sizing:border-box;flex:1;max-width:150px;overscroll-behavior:contain;position:relative}
+.dp-wh::-webkit-scrollbar{display:none}
+.dp-wh div{height:36px;line-height:36px;text-align:center;font-size:21px;scroll-snap-align:center;color:rgba(60,60,67,.5);cursor:pointer;transition:color .15s}
+.dp-wh div.on{color:#1C1C1E;font-weight:500}
+.dp-colon{font-size:22px;font-weight:600;color:#1C1C1E}
+
+/* Budget: the field pill sits on the right of its row; dark mode */
+.row.field .dp-btn{margin-left:auto;align-self:center}
+.tval input[data-dp]{cursor:pointer}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .dp-card{background:rgba(44,44,46,.94);box-shadow:0 24px 60px -14px rgba(0,0,0,.7),inset 0 0 0 .5px rgba(255,255,255,.12)}
+:root:not([data-theme="light"]) .dp-h b,:root:not([data-theme="light"]) .dp-g button,:root:not([data-theme="light"]) .dp-wh div.on,:root:not([data-theme="light"]) .dp-colon,:root:not([data-theme="light"]) .dp-btn{color:#fff}
+:root:not([data-theme="light"]) .dp-g button.on{color:#fff}:root:not([data-theme="light"]) .dp-g button.today:not(.on){color:#0A84FF}
+:root:not([data-theme="light"]) .dp-g button:disabled,:root:not([data-theme="light"]) .dp-g span,:root:not([data-theme="light"]) .dp-wh div,:root:not([data-theme="light"]) .dp-title{color:rgba(235,235,245,.4)}
+:root:not([data-theme="light"]) .dp-btn{background:rgba(118,118,128,.24)}:root:not([data-theme="light"]) .dp-foot{border-top-color:rgba(84,84,88,.6)}}
+:root[data-theme="dark"] .dp-card{background:rgba(44,44,46,.94);box-shadow:0 24px 60px -14px rgba(0,0,0,.7),inset 0 0 0 .5px rgba(255,255,255,.12)}
+:root[data-theme="dark"] .dp-h b,:root[data-theme="dark"] .dp-g button,:root[data-theme="dark"] .dp-wh div.on,:root[data-theme="dark"] .dp-colon,:root[data-theme="dark"] .dp-btn{color:#fff}
+:root[data-theme="dark"] .dp-g button.today:not(.on){color:#0A84FF}
+:root[data-theme="dark"] .dp-g button:disabled,:root[data-theme="dark"] .dp-g span,:root[data-theme="dark"] .dp-wh div,:root[data-theme="dark"] .dp-title{color:rgba(235,235,245,.4)}
+:root[data-theme="dark"] .dp-btn{background:rgba(118,118,128,.24)}:root[data-theme="dark"] .dp-foot{border-top-color:rgba(84,84,88,.6)}

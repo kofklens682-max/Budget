@@ -1,0 +1,37 @@
+/* 17 Nov (Fable, after the user's feedback on the draft). Loaded after next.css. */
+
+/* message / Undo bar: glass pill at the BOTTOM, above the tab bar (it used to cover the page title) */
+html body .toast,html.glass body .toast,html.glass[data-theme="dark"] body .toast{top:auto !important;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);transform:translate(-50%,40px);
+  border-radius:999px !important;padding:12px 18px !important;color:#1C1C1E !important;font-weight:600 !important;
+  background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(255,255,255,.52)) !important;-webkit-backdrop-filter:blur(18px) saturate(1.8) !important;backdrop-filter:blur(18px) saturate(1.8) !important;
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.95),inset 0 0 0 .6px rgba(255,255,255,.6),0 14px 30px -10px rgba(20,60,40,.3),0 2px 6px rgba(20,60,40,.08) !important}
+html body .toast.show{transform:translate(-50%,0)}
+html body .toast .toast-btn{color:#1FA347 !important;font-weight:700}
+html[data-theme="dark"] body .toast{color:#fff !important;background:linear-gradient(180deg,rgba(60,60,67,.74),rgba(40,40,46,.6)) !important;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 14px 30px -10px rgba(0,0,0,.6) !important}
+html[data-theme="dark"] body .toast .toast-btn{color:#30D158 !important}
+
+/* History: one Filter button + an iPhone-style menu */
+.hfbtn{display:flex !important}
+.fm-menu{position:fixed;z-index:80;width:236px;overflow:auto;overscroll-behavior:contain;padding:4px 0;border-radius:16px;
+  background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);
+  box-shadow:0 18px 44px -10px rgba(0,0,0,.3),0 0 0 .5px rgba(60,60,67,.14);transform-origin:100% 0;animation:fmIn .22s cubic-bezier(.2,.9,.3,1.1)}
+@keyframes fmIn{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.fm-menu.out{animation:fmOut .22s cubic-bezier(.4,0,.6,1) forwards}
+@keyframes fmOut{from{opacity:1;transform:none}to{opacity:0;transform:scale(.6)}}
+.fm-i svg{opacity:0;transform:scale(.5);transition:opacity .18s,transform .22s cubic-bezier(.3,1.4,.5,1)}
+.fm-i.on svg{opacity:1;transform:none}
+.fm-menu em{display:block;font-style:normal;font-size:12px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.3px;padding:9px 16px 4px;border-top:6px solid rgba(120,120,128,.1);margin-top:4px}
+.fm-i{display:flex;align-items:center;gap:10px;width:100%;padding:11px 16px;font-size:16px;font-weight:500;text-align:left;color:var(--text,#1C1C1E)}
+.fm-i + .fm-i{border-top:.5px solid rgba(60,60,67,.12)}
+.fm-i span{flex:1}
+.fm-i i{width:10px;height:10px;border-radius:50%;flex:none}
+.fm-i.on{color:var(--accent,#30D158);font-weight:700}
+.fm-i svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+html[data-theme="dark"] .fm-menu{background:rgba(44,44,46,.9)}
+
+/* Settings: a short menu, each section opens on its own */
+.st-pane[hidden],.st-menu[hidden]{display:none !important}
+.st-back{display:flex;align-items:center;gap:2px;color:var(--accent,#30D158);font-weight:600;font-size:16px;padding:4px 0 2px;margin-left:-6px}
+.st-back svg{width:22px;height:22px;transform:rotate(180deg);fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.st-h{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:6px 2px 12px}
+.st-menu .row{min-height:58px}

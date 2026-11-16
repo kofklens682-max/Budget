@@ -138,12 +138,14 @@ function safetyTick() {
   const sf = SF(), now = new Date(), min = now.getHours() * 60 + now.getMinutes(), today = todayIso();
   if (min < sfMin(sf.eveTime)) return;
   const sinceWeek = sf.lastWeek ? daysBetween(sf.lastWeek, today) : 99;
-  const weekDue = sf.weekly && sf.laterWeek !== today && sf.lastWeek !== today && ((now.getDay() === sf.weekDay && sinceWeek >= 5) || sinceWeek >= 8) && Date.now() - sf.shownWeek > 30 * 60e3;
+  // 16 Nov (user: the Weekly check pops up too often): at most ONCE a day, on your check day; if you skip it, once more every 3 days
+  const sinceShown = sf.weekShownDay ? daysBetween(sf.weekShownDay, today) : 99;
+  const weekDue = sf.weekly && sf.laterWeek !== today && sf.lastWeek !== today && sf.weekShownDay !== today && ((now.getDay() === sf.weekDay && sinceWeek >= 5) || (sinceWeek >= 8 && sinceShown >= 3));
   if (weekDue) {
-    sf.shownWeek = Date.now(); save();
+    sf.shownWeek = Date.now(); sf.weekShownDay = today; save();
     popShow(`<b>Weekly check</b><span>Count your money and compare it with Budget. It takes 30 seconds. Last time: ${sfAgo(sf.lastWeek)}.</span><div><button data-act="sp-week">Count now</button><button class="n" data-act="sp-later">Later</button></div>`);
-  } else if (sf.eve && sf.lastEve !== today && Date.now() - sf.shownEve > 30 * 60e3) {
-    sf.shownEve = Date.now(); save();
+  } else if (sf.eve && sf.lastEve !== today && sf.eveShownDay !== today) { // the evening question: once an evening
+    sf.shownEve = Date.now(); sf.eveShownDay = today; save();
     popShow(`<b>Did anything else happen today?</b><span>Money you spent or got that is not in Budget yet.</span><div><button data-act="sp-spent">I spent something</button><button data-act="sp-got">I got money</button><button class="n" data-act="sp-no">No, all is here</button></div>`);
   }
 }

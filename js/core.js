@@ -300,7 +300,7 @@ function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) { const d = normalize(JSON.parse(raw)); hadQuick = true; return d; }
-  } catch (e) { /* damaged: the second copy takes over */ }
+  } catch (e) { window.quickBad = true; /* damaged: the second copy takes over */ }
   return blank();
 }
 let S = load();

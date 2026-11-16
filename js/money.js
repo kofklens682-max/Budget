@@ -366,7 +366,7 @@ function renderHistory() {
   return h + `
     <div class="search" style="margin-top:12px">${glyph('search')}<input id="q" type="search" placeholder="Search names, notes, amounts" value="${esc(UI.q)}" autocomplete="off" enterkeyhint="search"></div>
     <div class="hrow"><div class="seg full">${segButtons('htype', [['all', 'All'], ['in', 'In'], ['out', 'Out']], UI.hType === 'transfer' ? 'all' : UI.hType)}</div><button class="hfbtn ${UI.hFilter ? 'on' : ''}" data-act="hfilter">${glyph('search')}Filter${nFilt ? '<b>' + nFilt + '</b>' : ''}</button></div>
-    <div class="fchips" ${UI.hFilter || nFilt ? '' : 'hidden'}>${chip('htype', 'transfer', 'Transfers', UI.hType === 'transfer')}<span class="fsep"></span>${curItems.map(([v, l]) => chip('hcur', v, l, UI.hCur === v)).join('')}<span class="fsep"></span>${S.accounts.map((a) => chip('hacc', a.id, esc(a.name), UI.hAcc === a.id)).join('')}${S.groups.length ? '<span class="fsep"></span>' + S.groups.map((g) => chip('hgroup', g.id, esc(g.name), UI.hGroup === g.id, g.color)).join('') : ''}</div>
+    ${typeof f17FilterMenu === 'function' ? f17FilterMenu(curItems) : ''}
     <div id="hist-list">${histList()}</div>`;
 }
 function histList() {
@@ -2161,7 +2161,7 @@ function settingsHtml() {
       ${hasDemo() ? action('clear-demo', 'Remove demo data') : action('load-demo', 'Load demo data')}
       ${action('erase', 'Erase all data', 'var(--danger)')}
     </div>
-    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION}</p>
+    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 16 Nov 2026</p>
   </div>`;
 }
 function mountSettings(sh) {
@@ -2200,7 +2200,7 @@ async function backupText() {
   data.settings.pin = null;
   let pics = {};
   try { pics = await picsForBackup(S.tx); } catch (e) { /* the money data matters most */ }
-  return JSON.stringify({ app: 'budget', version: APP_VERSION, exportedAt: new Date().toISOString(), data, pics });
+  return JSON.stringify({ app: 'budget', version: APP_VERSION, exportedAt: new Date().toISOString(), data, pics, diary: typeof dLog === 'function' ? dLog() : [] });
 }
 function markBackedUp() { S.settings.lastBackup = Date.now(); save(); render(); if (sheet) refreshSheet(settingsHtml(), mountSettings); }
 async function exportBackup() {
@@ -2236,6 +2236,7 @@ async function importBackupFile(f) {
   if (!ok) return;
   await keepCopy('before', 'Before a restore');
   await picsFromBackup(obj.pics);
+  if (Array.isArray(obj.diary)) { try { localStorage.setItem('budget-diary', JSON.stringify(obj.diary.slice(-2000))); } catch (e) { /* full */ } }
   n.settings.pin = S.settings.pin;
   if (!data.schedule) n.schedule = S.schedule; // older backups have no schedule — keep the current one
   S = n;
