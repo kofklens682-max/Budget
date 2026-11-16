@@ -228,7 +228,7 @@ function normGroups(gs) {
     name: String(g.name).slice(0, 30),
     color: HEX.test(g.color) ? g.color : '#007AFF',
     fee: g.fee && Number(g.fee.amount) > 0 && CUR[g.fee.currency] ? { amount: Number(g.fee.amount), currency: g.fee.currency } : null,
-    students: (Array.isArray(g.students) ? g.students : []).filter((s) => s && s.id && s.name).map((s) => ({ id: String(s.id), name: String(s.name).slice(0, 40), ...(s.tid ? { tid: String(s.tid) } : {}), ...(s.gone ? { gone: true } : {}), ...(s.orphan ? { orphan: true } : {}), ...(s.orphanOk ? { orphanOk: true } : {}) })),
+    students: (Array.isArray(g.students) ? g.students : []).filter((s) => s && s.id && s.name).map((s) => ({ id: String(s.id), name: String(s.name).slice(0, 40), ...(s.tid ? { tid: String(s.tid) } : {}), ...(s.gone ? { gone: true } : {}), ...(s.left ? { left: true } : {}), ...(s.orphan ? { orphan: true } : {}), ...(s.orphanOk ? { orphanOk: true } : {}) })),
     createdAt: g.createdAt || Date.now(),
     ...(g.tid ? { tid: String(g.tid) } : {}), ...(g.gone ? { gone: true } : {}), ...(g.orphan ? { orphan: true } : {}), ...(g.orphanOk ? { orphanOk: true } : {}), // link to the Teacher app's group (bridge.js)
   }));

@@ -76,6 +76,7 @@ const BR = (() => {
         if (hit && hit.g !== g) { hit.g.students = hit.g.students.filter((x) => x !== s); g.students.push(s); ch = true; } // moved to another group in the Teacher app
         if (!s) { s = { id: uid(), name: rs.name, tid: rs.id }; g.students.push(s); ch = true; }
         else if (s.tid !== rs.id || s.name !== rs.name || s.gone || s.orphan) { if (s.name !== rs.name) S.tx.forEach((t) => { if (t.studentId === s.id) t.person = rs.name; }); s.tid = rs.id; s.name = rs.name; delete s.gone; delete s.orphan; ch = true; }
+        if (!!rs.left !== !!s.left) { if (rs.left) s.left = true; else delete s.left; ch = true; } // left the group in Teacher, still listed while it matters
         seen.add(s);
       });
       g.students.forEach((s) => { if (seen.has(s)) return; if (s.tid && !s.gone) { s.gone = true; ch = true; } else if (!s.tid && !s.orphan) { s.orphan = true; ch = true; } });
@@ -369,7 +370,9 @@ const BR = (() => {
       return { s, ps, paid, due, status };
     });
     if (T2) { // the same students the Teacher app counts: no fee or nothing to pay this month = not counted
-      rows = rows.filter((r) => r.due != null && r.status !== 'free');
+      const who = r0.mem && r0.mem[g.tid] && r0.mem[g.tid][ym]; // 17 Nov: exactly the students the Teacher app lists for this month (also one who left and still owes)
+      if (who) rows = rows.filter((r) => who.includes(r.s.tid) && (r.s.left || (r.due != null && r.status !== 'free'))).map((r) => (r.s.left ? { ...r, s: { ...r.s, name: r.s.name + ' (left)' }, due: r.due || 0, status: r.status === 'free' ? 'none' : r.status } : r));
+      else rows = rows.filter((r) => !r.s.left && r.due != null && r.status !== 'free');
       const collected = rows.reduce((a, r) => a + (r.marked || 0), 0);
       return { pays, rows, cur, collected, otherCollected: 0, others: [], expected: rows.reduce((a, r) => a + (r.due || 0), 0), paidCount: rows.filter((r) => r.status === 'paid').length, n: rows.length, teacher: true };
     }

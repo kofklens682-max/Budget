@@ -173,7 +173,7 @@ function groupHtml() {
     </section>
     <div class="btn-row" style="margin-top:12px">
       ${m.teacher ? '' : '<button class="btn" data-act="group-pay">＋ Record payment</button>'}
-      <button class="btn grey" data-act="group-edit">Students</button>
+      ${m.teacher ? '' : '<button class="btn grey" data-act="group-edit">Students</button>'}
     </div>
     ${m.n ? `<div class="form-label">Students</div><div class="group roster">${rows}</div>` : '<p class="hint" style="margin-top:16px">Add your students (tap “Students”) to see who has paid and who hasn\'t.</p>'}
     ${m.others.length ? `<div class="form-label">${m.n ? 'Other payments' : 'Payments'}</div><div class="group">${m.others.map((t) => txRow(t, true)).join('')}</div>` : ''}

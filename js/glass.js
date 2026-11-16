@@ -3,8 +3,7 @@
    The lens stays on while you scroll, less blur in the middle, a bright rim, and the bar swells like a drop when you press it. */
 (function () {
   const root = document.documentElement, bar = () => document.querySelector('.tabs');
-  const watch = () => { const b = bar(); if (!b) return setTimeout(watch, 300); new MutationObserver(() => { if (b.classList.contains('mv')) b.classList.remove('mv'); }).observe(b, { attributes: true, attributeFilter: ['class'] }); };
-  watch();
+  // 17 Nov: the lens is OFF again while the page moves (class "mv", set in liquid.js). On the phone the always-on lens drew as blue blocks.
   let raf = 0;
   function wobble(peak) {
     const maps = document.querySelectorAll('#g2lens-tabs feDisplacementMap'); if (!maps.length) return; cancelAnimationFrame(raf);
