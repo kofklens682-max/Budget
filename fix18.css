@@ -1,7 +1,9 @@
 /* 17 Nov (Fable): fixes after the user's first phone test. Loaded last. */
 
 /* tab bar lens: only while the page stands still. While it moves (class "mv") a plain soft blur: the lens drew as blue blocks on the phone */
-html.glass.g2-lens:root .tabs.mv{-webkit-backdrop-filter:blur(9px) saturate(1.8) brightness(1.06) !important;backdrop-filter:blur(9px) saturate(1.8) brightness(1.06) !important}
+html.glass.g2-lens:root .tabs.mv{-webkit-backdrop-filter:blur(2.5px) saturate(1.8) brightness(1.06) !important;backdrop-filter:blur(2.5px) saturate(1.8) brightness(1.06) !important}
+/* Settings > Look > "Bend while scrolling" on: the lens also stays while the page moves (the user's own choice) */
+html.glass.g2-lens.g2-live:root .tabs.mv{-webkit-backdrop-filter:url(#g2lens-tabs) blur(2.5px) saturate(1.8) brightness(1.06) !important;backdrop-filter:url(#g2lens-tabs) blur(2.5px) saturate(1.8) brightness(1.06) !important}
 
 /* group page: "of 4 350 000 so'm" sits on its own line under the big amount (it used to break after "of") */
 .sum-card .les-big small{display:block;margin-top:2px}
