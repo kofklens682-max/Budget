@@ -45,6 +45,7 @@
     const all = Object.values(out).flat(), ver = all.find((n) => n.matches && n.matches('p.hint') && /version/i.test(n.textContent));
     if (ver) { Object.keys(out).forEach((k) => { out[k] = out[k].filter((n) => n !== ver); }); const a = document.createElement('div'); a.className = 'group plain';
       a.innerHTML = `<div class="row field">${tile('report', '#8E8E93')}<div class="row-main"><div class="row-title">${(ver.innerHTML.split('<br>')[1] || 'Budget').replace(/<[^>]+>/g, '')}</div><div class="row-sub">${ver.innerHTML.split('<br>')[0].replace(/<[^>]+>/g, '')}</div></div></div>`; out.About = [a]; }
+    { const u = document.createElement('div'); u.className = 'group plain'; u.innerHTML = '<div class="row field" data-appupdate role="button" style="cursor:pointer">' + tile('report', '#0A84FF') + '<div class="row-main"><div class="row-title">Update the app</div><div class="row-sub">Get the newest version now, without closing the app</div></div></div>'; out.About = [...(out.About || []), u]; }
     const panes = [];
     // 4. rebuild the page: a short menu of sections; a tap opens one section (17 Nov, user: "still crowded")
     body.replaceChildren(...(secs._top ? secs._top.nodes : []));

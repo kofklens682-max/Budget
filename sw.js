@@ -1,6 +1,6 @@
 // Offline support. Bump VERSION whenever the app files change so phones pick up the update:
 // the new worker installs, takes over, and the open app reloads into the new version.
-const VERSION = 'budget-v69';
+const VERSION = 'budget-v70';
 const SHARE = 'budget-share'; // a picture or message shared to Budget, until the app picks it up
 const SHELL = [
   './',
@@ -49,6 +49,7 @@ const SHELL = [
   './fix18.css',
   './fix19.css',
   './js/fix19.js',
+  './js/updatenow.js',
   './manifest.webmanifest',
   './icons/icon-96.png',
   './icons/icon-192.png',
