@@ -288,6 +288,7 @@ function normalize(d) {
     };
     if (!open) delete r.open;
     if (r.apart !== true) delete r.apart;
+    if (typeof r.paused !== 'string' || r.paused.length !== 10) delete r.paused; // 17 Nov 2026: the day a goal was paused
     return r;
   });
   const schedule = normSchedule(d.schedule);

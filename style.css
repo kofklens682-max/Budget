@@ -332,6 +332,12 @@ button.row:active, .row.tap:active { background: var(--fill-2); }
 .chip.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--in-text); }
 .chip.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); }
 .chip.info { background: var(--accent-soft); color: var(--accent); }
+/* 17 Nov 2026: a paused goal (grey = switched off, not good and not late) and the red bin in the Categories list */
+.chip.off { background: var(--fill); color: var(--text-2); }
+.goal-card.paused .g3, .goal-card.paused .g3-leg, .goal-card.paused .gc-top .ic { opacity: .45; }
+.cat-del { flex: none; width: 40px; height: 44px; display: grid; place-items: center; color: var(--danger); }
+.cat-del .gl { width: 20px; height: 20px; }
+.cat-del:active { transform: scale(.88); }
 
 /* ---------- Stats ---------- */
 .period-nav { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 12px; }

@@ -14,9 +14,17 @@ function topPeople(type) {
 
 // A goal is an envelope: money put in (saved), money already paid out of it for the thing (paid —
 // "I paid for it" lines, e.g. a first instalment of a fee), and what is still needed.
+// 17 Nov 2026: a goal can be stopped for a while (goal.paused = the day it was paused). It keeps its money and its %, but takes
+// nothing from money in and is never "behind" until it is turned back on. goalOn is the ONE test every place uses.
+const goalOn = (g) => !g.paid && !g.paused;
 const goalPaid = (g) => g.contribs.reduce((a, c) => a + (c.txId && c.amount < 0 ? -c.amount : 0), 0);
 function goalStats(g) {
   const saved = goalSaved(g), paid = goalPaid(g), covered = saved + paid, cur = g.currency;
+  if (g.paused && !g.paid) {
+    const open = !!g.open, left = open ? 0 : Math.max(0, g.target - covered);
+    return { open, paused: true, saved, paid, covered: open ? saved : covered, left, pct: !open && g.target > 0 ? clamp((covered / g.target) * 100, 0, 100) : 0,
+      daysLeft: open ? null : daysBetween(todayIso(), g.deadline), pace: `Paused since ${medDate(g.paused)} · nothing goes in by itself`, status: ['off', 'Paused'] };
+  }
   // Saving with no set amount: what's in it, and what went in this month.
   if (g.open) {
     const [from, to] = ymRange(ymNow());
@@ -64,7 +72,7 @@ function goalBar(g, st, big) {
 }
 // dated goals still filling (soonest first) · savings with no set amount · full · paid
 const goalSort = (a, b) => {
-  const rank = (g) => (g.paid ? 3 : g.open ? 1 : goalSaved(g) >= g.target ? 2 : 0);
+  const rank = (g) => (g.paid ? 3 : g.paused ? 2.5 : g.open ? 1 : goalSaved(g) >= g.target ? 2 : 0);
   return rank(a) - rank(b) || (a.deadline || '').localeCompare(b.deadline || '');
 };
 
@@ -635,14 +643,14 @@ function renderGoals() {
   h += '<div class="stack" style="margin-top:12px">';
   for (const g of [...S.goals].sort(goalSort)) {
     const st = goalStats(g), gi = goalIcon(g);
-    h += `<button class="card goal-card" data-act="goal" data-id="${g.id}">
+    h += `<button class="card goal-card${st.paused ? ' paused' : ''}" data-act="goal" data-id="${g.id}">
       <div class="gc-top">
         ${ic(gi.id, gi.c)}
         <div class="row-main"><div class="gc-name">${esc(g.name)}</div><div class="gc-date">${st.open ? 'No set amount — just saving' : `by ${medDate(g.deadline)} · ${daysLeftText(st.daysLeft)}`}${g.apart ? ' · not in total' : ''}</div></div>
         <span class="chip ${st.status[0]}">${st.status[1]}</span>
       </div>
       ${goalBar(g, st)}
-      <div class="gc-pace">${glyph(st.open ? 'coins' : 'calendar')}<span>${st.pace}${st.open && g.auto > 0 ? ` · gets ${g.auto}% of money in` : ''}</span></div>
+      <div class="gc-pace">${glyph(st.paused ? 'clock' : st.open ? 'coins' : 'calendar')}<span>${st.pace}${st.open && !st.paused && g.auto > 0 ? ` · gets ${g.auto}% of money in` : ''}</span></div>
     </button>`;
   }
   return h + '</div>';
@@ -842,7 +850,7 @@ function txHtml() {
       <div class="grp-pick"><button class="${!d.groupId ? 'on' : ''}" data-act="pick-group" data-v="">No group</button>${S.groups.map((x) => `<button class="${d.groupId === x.id ? 'on' : ''}" data-act="pick-group" data-v="${x.id}" style="--c:${x.color}"><i></i>${esc(x.name)}</button>`).join('')}</div>` : ''}
     ${who}
     <div class="form-label">Category</div>
-    <div class="cats">${S.cats[d.type].map((c) => `<button class="cat ${d.category === c.id ? 'on' : ''}" data-act="pick-cat" data-v="${c.id}">${ic(c.g, c.c, 'lg')}<span>${esc(c.name)}</span></button>`).join('')}<button class="cat add" data-act="new-cat-inline"><span class="ic lg" style="--c:var(--fill)">${glyph('plus')}</span><span>New</span></button></div>`;
+    <div class="cats">${S.cats[d.type].map((c) => `<button class="cat ${d.category === c.id ? 'on' : ''}" data-act="pick-cat" data-v="${c.id}">${ic(c.g, c.c, 'lg')}<span>${esc(c.name)}</span></button>`).join('')}<button class="cat add" data-act="new-cat-inline"><span class="ic lg" style="--c:var(--fill)">${glyph('plus')}</span><span>New</span></button><button class="cat add" data-act="edit-cats-inline"><span class="ic lg" style="--c:var(--fill)">${glyph('pencil')}</span><span>Edit</span></button></div>`;
   } else {
     body = `
     <div class="form-label">From</div>
@@ -1227,19 +1235,21 @@ function reopenAccount(id) {
 
 // ================= Categories =================
 let catType = 'out';
+let catsBack = null; // 17 Nov 2026: set when the list was opened from an entry's form, so Back and Done return to that entry
 function openCats(type) { catType = type || catType; openSheet(catsHtml(), mountCats); }
 function catsHtml() {
   const count = (id) => S.tx.filter((t) => t.type === catType && t.category === id).length;
-  return sheetHead('Categories', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>') + `
+  return sheetHead('Categories', `<button data-act="${catsBack ? 'cats-back' : 'settings'}">Back</button>`, `<button data-act="${catsBack ? 'cats-back' : 'close-sheet'}">Done</button>`) + `
   <div class="sheet-body">
     <div class="seg full">${segButtons('cats-type', [['in', 'Money in'], ['out', 'Money out']], catType)}</div>
     <div class="group sort-list" id="cat-list" style="margin-top:14px">
       ${S.cats[catType].map((c) => `<div class="row sortable" data-sort data-id="${c.id}">
         <button class="row-link" data-act="edit-cat" data-id="${c.id}">${ic(c.g, c.c)}<div class="row-main"><div class="row-title">${esc(c.name)}</div><div class="row-sub">${(count(c.id) === 1 ? '1 entry' : count(c.id) + ' entries')}</div></div></button>
+        ${c.id === OTHER_CAT[catType] ? '' : `<button class="cat-del" data-act="del-cat-row" data-id="${c.id}" aria-label="Delete ${esc(c.name)}"><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v5.5M14 11v5.5"/></svg></button>`}
         <span class="drag" aria-label="Drag to reorder">${glyph('grip')}</span>
       </div>`).join('')}
     </div>
-    <p class="hint">Drag ⠿ to change the order you see them in. Tap a category to rename it or change its icon and colour.</p>
+    <p class="hint">Drag ⠿ to change the order you see them in. Tap a category to rename it or change its icon and colour. The red bin deletes it.</p>
     <div class="actions"><button class="btn soft" data-act="new-cat">＋ New category</button></div>
   </div>`;
 }
@@ -1307,17 +1317,25 @@ function saveCat() {
   catBack();
   toast(i >= 0 ? 'Category updated' : `${rec.name} added`);
 }
-async function deleteCat() {
-  const d = cdraft;
+async function deleteCat(row) { // row = { type, id } when the red bin in the list was tapped; otherwise the category being edited
+  const d = row ? { ...S.cats[row.type].find((x) => x.id === row.id), type: row.type } : cdraft;
+  if (!d.id || d.id === OTHER_CAT[d.type]) return;
   const n = S.tx.filter((t) => t.type === d.type && t.category === d.id).length;
   const ok = await ask({ title: `Delete “${d.name}”?`, msg: n ? `${n} entr${n === 1 ? 'y uses' : 'ies use'} it. They'll move to “${cat(d.type, OTHER_CAT[d.type]).name}”.` : 'No entries use it.', ok: 'Delete category', destructive: true });
   if (!ok) return;
-  S.cats[d.type] = S.cats[d.type].filter((x) => x.id !== d.id);
-  S.tx.forEach((t) => { if (t.type === d.type && t.category === d.id) t.category = OTHER_CAT[d.type]; });
+  const idx = S.cats[d.type].findIndex((x) => x.id === d.id), rec = S.cats[d.type][idx], moved = [];
+  if (idx < 0) return;
+  S.cats[d.type].splice(idx, 1);
+  S.tx.forEach((t) => { if (t.type === d.type && t.category === d.id) { t.category = OTHER_CAT[d.type]; moved.push(t); } });
   if (draft && draft.category === d.id) draft.category = null;
   save(); render();
-  catBack();
-  toast('Category deleted');
+  const again = () => { if (sheet && $('#cat-list', sheet.sh)) refreshSheet(catsHtml(), mountCats); };
+  if (row) again(); else catBack();
+  undoToast(n ? `${rec.name} deleted · ${n} entr${n === 1 ? 'y' : 'ies'} moved to ${cat(d.type, OTHER_CAT[d.type]).name}` : `${rec.name} deleted`, () => {
+    if (!S.cats[d.type].some((x) => x.id === rec.id)) S.cats[d.type].splice(Math.min(idx, S.cats[d.type].length), 0, rec);
+    moved.forEach((t) => { if (S.tx.includes(t) && t.category === OTHER_CAT[d.type]) t.category = rec.id; });
+    again();
+  });
 }
 
 // ================= Goals (forms & detail) =================
@@ -1327,7 +1345,7 @@ function openGoalForm(id) {
   const now = new Date();
   const later = iso(new Date(now.getFullYear(), now.getMonth() + 6, now.getDate()));
   gdraft = g
-    ? { id: g.id, name: g.name, icon: g.icon, target: g.target, currency: g.currency, deadline: g.deadline || later, initial: 0, open: !!g.open, auto: g.auto || 0, paid: !!g.paid }
+    ? { id: g.id, name: g.name, icon: g.icon, target: g.target, currency: g.currency, deadline: g.deadline || later, initial: 0, open: !!g.open, auto: g.auto || 0, paid: !!g.paid, paused: !!g.paused }
     : { id: null, name: '', icon: 'target', target: 0, currency: UI.cur, deadline: later, initial: 0, open: false, auto: 0 };
   openSheet(goalFormHtml(), mountGoalForm);
 }
@@ -1335,7 +1353,7 @@ function openGoalForm(id) {
 // than the other goals leave free.
 function goalAutoMax() {
   const g = gdraft.id ? goalById(gdraft.id) : null;
-  return 100 - (splitTotal() - (g && !g.paid ? g.auto || 0 : 0));
+  return 100 - (splitTotal() - (g && goalOn(g) ? g.auto || 0 : 0));
 }
 function goalAutoHint(d) {
   const ex = d.currency === 'USD' ? 100 : 1000000;
@@ -1384,7 +1402,7 @@ function goalFormHtml() {
     <p class="hint">On: the money stays in this goal, but your total balance on Overview doesn't count it.</p>`}
     ${goalCurLocked(d) ? `<p class="hint">This goal already holds money, so it stays in ${d.currency === 'UZS' ? "so'm" : 'dollars'}.</p>` : ''}
     <p class="hint" id="g-preview"></p>
-    ${d.paid ? '' : `<div class="form-label">Of every money in</div>
+    ${d.paid ? '' : d.paused ? `<p class="hint">This goal is paused, so it takes nothing from money in${d.auto > 0 ? ` (its ${d.auto}% is kept for when you turn it back on)` : ''}.</p>` : `<div class="form-label">Of every money in</div>
     <div class="group plain"><div class="row field"><span style="flex:1">Goes here by itself</span><div class="stepper" id="g-auto"><button data-act="g-auto" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${d.auto || 0}%</b><button data-act="g-auto" data-v="2.5" aria-label="More">${glyph('plus')}</button></div></div></div>
     <p class="hint" id="g-auto-hint">${goalAutoHint(d)}</p>`}
     <div class="actions">
@@ -1435,7 +1453,7 @@ function saveGoal() {
     const g = S.goals.find((x) => x.id === d.id);
     Object.assign(g, { name: d.name.trim(), icon: d.icon, currency: goalCurLocked(d) ? g.currency : d.currency }, kind);
     if (d.open) delete g.paid; else delete g.open;
-    if (!g.paid) { if (auto > 0) g.auto = auto; else delete g.auto; }
+    if (goalOn(g)) { if (auto > 0) g.auto = auto; else delete g.auto; }
     save(); render();
     openGoal(g.id);
     toast('Goal updated');
@@ -1471,8 +1489,8 @@ function goalDetailHtml() {
     </div>
     <section class="card" style="margin-top:18px">
       ${goalBar(g, st, true)}
-      <div class="gc-pace">${glyph(g.open ? 'coins' : 'calendar')}<span>${st.pace}${!g.paid && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
-      ${g.auto > 0 && !g.paid ? `<div class="gc-pace">${glyph('split')}<span>Gets <b>${g.auto}%</b> of every money in${!g.open && st.left <= 0 ? ' (full now, takes nothing)' : ''} · <button class="link inl" data-act="split">Change</button></span></div>` : ''}
+      <div class="gc-pace">${glyph(st.paused ? 'clock' : g.open ? 'coins' : 'calendar')}<span>${st.pace}${goalOn(g) && st.left > 0 && st.daysLeft > 0 ? ` · ${daysLeftText(st.daysLeft)}` : ''}</span></div>
+      ${g.auto > 0 && goalOn(g) ? `<div class="gc-pace">${glyph('split')}<span>Gets <b>${g.auto}%</b> of every money in${!g.open && st.left <= 0 ? ' (full now, takes nothing)' : ''} · <button class="link inl" data-act="split">Change</button></span></div>` : ''}
     </section>
     ${!g.paid && (st.left > 0 || g.open) ? `<p class="hint">Free money you can add: <b class="num ${free > 0 ? 'in' : ''}">${fmtG(Math.max(0, free), cur)}</b></p>` : ''}
     <div class="btn-row" style="margin-top:14px">
@@ -1480,6 +1498,8 @@ function goalDetailHtml() {
       <button class="btn grey" data-act="goal-move" data-v="-1" ${st.saved > 0 ? '' : 'disabled'}>Take out</button>
     </div>
     ${st.saved > 0 ? `<button class="btn soft" style="margin-top:10px" data-act="goal-spend">${glyph('receipt')} ${g.open ? 'Spend from it' : 'I paid for it (all or part)'}</button>` : ''}
+    ${g.paid ? '' : `<button class="btn ${g.paused ? '' : 'grey'}" style="margin-top:10px" data-act="goal-pause">${g.paused ? 'Turn this goal back on' : 'Pause this goal'}</button>
+    <p class="hint">${g.paused ? 'Paused: the money stays here and nothing goes in by itself. You can still add or take out money yourself.' : 'Not saving for this now? Pause it. The money stays, and you can turn it back on any time.'}</p>`}
     <div class="group plain" style="margin-top:14px"><div class="row field"><span style="flex:1">Leave out of my total</span><label class="switch"><input type="checkbox" id="g-apart" data-act="goal-apart" ${g.apart ? 'checked' : ''} aria-label="Leave this goal out of my total balance"><i></i></label></div></div>
     <p class="hint" id="g-apart-hint">${apartHint(g)}</p>
     <div class="form-label">History</div>
@@ -1722,8 +1742,8 @@ function allocCard() {
 // (contrib.auto = the entry's id), so editing or deleting the entry changes them too. A goal takes
 // nothing once it's full or paid, and never more than is free in its own currency (a $ goal only
 // gets dollars you really have). One entry can skip it (noSplit — a refund, money you owe back).
-const splitGoals = () => [...S.goals].sort(goalSort).filter((g) => g.auto > 0 && !g.paid);
-const splitTotal = () => S.goals.reduce((a, g) => a + (g.paid ? 0 : g.auto || 0), 0);
+const splitGoals = () => [...S.goals].sort(goalSort).filter((g) => g.auto > 0 && goalOn(g));
+const splitTotal = () => S.goals.reduce((a, g) => a + (goalOn(g) ? g.auto || 0 : 0), 0);
 // What an entry d ({ id, type, amount, currency }) would put into each goal: [{ g, pct, want, part }]
 // (amounts in the goal's currency). Worked out as if the entry's old version and its old parts
 // were gone, so it's right for a new entry and for one being changed.
@@ -1799,9 +1819,9 @@ function splitHtml() {
   const open = gs.filter((g) => !g.paid);
   const row = (g) => {
     const gi = goalIcon(g), st = goalStats(g);
-    const sub = g.paid ? 'Paid — takes nothing' : g.open ? 'No limit' : st.left <= 0 ? 'Full — takes nothing now' : `Goal ${fmtG(g.target, g.currency)}`;
-    return `<div class="row${g.paid ? ' dim' : ''}">${ic(gi.id, gi.c, 'sm')}<div class="row-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${sub}</div></div>
-      ${g.paid ? '' : `<div class="stepper"><button data-act="split-step" data-id="${g.id}" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${g.auto || 0}%</b><button data-act="split-step" data-id="${g.id}" data-v="2.5" aria-label="More">${glyph('plus')}</button></div>`}</div>`;
+    const sub = g.paid ? 'Paid — takes nothing' : g.paused ? 'Paused — takes nothing' : g.open ? 'No limit' : st.left <= 0 ? 'Full — takes nothing now' : `Goal ${fmtG(g.target, g.currency)}`;
+    return `<div class="row${goalOn(g) ? '' : ' dim'}">${ic(gi.id, gi.c, 'sm')}<div class="row-main"><div class="row-title">${esc(g.name)}</div><div class="row-sub">${sub}</div></div>
+      ${!goalOn(g) ? '' : `<div class="stepper"><button data-act="split-step" data-id="${g.id}" data-v="-2.5" aria-label="Less">${glyph('minus')}</button><b class="num">${g.auto || 0}%</b><button data-act="split-step" data-id="${g.id}" data-v="2.5" aria-label="More">${glyph('plus')}</button></div>`}</div>`;
   };
   return head + `<div class="sheet-body">
     <p class="hint" style="margin:2px 4px 14px">Every time money comes in, these parts go into your goals by themselves. The rest stays free to spend.</p>
@@ -1824,7 +1844,7 @@ function syncSplit(sh) {
     i.style.width = `${v}%`;
     i.style.minWidth = v ? '' : '0';
   });
-  const open = [...S.goals].sort(goalSort).filter((g) => !g.paid && g.auto > 0);
+  const open = [...S.goals].sort(goalSort).filter((g) => goalOn(g) && g.auto > 0);
   $('#split-leg', sh).innerHTML = open.map((g) => `<div><i style="background:${goalIcon(g).c}"></i>${esc(g.name)}<b class="num">${g.auto}%</b></div>`).join('')
     + `<div><i style="background:var(--in)"></i>Free to spend<b class="num">${100 - total}%</b></div>`;
   $$('.stepper', sh).forEach((st) => {
@@ -1838,7 +1858,7 @@ function syncSplit(sh) {
 function splitStep(id, v) {
   const g = goalById(id);
   if (!g || !sheet) return;
-  const others = splitTotal() - (g.paid ? 0 : g.auto || 0);
+  const others = splitTotal() - (goalOn(g) ? g.auto || 0 : 0);
   const next = clamp((g.auto || 0) + v, 0, 100 - others);
   if (next === (g.auto || 0)) return;
   if (next) g.auto = next; else delete g.auto;
@@ -2161,7 +2181,7 @@ function settingsHtml() {
       ${hasDemo() ? action('clear-demo', 'Remove demo data') : action('load-demo', 'Load demo data')}
       ${action('erase', 'Erase all data', 'var(--danger)')}
     </div>
-    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 16 Nov 2026</p>
+    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 17 Nov 2026</p>
   </div>`;
 }
 function mountSettings(sh) {
@@ -2492,7 +2512,10 @@ Object.assign(ACTIONS, {
   'acc-history': (a, v, id) => { UI.hView = 'entries'; UI.hAcc = id; UI.hType = 'all'; closeSheet(); goTab('history'); },
 
   // categories
-  'open-cats': (a, v) => openCats(v),
+  'open-cats': (a, v) => { catsBack = null; openCats(v); },
+  'edit-cats-inline': () => { catsBack = reopenTx; openCats(draft.type); },
+  'cats-back': () => { const b = catsBack; catsBack = null; if (b && draft) b(); else closeSheet(); },
+  'del-cat-row': (a, v, id) => deleteCat({ type: catType, id }),
   'cats-type': (a, v) => { catType = v; refreshSheet(catsHtml(), mountCats); },
   'edit-cat': (a, v, id) => openCatForm(catType, id, null),
   'new-cat': () => openCatForm(catType, null, null),
@@ -2514,6 +2537,23 @@ Object.assign(ACTIONS, {
     const hint = $('#g-apart-hint');
     if (hint) hint.innerHTML = apartHint(g);
     toast(a.checked ? 'Left out of your total' : 'Counted in your total again');
+  },
+  'goal-pause': () => { // stop for a while / turn back on; Undo puts everything back
+    const g = goalById(gid);
+    if (!g || g.paid) return;
+    const was = { paused: g.paused, auto: g.auto };
+    let cut = false;
+    if (g.paused) {
+      delete g.paused;
+      const room = 100 - (splitTotal() - (g.auto || 0)); // other goals may have taken its share meanwhile
+      if ((g.auto || 0) > room) { cut = true; if (room > 0) g.auto = room; else delete g.auto; }
+    } else g.paused = todayIso();
+    save(); buzz(); render(); refreshGoalSheet();
+    undoToast(g.paused ? `${g.name} is paused` : cut ? `${g.name} is on again · now gets ${g.auto || 0}% (the rest is taken by other goals)` : `${g.name} is on again`, () => {
+      if (was.paused) g.paused = was.paused; else delete g.paused;
+      if (was.auto) g.auto = was.auto; else delete g.auto;
+      refreshGoalSheet();
+    });
   },
   'pick-icon': (a, v) => { gdraft.icon = v; pick(a, '.emojis'); },
   'goal-cur': (a, v) => {
