@@ -25,3 +25,5 @@ html .al-legend i.g{background:#007AFF !important;background-image:none !importa
 .bc-one{display:flex;align-items:center;gap:4px;font-size:17px}
 /* never cut a line with "..." on the Colors pages */
 .bc-page :is(.row-title,.row-sub){white-space:normal !important;overflow:visible !important;text-overflow:clip !important}
+/* the icons in Teacher's iPhone line style (icons-line.js): white line, no fill, rounded ends */
+html .ic svg g.ln,html .ic svg g.ln *{fill:none !important;stroke:#fff !important;stroke-width:2 !important;stroke-linecap:round !important;stroke-linejoin:round !important}
