@@ -327,7 +327,7 @@ const isOpenAcc = (id) => openAccs().some((a) => a.id === id);
 const accKind = (a) => ACC_KINDS.find((k) => k.id === a.kind) || ACC_KINDS[3];
 const accIc = (a, cls = '') => ic(accKind(a).g, a.color, cls);
 const grp = (id) => (id ? S.groups.find((g) => g.id === id) || null : null);
-const goalIcon = (g) => GOAL_ICONS.find((x) => x.id === g.icon) || GOAL_ICONS[0];
+const goalIcon = (g) => { const x = GOAL_ICONS.find((i) => i.id === g.icon) || GOAL_ICONS[0]; return g && HEX.test(g.color || '') ? { ...x, c: g.color } : x; }; // 18 Nov: a goal may have its own color (Settings > Look > Colors)
 // Dates are "YYYY-MM-DD", so plain comparison sorts them (much faster than localeCompare).
 const cmpDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
 const sortTx = (a, b) => cmpDate(b, a) || (b.createdAt || 0) - (a.createdAt || 0);

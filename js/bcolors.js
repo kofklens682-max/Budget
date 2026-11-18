@@ -37,37 +37,64 @@
 
   const cur = (k) => get()[k] || orig[k] || '#8E8E93';
   const dot = (c) => `<span class="bc-dot" style="--k:${c}"></span>`;
+  const chev = () => (typeof I !== 'undefined' && I.chev ? I.chev : '');
   const preview = () => `<div class="bc-prev"><svg viewBox="0 0 200 64" aria-hidden="true">${[14, 30, 22, 40, 28].map((h, i) => `<rect x="${12 + i * 38}" y="${60 - h}" width="11" height="${h}" rx="3" fill="${cur('in')}"/><rect x="${25 + i * 38}" y="${60 - h * 0.6}" width="11" height="${h * 0.6}" rx="3" fill="${cur('out')}"/>`).join('')}<path d="M6 40 L50 30 L94 34 L138 18 L194 12" fill="none" stroke="${cur('accent')}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+  /* 18 Nov, his phone test: "there is no flexibility, let me change MORE things". Besides the three app colors, every category (the pie
+     chart), every account and every goal can now take any of the 60 Apple shades. These colors are part of your data (saved and synced
+     like the rest); the color each one had before is kept on this phone (key "b-colors-orig") for "Original color". A color chosen here
+     is kept exactly: Budget's older "seven colors" rule (palette.js) leaves it alone (key "b-colors-picked"). */
+  const OK = 'b-colors-orig', PK = 'b-colors-picked';
+  const og = () => { try { return JSON.parse(localStorage.getItem(OK) || '{}') || {}; } catch (e) { return {}; } };
+  const putO = (o) => { try { localStorage.setItem(OK, JSON.stringify(o)); } catch (e) { /* this visit only */ } };
+  const keep = (c) => { if (!c) return; const u = c.toUpperCase(); try { const l = JSON.parse(localStorage.getItem(PK) || '[]'); if (!l.includes(u)) { l.push(u); localStorage.setItem(PK, JSON.stringify(l)); } } catch (e) { /* fine */ } if (typeof LEGACY_C !== 'undefined') delete LEGACY_C[u]; };
+  const shown = (c) => (typeof fixC === 'function' ? fixC(c) : c);
+  function ref(k) {
+    const it = ITEMS.find((x) => x[0] === k);
+    if (it) return { name: it[1], sub: it[2], own: !!get()[k], now: cur(k), orig: orig[k] || '#8E8E93', set: (c) => { const o = get(); if (c) o[k] = c; else delete o[k]; put(o); apply(); } };
+    const [t, x, y] = k.split(':');
+    const data = (o, field, dflt) => { if (!o) return null; const O = og(), own = k in O;
+      return { name: o.name, own, now: shown(o[field] || dflt), orig: own ? shown(O[k] || dflt) : shown(o[field] || dflt),
+        set: (c) => { const P = og(); if (c) { if (!(k in P)) P[k] = o[field] || ''; o[field] = c; } else if (k in P) { if (P[k]) o[field] = P[k]; else delete o[field]; delete P[k]; } putO(P); save(); } }; };
+    if (t === 'c') return data((S.cats[x] || []).find((c) => c.id === y), 'c', '#8E8E93');
+    if (t === 'a') return data((S.accounts || []).find((c) => c.id === x), 'color', '#8E8E93');
+    if (t === 'g') { const g = (S.goals || []).find((c) => c.id === x); return data(g, 'color', g ? (GOAL_ICONS.find((i) => i.id === g.icon) || GOAL_ICONS[0]).c : '#8E8E93'); }
+    return null;
+  }
+  const row = (k) => { const r = ref(k); if (!r) return ''; return `<button class="row" data-act="bc-pick" data-v="${esc(k)}">${dot(r.now)}<div class="row-main"><div class="row-title">${esc(r.name)}</div><div class="row-sub">${r.own ? nameOf(r.now) : 'Original color'}${r.sub ? ' · ' + r.sub : ''}</div></div>${chev()}</button>`; };
+  const sec = (label, keys) => (keys.length ? `<div class="form-label">${label}</div><div class="group plain">${keys.map(row).join('')}</div>` : '');
   function listHtml() {
-    const rows = ITEMS.map(([k, t, sub]) => `<button class="row" data-act="bc-pick" data-v="${k}">${dot(cur(k))}<div class="row-main"><div class="row-title">${t}</div><div class="row-sub">${nameOf(get()[k])} · ${sub}</div></div>${typeof I !== 'undefined' && I.chev ? I.chev : ''}</button>`).join('');
-    return sheetHead('Colors', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body">
+    return sheetHead('Colors', '<button data-act="settings">Back</button>', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body bc-page">
       ${preview()}
-      <div class="group plain">${rows}</div>
-      <div class="group plain"><button class="row" data-act="open-cats" data-v="out">${dot('#FF9500')}<div class="row-main"><div class="row-title">Pie chart</div><div class="row-sub">Each category has its own color. Change it in Categories.</div></div>${typeof I !== 'undefined' && I.chev ? I.chev : ''}</button></div>
+      ${sec('Charts and app', ITEMS.map((x) => x[0]))}
+      ${sec('Pie chart · money out categories', (S.cats.out || []).map((c) => 'c:out:' + c.id))}
+      ${sec('Money in categories', (S.cats.in || []).map((c) => 'c:in:' + c.id))}
+      ${sec('Accounts', (S.accounts || []).filter((a) => a.kind !== 'free').map((a) => 'a:' + a.id))}
+      ${sec('Goals', (S.goals || []).map((g) => 'g:' + g.id))}
       <p class="hint">Only Apple's colors. Each in five shades: darker, dark, actual, bright, brighter.</p></div>`;
   }
   function pickHtml(k) {
-    const it = ITEMS.find((x) => x[0] === k), mine = get()[k], me = findC(mine), si = me ? me.s : 2;
-    const grid = FAM.map((f, fi) => { const c = f.s[si], on = !!me && me.f === fi; return `<button class="bc-sw${on ? ' on' : ''}" data-act="bc-set" data-v="${k}|${c}" style="--k:${c}"><span class="bc-ball">${on ? '✓' : ''}</span><b>${f.n}</b></button>`; }).join('');
-    const shades = me ? `<div class="form-label">Shade of ${FAM[me.f].n.toLowerCase()}</div><div class="bc-shades">${FAM[me.f].s.map((c, j) => `<button class="bc-sh${j === me.s ? ' on' : ''}" data-act="bc-set" data-v="${k}|${c}" style="--k:${c}"><span class="bc-ball sm">${j === me.s ? '✓' : ''}</span><b>${SHADE[j]}</b></button>`).join('')}</div>`
+    const r = ref(k); if (!r) return listHtml();
+    const me = r.own ? findC(r.now) : null, si = me ? me.s : 2;
+    const grid = FAM.map((f, fi) => { const c = f.s[si], on = !!me && me.f === fi; return `<button class="bc-sw${on ? ' on' : ''}" data-act="bc-set" data-v="${esc(k)}|${c}" style="--k:${c}"><span class="bc-ball">${on ? '✓' : ''}</span><b>${f.n}</b></button>`; }).join('');
+    const shades = me ? `<div class="form-label">Shade of ${FAM[me.f].n.toLowerCase()}</div><div class="bc-shades">${FAM[me.f].s.map((c, j) => `<button class="bc-sh${j === me.s ? ' on' : ''}" data-act="bc-set" data-v="${esc(k)}|${c}" style="--k:${c}"><span class="bc-ball sm">${j === me.s ? '✓' : ''}</span><b>${SHADE[j]}</b></button>`).join('')}</div>`
       : '<p class="hint">Choose a color, then its shade.</p>';
-    return sheetHead(it[1], '<button data-act="bc-open">Back</button>', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body">
-      ${preview()}
+    return sheetHead(esc(r.name), '<button data-act="bc-open">Back</button>', '<button data-act="close-sheet">Done</button>') + `<div class="sheet-body bc-page">
+      ${ITEMS.some((x) => x[0] === k) ? preview() : `<div class="bc-prev bc-one">${dot(r.now)}<b>${esc(r.name)}</b></div>`}
       <div class="bc-grid">${grid}</div>
       ${shades}
-      <div class="group plain"><button class="row" data-act="bc-set" data-v="${k}|">${dot(orig[k] || '#8E8E93')}<div class="row-main"><div class="row-title">Original color</div><div class="row-sub">The color it has now</div></div>${mine ? '' : '<span class="bc-tick">✓</span>'}</button></div></div>`;
+      <div class="group plain"><button class="row" data-act="bc-set" data-v="${esc(k)}|">${dot(r.orig)}<div class="row-main"><div class="row-title">Original color</div><div class="row-sub">The color it had before</div></div>${r.own ? '' : '<span class="bc-tick">✓</span>'}</button></div></div>`;
   }
   Object.assign(ACTIONS, {
     'bc-open': () => openSheet(listHtml()),
     'bc-pick': (a, v) => openSheet(pickHtml(v)),
-    'bc-set': (a, v) => { const i = v.indexOf('|'), k = v.slice(0, i), c = v.slice(i + 1), o = get(); if (c) o[k] = c; else delete o[k]; put(o); apply(); openSheet(pickHtml(k)); if (typeof render === 'function') render(); },
+    'bc-set': (a, v) => { const i = v.lastIndexOf('|'), k = v.slice(0, i), c = v.slice(i + 1), r = ref(k); if (!r) return; keep(c); r.set(c); openSheet(pickHtml(k)); if (typeof render === 'function') render(); },
   });
   // Settings > Look: the row (after "Appearance")
   if (typeof settingsHtml === 'function') {
     const _s = settingsHtml;
     settingsHtml = function () {
       const h = _s.apply(this, arguments);
-      const row = `<div class="group plain"><button class="row" data-act="bc-open">${typeof ic === 'function' ? ic('palette', '#FF2D55', 'sm') || ic('report', '#FF2D55', 'sm') : ''}<div class="row-main"><div class="row-title">Colors</div><div class="row-sub">Charts, lines, buttons</div></div>${typeof I !== 'undefined' && I.chev ? I.chev : ''}</button></div>`;
+      const row = `<div class="group plain"><button class="row" data-act="bc-open">${typeof ic === 'function' ? ic('palette', '#FF2D55', 'sm') || ic('report', '#FF2D55', 'sm') : ''}<div class="row-main"><div class="row-title">Colors</div><div class="row-sub">Charts, pie, accounts, goals, buttons</div></div>${typeof I !== 'undefined' && I.chev ? I.chev : ''}</button></div>`;
       return h.replace(/(<button class="row field" data-tabshrink)/, (m) => row.replace('</div>', '</div>') + m);
     };
   }

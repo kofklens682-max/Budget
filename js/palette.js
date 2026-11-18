@@ -6,7 +6,10 @@
   const P7 = ['#34C759', '#007AFF', '#FF9500', '#AF52DE', '#FF2D55', '#FF3B30', '#FFCC00'], GREY = ['#8E8E93', '#636366', '#C7C7CC'];
   const rgb = (h) => { const x = String(h).replace('#', ''); if (!/^[0-9a-f]{6}$/i.test(x)) return null; return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)); };
   const sat = ([r, g, b]) => (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
-  const near = (h) => { const a = rgb(h); if (!a || sat(a) < 0.12) return null; let best = null, bd = 1e9; // greys stay grey
+  // 18 Nov 2026: a color the user picked in Settings > Look > Colors (one of Apple's 60 shades) is kept exactly (js/bcolors.js)
+  const picked = () => { try { return new Set(JSON.parse(localStorage.getItem('b-colors-picked') || '[]')); } catch (e) { return new Set(); } };
+  picked().forEach((k) => { delete LEGACY_C[k]; });
+  const near = (h) => { if (picked().has(String(h).toUpperCase())) return null; const a = rgb(h); if (!a || sat(a) < 0.12) return null; let best = null, bd = 1e9; // greys stay grey
     P7.forEach((p) => { const b = rgb(p), d = (a[0] - b[0]) ** 2 * 0.3 + (a[1] - b[1]) ** 2 * 0.59 + (a[2] - b[2]) ** 2 * 0.11; if (d < bd) { bd = d; best = p; } }); return best; };
   const map = (c) => { if (!c) return; const k = String(c).toUpperCase(), n = near(LEGACY_C[k] || c); if (n && n.toUpperCase() !== k) LEGACY_C[k] = n; };
   // the colours the app itself uses, and every colour in your data (categories, accounts, goals, groups, schedule)
