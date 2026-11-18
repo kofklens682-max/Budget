@@ -7,12 +7,12 @@ html.glass:root .tabs.g2d{transform:translateY(5px) scale(.88) !important}
 .cb-chips{display:flex;gap:6px;margin:0 0 12px;overflow-x:auto;scrollbar-width:none}
 .cb-chips::-webkit-scrollbar{display:none}
 .cb-chips button{flex:none;border:0;font:inherit;font-size:14px;font-weight:600;padding:7px 14px;border-radius:99px;background:rgba(120,120,128,.12);color:inherit}
-.cb-chips button.on{background:#0A84FF;color:#fff}
+.cb-chips button.on{background:#007AFF;color:#fff}
 .np.cb{height:auto;perspective:none;margin-top:0}
 .cb-page{position:relative;background:#FFFDF4;padding:6px 14px 6px 46px;box-shadow:0 1px 2px rgba(60,50,20,.08),0 10px 24px -14px rgba(60,50,20,.35);font-family:Caveat,'Segoe Print',cursive;color:#27324d}
 .cb-page.top{border-radius:16px 16px 4px 4px}
 .cb-page.bot{border-radius:4px 4px 16px 16px}
-.cb-page::before{content:"";position:absolute;left:36px;top:0;bottom:0;width:1.5px;background:rgba(255,69,58,.45)}
+.cb-page::before{content:"";position:absolute;left:36px;top:0;bottom:0;width:1.5px;background:rgba(255,59,48,.45)}
 .cb-rings{display:flex;justify-content:space-between;padding:0 22px;height:10px;position:relative;z-index:2}
 .cb-rings i{width:9px;height:26px;margin-top:-8px;border-radius:6px;border:2.5px solid #9aa0aa;border-bottom-color:#c9ced6;background:transparent;box-shadow:0 1px 2px rgba(0,0,0,.18)}
 .cb-l{height:44px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(88,113,179,.3);min-width:0}

@@ -247,7 +247,7 @@ function renderHome() {
   const prevYm = ymShift(ymNow(), -1);
   const [pf, pt] = ymRange(prevYm);
   if (hasDemo()) {
-    h += `<button class="banner demo" data-act="clear-demo">${ic('flask', '#F2B705', 'sm')}<div><b>You're looking at demo data</b><span class="s">Tap here to remove it when you're ready to start.</span></div></button>`;
+    h += `<button class="banner demo" data-act="clear-demo">${ic('flask', '#FFCC00', 'sm')}<div><b>You're looking at demo data</b><span class="s">Tap here to remove it when you're ready to start.</span></div></button>`;
   } else if (['UZS', 'USD'].some(goalsShort)) {
     h += `<button class="banner warn" data-act="tab" data-tab="goals">${ic('coins', '#FF9500', 'sm')}<div><b>Your goals hold more than you have</b><span class="s">Some goal money was spent. Tap to fix it.</span></div></button>`;
   } else if (now.getDate() <= 7 && S.settings.reportSeen !== prevYm && S.tx.some((t) => t.date >= pf && t.date < pt)) {
@@ -2053,7 +2053,7 @@ async function drawReportPicture(r) {
 
   // Hero
   const grad = x.createLinearGradient(48, 48, 1032, 560);
-  grad.addColorStop(0, '#2BDDA0'); grad.addColorStop(0.55, '#0FA57C'); grad.addColorStop(1, '#05705D');
+  grad.addColorStop(0, '#34C759'); grad.addColorStop(0.55, '#248A3D'); grad.addColorStop(1, '#0C817B');
   rr(48, 48, 984, 470, 56, grad);
   const glow = x.createRadialGradient(220, 110, 0, 220, 110, 620);
   glow.addColorStop(0, 'rgba(255,255,255,.28)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
@@ -2074,8 +2074,8 @@ async function drawReportPicture(r) {
     text(plain(fmt(val, cur)), X, 694, `800 52px ${F}`, '#000', 'left', 400);
     text(pct === null ? '—' : `${pct > 0 ? '▲' : pct < 0 ? '▼' : '='} ${Math.abs(pct)}% vs ${MON[parseD(r.prevYm + '-01').getMonth()]}`, X, 746, `500 28px ${F}`, '#8E8E93');
   };
-  col(104, '#1BAF7A', 'Money in', r.t.in, r.inChange);
-  col(582, '#EB6834', 'Money out', r.t.out, r.outChange);
+  col(104, '#34C759', 'Money in', r.t.in, r.inChange);
+  col(582, '#FF3B30', 'Money out', r.t.out, r.outChange);
   x.fillStyle = '#E5E5EA'; x.fillRect(540, 594, 2, 160);
 
   // Where the money went
@@ -2181,7 +2181,7 @@ function settingsHtml() {
       ${hasDemo() ? action('clear-demo', 'Remove demo data') : action('load-demo', 'Load demo data')}
       ${action('erase', 'Erase all data', 'var(--danger)')}
     </div>
-    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 17 Nov 2026</p>
+    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 18 Nov 2026</p>
   </div>`;
 }
 function mountSettings(sh) {

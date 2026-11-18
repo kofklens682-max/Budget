@@ -17,6 +17,6 @@
   const st = document.createElement('style');
   st.textContent = `.ts-sw{width:51px;height:31px;border-radius:99px;background:rgba(120,120,128,.18);position:relative;flex:none;transition:background .25s;margin-left:auto}
 .ts-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .3s cubic-bezier(.3,1.3,.5,1)}
-.ts-sw.on{background:#30D158}.ts-sw.on::after{transform:translateX(20px)}`;
+.ts-sw.on{background:#34C759}.ts-sw.on::after{transform:translateX(20px)}`;
   document.head.appendChild(st);
 })();

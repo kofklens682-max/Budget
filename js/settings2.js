@@ -13,9 +13,9 @@
     Privacy: 'Everything stays on this phone.',
     Data: '',
   };
-  const ACT_IC = { export: ['box', '#0A84FF'], 'share-backup': ['mail', '#0A84FF'], import: ['refund', '#30D158'], copies: ['clock', '#8E8E93'],
-    'clear-demo': ['flask', '#FF9F0A'], 'load-demo': ['flask', '#FF9F0A'], erase: ['flame', '#FF453A'], 'change-pin': ['key', '#8E8E93'], 'acct-now': ['exchange', '#30D158'], 'acct-days': ['calendar', '#0A84FF'], 'acct-signout': ['lock', '#FF453A'], 'acct-open': ['key', '#8E8E93'] };
-  const SEC_IC = { Account: ['key', '#30D158'], Accounts: ['safe', '#0A84FF'], 'Bank fees': ['exchange', '#FF9F0A'], Organise: ['box', '#BF5AF2'], Currency: ['exchange', '#30D158'], 'Keep it true': ['bell', '#FF9F0A'], Look: ['phone', '#0A84FF'], Privacy: ['lock', '#8E8E93'], Backup: ['clock', '#0A84FF'], Data: ['flame', '#FF453A'], About: ['report', '#8E8E93'] };
+  const ACT_IC = { export: ['box', '#007AFF'], 'share-backup': ['mail', '#007AFF'], import: ['refund', '#34C759'], copies: ['clock', '#8E8E93'],
+    'clear-demo': ['flask', '#FF9500'], 'load-demo': ['flask', '#FF9500'], erase: ['flame', '#FF3B30'], 'change-pin': ['key', '#8E8E93'], 'acct-now': ['exchange', '#34C759'], 'acct-days': ['calendar', '#007AFF'], 'acct-signout': ['lock', '#FF3B30'], 'acct-open': ['key', '#8E8E93'] };
+  const SEC_IC = { Account: ['key', '#34C759'], Accounts: ['safe', '#007AFF'], 'Bank fees': ['exchange', '#FF9500'], Organise: ['box', '#AF52DE'], Currency: ['exchange', '#34C759'], 'Keep it true': ['bell', '#FF9500'], Look: ['phone', '#007AFF'], Privacy: ['lock', '#8E8E93'], Backup: ['clock', '#007AFF'], Data: ['flame', '#FF3B30'], About: ['report', '#8E8E93'] };
   const SEC_SUB = { Account: 'Online copy, last 7 days', Accounts: 'Cash, card and others', 'Bank fees': 'Usual transfer fee', Organise: 'Categories', Currency: "So'm, dollar, exchange rate", 'Keep it true': 'Evening question, weekly check', Look: 'Light or dark, tab bar, glass', Privacy: 'Passcode', Backup: 'Backup file, automatic copies', Data: 'Demo data, erase' };
   const tile = (g, c) => (typeof ic === 'function' ? ic(g, c, 'sm') : '');
   function tidy(html) {
@@ -36,7 +36,7 @@
     out['Keep it true'] = [...take('Keep it true'), sub('Ask me after'), ...take('Ask me after'), sub('Weekly check on'), ...take('Weekly check on')];
     const shrink = document.createElement('div'); shrink.className = 'group plain';
     const on = typeof tabShrinkOn === 'function' ? tabShrinkOn() : true;
-    shrink.innerHTML = `<button class="row field" data-tabshrink role="switch" aria-checked="${on}">${tile('phone', '#0A84FF')}<div class="row-main"><div class="row-title">Shrink the tab bar</div><div class="row-sub">Smaller while you scroll down</div></div><i class="ts-sw${on ? ' on' : ''}"></i></button>`;
+    shrink.innerHTML = `<button class="row field" data-tabshrink role="switch" aria-checked="${on}">${tile('phone', '#007AFF')}<div class="row-main"><div class="row-title">Shrink the tab bar</div><div class="row-sub">Smaller while you scroll down</div></div><i class="ts-sw${on ? ' on' : ''}"></i></button>`;
     const bend = document.createElement('div'); bend.className = 'group plain'; bend.innerHTML = window.GlassBend ? GlassBend.html() : '';
     out.Look = [sub('Appearance'), ...take('Appearance'), shrink, bend];
     out.Privacy = take('Privacy'); out.Backup = take('Backup'); out.Data = take('Data');
@@ -45,7 +45,7 @@
     const all = Object.values(out).flat(), ver = all.find((n) => n.matches && n.matches('p.hint') && /version/i.test(n.textContent));
     if (ver) { Object.keys(out).forEach((k) => { out[k] = out[k].filter((n) => n !== ver); }); const a = document.createElement('div'); a.className = 'group plain';
       a.innerHTML = `<div class="row field">${tile('report', '#8E8E93')}<div class="row-main"><div class="row-title">${(ver.innerHTML.split('<br>')[1] || 'Budget').replace(/<[^>]+>/g, '')}</div><div class="row-sub">${ver.innerHTML.split('<br>')[0].replace(/<[^>]+>/g, '')}</div></div></div>`; out.About = [a]; }
-    { const u = document.createElement('div'); u.className = 'group plain'; u.innerHTML = '<div class="row field" data-appupdate role="button" style="cursor:pointer">' + tile('report', '#0A84FF') + '<div class="row-main"><div class="row-title">Update the app</div><div class="row-sub">Get the newest version now, without closing the app</div></div></div>'; out.About = [...(out.About || []), u]; }
+    { const u = document.createElement('div'); u.className = 'group plain'; u.innerHTML = '<div class="row field" data-appupdate role="button" style="cursor:pointer">' + tile('report', '#007AFF') + '<div class="row-main"><div class="row-title">Update the app</div><div class="row-sub">Get the newest version now, without closing the app</div></div></div>'; out.About = [...(out.About || []), u]; }
     const panes = [];
     // 4. rebuild the page: a short menu of sections; a tap opens one section (17 Nov, user: "still crowded")
     body.replaceChildren(...(secs._top ? secs._top.nodes : []));
@@ -71,7 +71,7 @@
     // 5. a coloured icon on every plain action row (Backup, Data, passcode)
     body.querySelectorAll('button.row.field[data-act]').forEach((b) => { const m = ACT_IC[b.dataset.act]; if (m && !b.querySelector('.ic')) b.insertAdjacentHTML('afterbegin', tile(m[0], m[1])); });
     body.querySelectorAll('.row.field').forEach((r) => { const t = r.querySelector(':scope > span'); if (/^Passcode lock$/.test(t ? t.textContent.trim() : '') && !r.querySelector('.ic')) r.insertAdjacentHTML('afterbegin', tile('lock', '#8E8E93')); });
-    body.querySelectorAll('.row').forEach((r) => { if (r.querySelector('.ic')) return; const t = r.textContent.trim(); const m = /^Evening question/.test(t) ? ['bell', '#FF9F0A'] : /^Weekly money check/.test(t) ? ['safe', '#30D158'] : /^Automatic/.test(t) && r.closest('#rate-box') ? ['exchange', '#0A84FF'] : null; if (m) r.insertAdjacentHTML('afterbegin', tile(m[0], m[1])); });
+    body.querySelectorAll('.row').forEach((r) => { if (r.querySelector('.ic')) return; const t = r.textContent.trim(); const m = /^Evening question/.test(t) ? ['bell', '#FF9500'] : /^Weekly money check/.test(t) ? ['safe', '#34C759'] : /^Automatic/.test(t) && r.closest('#rate-box') ? ['exchange', '#007AFF'] : null; if (m) r.insertAdjacentHTML('afterbegin', tile(m[0], m[1])); });
     body.classList.add('st2');
     return tpl.innerHTML;
   }
@@ -87,7 +87,7 @@
     const h = _a.apply(this, arguments); if (!Acct.signedIn()) return h;
     return h.replace(/(<button class="row field" data-act="acct-now"[^>]*>[\s\S]*?<\/button>)/, `$1<button class="row field" data-act="acct-days"><span style="flex:1;color:var(--accent)">Copies from the last 7 days</span>${I.chev}</button>`);
   };
-  const dayRows = (list) => list.length ? `<div class="group">${list.map((d) => `<button class="row" data-act="acct-day" data-v="${d.slot}">${ic('calendar', '#0A84FF', 'sm')}<div class="row-main"><div class="row-title">${acctWhen(d.at).split(',')[0]}</div><div class="row-sub">Saved at ${acctWhen(d.at).split(', ')[1] || ''}</div></div>${I.chev}</button>`).join('')}</div>`
+  const dayRows = (list) => list.length ? `<div class="group">${list.map((d) => `<button class="row" data-act="acct-day" data-v="${d.slot}">${ic('calendar', '#007AFF', 'sm')}<div class="row-main"><div class="row-title">${acctWhen(d.at).split(',')[0]}</div><div class="row-sub">Saved at ${acctWhen(d.at).split(', ')[1] || ''}</div></div>${I.chev}</button>`).join('')}</div>`
     : '<p class="hint" style="text-align:center;margin-top:20px">No daily copies yet. The first one is saved today.</p>';
   const daysHtml = (inner) => sheetHead('Last 7 days', '<button data-act="acct-back">Back</button>', '') + `<div class="sheet-body"><p class="hint" style="margin:4px 4px 12px">One copy is saved online each day. Tap a day to bring Budget back to how it was then.</p>${inner}</div>`;
   Object.assign(ACTIONS, {

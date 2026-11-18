@@ -31,7 +31,7 @@
 .gb-live span{flex:1}.gb-live b{display:block;font-size:16px;font-weight:600}.gb-live small{margin:2px 0 0 !important}
 .gb-sw{flex:none;width:51px;height:31px;border-radius:31px;background:rgba(120,120,128,.28);position:relative;transition:background .25s}
 .gb-sw::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.22);transition:transform .25s cubic-bezier(.3,1.3,.5,1)}
-.gb-sw.on{background:#30D158}.gb-sw.on::after{transform:translateX(20px)}
+.gb-sw.on{background:#34C759}.gb-sw.on::after{transform:translateX(20px)}
 .gb-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-11px;border-radius:50%;background:#fff;box-shadow:0 .5px 4px rgba(0,0,0,.12),0 3px 8px rgba(0,0,0,.18)}`;
   document.head.appendChild(css);
   window.GlassBend = { html: () => { const v = get(); return `<div class="gb-row" data-noswipe><div class="t">Glass bending<em>${label(v)}</em></div><small>How much the tab bar bends the picture behind it</small><div class="s">Flat<input type="range" min="0" max="150" step="5" value="${v}" data-glassbend aria-label="Glass bending">Strong</div><button class="gb-live" data-glasslive role="switch" aria-checked="${live()}"><span><b>Bend while scrolling</b><small>Off: bends when the page stands still. On: all the time (may draw wrongly on some phones)</small></span><i class="gb-sw${live() ? ' on' : ''}"></i></button></div>`; }, apply };

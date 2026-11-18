@@ -485,9 +485,9 @@ const BR = (() => {
   function inboxHtml() {
     const l = tbList(), accs = openAccs(), a = inAccId(), adds = l.filter((x) => x.op === 'add');
     const row = (x) => x.op === 'add'
-      ? `<div class="br-line"><div class="br-lh">${letterTile(x.person || '?', '#12B76A')}<div class="tx"><b>${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))} · marked ${shortDate(x.date)}</small></div></div>
+      ? `<div class="br-line"><div class="br-lh">${letterTile(x.person || '?', '#34C759')}<div class="tx"><b>${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))} · marked ${shortDate(x.date)}</small></div></div>
          <div class="br-two"><button class="br-yes" data-act="tb-add" data-v="${esc(x.id)}">Add to my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Already counted</button></div></div>`
-      : `<div class="br-line del"><div class="br-lh">${letterTile(x.person || '?', '#F04438')}<div class="tx"><b>Removed in Teacher: ${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))}</small></div></div>
+      : `<div class="br-line del"><div class="br-lh">${letterTile(x.person || '?', '#FF3B30')}<div class="tx"><b>Removed in Teacher: ${esc(x.person)} · ${money(x.amount)} so'm</b><small>${esc(x.group)} · ${esc(mName(x.m))}</small></div></div>
          <div class="br-two"><button class="br-no" data-act="tb-take" data-v="${esc(x.id)}">Take it out of my balance</button><button data-act="tb-skip" data-v="${esc(x.id)}">Keep it</button></div></div>`;
     return sheetHead('From the Teacher app', '<button data-act="close-sheet">Later</button>', '') + `<div class="sheet-body">
       <p class="hint" style="margin-top:0">You marked these payments in the Teacher app. Add the new money to your balance. If the money is already in Budget, tap Already counted: nothing is added. ${splitGoals().length ? 'New money is shared into your goals by their percentages, like an entry you type yourself.' : ''}</p>

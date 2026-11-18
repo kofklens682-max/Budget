@@ -19,9 +19,9 @@ const WK = WEEK.map((d) => d.slice(0, 3));
 const DAY_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF3B30', '#30B0C7', '#FF2D55']; // iPhone system colours (6 Nov 2026)
 const NBSP = ' ';
 const HEX = /^#[0-9a-f]{6}$/i;
-const PALETTE = ['#34C759', '#00C7BE', '#30B0C7', '#5AC8FA', '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF3B30', '#FF9500', '#FFCC00', '#A2845E', '#8E8E93', '#636366'];
+const PALETTE = ['#34C759', '#00C7BE', '#30B0C7', '#32ADE6', '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', '#FF3B30', '#FF9500', '#FFCC00', '#A2845E', '#8E8E93', '#636366'];
 // colours saved before the iPhone palette are shown in the nearest iPhone colour
-const LEGACY_C = { '#F2B705': '#FFCC00', '#7D6BF2': '#5856D6', '#64748B': '#8E8E93', '#3B82F6': '#007AFF', '#16A34A': '#34C759', '#F59E0B': '#FF9500', '#7C3AED': '#AF52DE', '#F87171': '#FF3B30', '#14B8A6': '#30B0C7', '#EC4899': '#FF2D55' };
+const LEGACY_C = { '#FFCC00': '#FFCC00', '#5856D6': '#5856D6', '#64748B': '#8E8E93', '#007AFF': '#007AFF', '#248A3D': '#34C759', '#FF9500': '#FF9500', '#5856D6': '#AF52DE', '#FF3B30': '#FF3B30', '#00C7BE': '#30B0C7', '#FF2D55': '#FF2D55' };
 const fixC = (c) => LEGACY_C[String(c).toUpperCase()] || c;
 const CAT_GLYPHS_OLD = ['briefcase', 'board', 'family', 'users', 'gift', 'laptop', 'store', 'refund', 'usercheck', 'coins', 'cart', 'utensils', 'coffee', 'car', 'bus', 'fuel', 'house', 'bolt', 'phone', 'shirt', 'pill', 'gradcap', 'book', 'sparkles', 'film', 'music', 'gamepad', 'dumbbell', 'scissors', 'baby', 'paw', 'wrench', 'handheart', 'tag', 'receipt', 'cake', 'plane', 'globe', 'umbrella', 'heart', 'star', 'box'];
 const CAT_GLYPHS = window.ICON_SECTIONS ? [...new Set(window.ICON_SECTIONS.flatMap((x) => x[1]))].filter((g) => (window.GLYPHS_IOS && window.GLYPHS_IOS[g]) || G[g]) : CAT_GLYPHS_OLD;
@@ -33,7 +33,7 @@ const DEFAULT_CATS = {
     { id: 'gift', name: 'Gift', g: 'gift', c: '#FF2D55' },
     { id: 'sidework', name: 'Side work', g: 'laptop', c: '#5856D6' },
     { id: 'business', name: 'Business', g: 'store', c: '#00C7BE' },
-    { id: 'refund', name: 'Refund', g: 'refund', c: '#5AC8FA' },
+    { id: 'refund', name: 'Refund', g: 'refund', c: '#32ADE6' },
     { id: 'debt', name: 'Debt repaid', g: 'usercheck', c: '#AF52DE' },
     { id: 'other_in', name: 'Other', g: 'coins', c: '#8E8E93' },
   ],
@@ -43,7 +43,7 @@ const DEFAULT_CATS = {
     { id: 'transport', name: 'Transport', g: 'car', c: '#00C7BE' },
     { id: 'home', name: 'Home & rent', g: 'house', c: '#007AFF' },
     { id: 'bills', name: 'Bills', g: 'bolt', c: '#FFCC00' },
-    { id: 'phone', name: 'Phone & net', g: 'phone', c: '#5AC8FA' },
+    { id: 'phone', name: 'Phone & net', g: 'phone', c: '#32ADE6' },
     { id: 'clothes', name: 'Clothes', g: 'shirt', c: '#AF52DE' },
     { id: 'health', name: 'Health', g: 'pill', c: '#FF3B30' },
     { id: 'education', name: 'Education', g: 'gradcap', c: '#5856D6' },
@@ -62,12 +62,12 @@ const ACC_KINDS = [
 ];
 const GOAL_ICONS = [
   { id: 'target', c: '#FF3B30' }, { id: 'phone', c: '#007AFF' }, { id: 'laptop', c: '#5856D6' }, { id: 'car', c: '#00C7BE' },
-  { id: 'plane', c: '#5AC8FA' }, { id: 'house', c: '#FF9500' }, { id: 'gradcap', c: '#AF52DE' }, { id: 'gem', c: '#FF2D55' },
+  { id: 'plane', c: '#32ADE6' }, { id: 'house', c: '#FF9500' }, { id: 'gradcap', c: '#AF52DE' }, { id: 'gem', c: '#FF2D55' },
   { id: 'gift', c: '#FF2D55' }, { id: 'shield', c: '#34C759' }, { id: 'gamepad', c: '#636366' }, { id: 'star', c: '#FFCC00' },
 ];
 const EMOJI_TO_ICON = { '🎯': 'target', '📱': 'phone', '💻': 'laptop', '🚗': 'car', '✈️': 'plane', '🏠': 'house', '🎓': 'gradcap', '💍': 'gem', '🎁': 'gift', '🛡️': 'shield', '🎮': 'gamepad', '⭐': 'star' };
 const TRANSFER_C = '#8E8E93';
-const PEOPLE_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#5AC8FA', '#5856D6', '#00C7BE'];
+const PEOPLE_COLORS = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#32ADE6', '#5856D6', '#00C7BE'];
 
 // Interface chrome icons (tinted with the accent colour by their container)
 const I = {
