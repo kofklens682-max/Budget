@@ -2181,7 +2181,7 @@ function settingsHtml() {
       ${hasDemo() ? action('clear-demo', 'Remove demo data') : action('load-demo', 'Load demo data')}
       ${action('erase', 'Erase all data', 'var(--danger)')}
     </div>
-    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 18 Nov 2026</p>
+    <p class="hint" style="text-align:center;margin-top:28px">${S.tx.length} entries · ${S.accounts.length} accounts · ${S.groups.length} groups · ${S.goals.length} goals<br>Budget · version ${APP_VERSION} · updated 20 Nov 2026</p>
   </div>`;
 }
 function mountSettings(sh) {
@@ -2471,6 +2471,8 @@ Object.assign(ACTIONS, {
     const removed = S.tx.find((t) => t.id === d.id);
     if (!removed) return;
     S.tx = S.tx.filter((t) => t !== removed);
+    const feeTx = S.tx.find((t) => t.nxFeeOf === removed.id); // 20 Nov: its bank fee goes with it (next.js)
+    if (feeTx) S.tx = S.tx.filter((t) => t !== feeTx);
     // The monthly copies go on: the newest copy carries the "Every month" on, and the others point to it.
     let heir = null;
     if (ans === true && copies.length) {
@@ -2489,6 +2491,7 @@ Object.assign(ACTIONS, {
     const short = cur && goalsShort(cur) ? ` — goals now hold ${fmtG(-freeMoney(cur), cur)} more than you have` : '';
     undoToast((removed.type === 'transfer' ? 'Transfer deleted' : 'Entry deleted') + short, () => {
       if (!S.tx.some((t) => t.id === removed.id)) S.tx.push(removed);
+      if (feeTx && !S.tx.some((t) => t.id === feeTx.id)) S.tx.push(feeTx);
       putContribs(pulled);
       if (heir) {
         const h = S.tx.find((t) => t.id === heir.id);

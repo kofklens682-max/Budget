@@ -22,37 +22,89 @@ function diffLog(before) { // compare the entries before and after one action
 }
 const snap = () => new Map(S.tx.map((t) => [t.id, JSON.parse(JSON.stringify(t))]));
 
-/* ---------- bank fee on transfers ---------- */
+/* ---------- bank fee: money out and transfers (20 Nov, user: "money out by card doesn't count the fee even if it's in
+   Settings; I want to switch it off while filling in"). One fee per entry, saved as its own "Bank fees" entry linked by
+   nxFeeOf, so the balance drops by amount + fee and the fees have their own monthly total. ---------- */
 const feeOf = (accId) => ((S.settings.nxFee || {})[accId] || 0);
 function feeCat() {
   let c = S.cats.out.find((x) => x.name === 'Bank fees');
   if (!c) { c = { id: uid(), name: 'Bank fees', g: (S.cats.out.find((x) => /fee|bank|other/i.test(x.name)) || S.cats.out[S.cats.out.length - 1]).g, c: '#8E8E93' }; S.cats.out.push(c); }
   return c.id;
 }
+const feeEntryOf = (id) => (id ? S.tx.find((x) => x.nxFeeOf === id) : null);
+const feeAllowed = (d) => !!d && (d.type === 'out' || d.type === 'transfer') && !d.nxFeeOf && !d.lesson && !d.tpid && !d.goalSpend;
+const feeAmount = (d) => (d.nxFeeOn && d.nxFee > 0 && d.amount > 0 ? roundCur((d.amount * d.nxFee) / 100, d.currency) : 0);
+function feeInit(d) {
+  if (!feeAllowed(d) || d.nxFeeInit) return;
+  d.nxFeeInit = true;
+  const f = feeEntryOf(d.id);
+  if (f) { d.nxFeeOn = true; d.nxFee = f.nxPct || (d.amount > 0 ? Math.round((f.amount / d.amount) * 10000) / 100 : 0); d.nxPctTyped = true; }
+  else if (!d.id) { d.nxFee = feeOf(d.account); d.nxFeeOn = d.nxFee > 0; }
+  else { d.nxFee = feeOf(d.account); d.nxFeeOn = false; } // an old entry saved without a fee stays without one until you switch it on
+}
+function feeMonthTotal(cur) {
+  const m = todayIso().slice(0, 7), id = (S.cats.out.find((x) => x.name === 'Bank fees') || {}).id;
+  return S.tx.filter((t) => t.type === 'out' && t.currency === cur && t.date.slice(0, 7) === m && (t.nxFeeOf || (id && t.category === id))).reduce((a, t) => a + t.amount, 0);
+}
+function feeHint(d) {
+  const fee = feeAmount(d);
+  if (!d.nxFeeOn) return 'No fee on this entry.';
+  if (!(d.nxFee > 0)) return 'Type the fee in % (for example 0.7 or 1.1).';
+  const month = feeMonthTotal(d.currency);
+  return d.amount > 0
+    ? `Fee ${fmt(fee, d.currency)} · total taken from ${acc(d.account).name}: ${fmt(roundCur(d.amount + fee, d.currency), d.currency)}. Saved as “Bank fees”${month ? ` (this month so far: ${fmt(month, d.currency)})` : ''}.`
+    : `${d.nxFee}% of the amount is taken from ${acc(d.account).name} as a bank fee.`;
+}
+function feeBlock(d) {
+  if (!feeAllowed(d)) return '<div id="nx-feebox"></div>';
+  feeInit(d);
+  if (!d.nxFeeOn && !(feeOf(d.account) > 0) && !feeEntryOf(d.id)) return '<div id="nx-feebox"></div>'; // this account has no usual fee: nothing to show
+  return `<div id="nx-feebox"><div class="form-label">Bank fee</div><div class="group plain">
+    <div class="row field"><span style="flex:1">Take a bank fee</span><label class="switch"><input type="checkbox" id="nx-fee-on" ${d.nxFeeOn ? 'checked' : ''} aria-label="Take a bank fee"><i></i></label></div>
+    ${d.nxFeeOn ? `<label class="row field"><span>Fee</span><input id="nx-fee" inputmode="decimal" placeholder="0" value="${d.nxFee || ''}" autocomplete="off" enterkeyhint="done" style="text-align:right"><span class="muted" style="min-width:0">%</span></label>` : ''}
+  </div><p class="hint" id="nx-fee-hint">${esc(feeHint(d))}</p></div>`;
+}
+function feeRedraw() { // only the fee box changes (picking an account must not redraw the whole form)
+  const box = document.getElementById('nx-feebox');
+  if (!box || !draft) return;
+  const t = document.createElement('div'); t.innerHTML = feeBlock(draft); box.replaceWith(t.firstElementChild);
+}
+function feeHintNow() { const h = document.getElementById('nx-fee-hint'); if (h && draft) h.textContent = feeHint(draft); }
 {
   const _h = txHtml;
   txHtml = function () {
-    let h = _h();
-    if (draft && draft.type === 'transfer' && !draft.id) {
-      if (draft.nxFee == null) draft.nxFee = feeOf(draft.account);
-      const fee = Math.round((+draft.amount || 0) * draft.nxFee) / 100;
-      const row = `<div class="form-label">Bank fee</div><div class="group plain"><label class="row field"><span>Fee</span><input id="nx-fee" inputmode="decimal" placeholder="0" value="${draft.nxFee || ''}" autocomplete="off" style="text-align:right"><span class="muted" style="min-width:0">%</span></label></div>
-        <p class="hint" id="nx-fee-hint">${draft.nxFee ? `Fee ${fmt(fee, draft.currency)} is taken from ${esc(acc(draft.account).name)} and saved as “Bank fees”. Type 0 for no fee.` : 'No fee. Type it in % (for example 0.7 or 1.1).'}</p>`;
-      h = h.replace('<div class="form-label">Details</div>', row + '<div class="form-label">Details</div>');
-    }
-    return h;
+    const h = _h();
+    if (!draft || !feeAllowed(draft)) return h;
+    return h.replace('<div class="form-label">Details</div>', feeBlock(draft) + '<div class="form-label">Details</div>');
   };
+  // A new account: its own usual fee (unless you typed a fee for this entry yourself).
+  for (const k of ['pick-acc', 'pick-from']) {
+    const _a = ACTIONS[k];
+    ACTIONS[k] = function () {
+      const r = _a.apply(this, arguments);
+      if (draft && feeAllowed(draft) && draft.nxFeeInit) { if (!draft.nxPctTyped) draft.nxFee = feeOf(draft.account); if (!draft.nxOnSet && !draft.id) draft.nxFeeOn = draft.nxFee > 0; }
+      feeRedraw();
+      return r;
+    };
+  }
   const _s = saveTx;
   saveTx = function () {
     const d = draft ? { ...draft } : null, before = snap();
     const r = _s.apply(this, arguments);
     try {
-      if (d && d.type === 'transfer' && !d.id && d.nxFee > 0 && d.amount > 0) {
-        const amount = roundCur((d.amount * d.nxFee) / 100, d.currency), tr = S.tx.find((t) => !before.has(t.id) && t.type === 'transfer');
-        if (amount > 0) {
-          const f = { id: uid(), type: 'out', amount, currency: d.currency, account: d.account, date: d.date && d.date <= todayIso() ? d.date : todayIso(), note: `${d.nxFee}% fee on a transfer`, person: 'Bank fee', category: feeCat(), nxFeeOf: tr ? tr.id : '' };
-          S.tx.push(f); S.settings.nxFee = { ...(S.settings.nxFee || {}), [d.account]: d.nxFee }; save(); render();
-          toast(`Bank fee ${fmt(amount, d.currency)} saved`);
+      if (d && feeAllowed(d) && d.nxFeeInit) {
+        const rec = d.id ? S.tx.find((t) => t.id === d.id) : S.tx.find((t) => !before.has(t.id) && t.type === d.type && !t.nxFeeOf);
+        if (rec) {
+          const amount = feeAmount({ ...d, amount: rec.amount, currency: rec.currency });
+          const old = feeEntryOf(rec.id);
+          if (amount > 0) {
+            const f = old || { id: uid(), type: 'out', person: 'Bank fee', category: feeCat(), nxFeeOf: rec.id, createdAt: Date.now() };
+            Object.assign(f, { amount, currency: rec.currency, account: rec.account, date: rec.date, nxPct: d.nxFee, note: `${d.nxFee}% fee on ${rec.type === 'transfer' ? 'a transfer' : 'a payment'}` });
+            if (!old) S.tx.push(f);
+            if (d.nxPctTyped && d.nxFee !== feeOf(rec.account)) S.settings.nxFee = { ...(S.settings.nxFee || {}), [rec.account]: d.nxFee }; // (the account remembers the fee you last used)
+            save(); render();
+            toast(`Saved with a bank fee of ${fmt(amount, rec.currency)}`);
+          } else if (old) { S.tx = S.tx.filter((t) => t !== old); save(); render(); }
         }
       }
     } catch (e) { console.error(e); }
@@ -60,8 +112,15 @@ function feeCat() {
     return r;
   };
   document.addEventListener('input', (e) => {
-    if (e.target.id === 'nx-fee' && draft) { draft.nxFee = Math.max(0, Math.min(20, parseFloat(String(e.target.value).replace(',', '.')) || 0)); const hint = document.getElementById('nx-fee-hint'), fee = Math.round((+draft.amount || 0) * draft.nxFee) / 100;
-      if (hint) hint.textContent = draft.nxFee ? `Fee ${fmt(fee, draft.currency)} is taken from ${acc(draft.account).name} and saved as “Bank fees”. Type 0 for no fee.` : 'No fee. Type it in % (for example 0.7 or 1.1).'; }
+    if (!draft) return;
+    if (e.target.id === 'nx-fee') { draft.nxFee = Math.max(0, Math.min(20, parseFloat(String(e.target.value).replace(',', '.')) || 0)); draft.nxPctTyped = true; feeHintNow(); }
+    else if (e.target.id === 'amt') setTimeout(feeHintNow, 0); // (after money.js has read the new amount)
+  }, true);
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'nx-fee-on' || !draft) return;
+    draft.nxFeeOn = e.target.checked; draft.nxOnSet = true;
+    if (draft.nxFeeOn && !(draft.nxFee > 0)) draft.nxFee = feeOf(draft.account);
+    feeRedraw();
   }, true);
 }
 
@@ -77,7 +136,7 @@ function detailHtml(id) {
     <div class="nx-detail">${tile}<div class="nx-damt num ${t.type === 'in' ? 'in' : ''}">${amt}</div><div class="nx-dtitle">${esc(title)}</div></div>
     <div class="group plain">${row('Date', esc(dayLabel(t.date)))}${row(tr ? 'From' : 'Account', esc(acc(t.account).name))}${tr ? row('To', esc(acc(t.toAccount).name)) : row('Category', esc(c.name))}
       ${g ? row('Group', esc(g.name)) : ''}${t.forMonth ? row('For', esc(ymLabel(t.forMonth, true))) : ''}${t.tpid ? row('From Teacher', 'Yes') : ''}
-      ${fee ? row('Bank fee', esc(fmt(fee.amount, fee.currency))) : ''}${feeFor ? row('Fee for', 'a transfer of ' + esc(fmt(feeFor.amount, feeFor.currency))) : ''}${t.note ? row('Note', esc(t.note)) : ''}</div>
+      ${fee ? row('Bank fee', esc(fmt(fee.amount, fee.currency))) : ''}${feeFor ? row('Fee for', (feeFor.type === 'transfer' ? 'a transfer of ' : 'a payment of ') + esc(fmt(feeFor.amount, feeFor.currency))) : ''}${t.note ? row('Note', esc(t.note)) : ''}</div>
   </div>`;
 }
 {
@@ -135,7 +194,7 @@ ACTIONS['nx-np'] = (a, v) => npGo(+v);
     let h = _s.apply(this, arguments);
     h = h.replace(/\s*<button class="row" data-act="groups-view"[\s\S]*?<\/button>/, '').replace(/<button class="row field" data-act="(load|clear)-demo"[\s\S]*?<\/button>/, '');
     h = h.replace('<div class="form-label">Organise</div>', `<div class="form-label">Bank fees</div><div class="group plain">${S.accounts.filter((a) => !a.closed).map((a) => `<label class="row field"><span style="flex:1">${esc(a.name)}</span><input data-nxfeeacc="${a.id}" inputmode="decimal" placeholder="0" value="${feeOf(a.id) || ''}" style="text-align:right;max-width:70px"><span class="muted" style="min-width:0">%</span></label>`).join('')}</div>
-      <p class="hint">The usual fee of each account. A new transfer starts with it; you can change it on the transfer.</p><div class="form-label">Organise</div>`);
+      <p class="hint">The usual fee of each account. A new money out or transfer from it starts with this fee; you can change it or switch it off there.</p><div class="form-label">Organise</div>`);
     return h;
   };
   document.addEventListener('input', (e) => { const id = e.target.dataset && e.target.dataset.nxfeeacc; if (!id) return; const v = Math.max(0, Math.min(20, parseFloat(String(e.target.value).replace(',', '.')) || 0)); S.settings.nxFee = { ...(S.settings.nxFee || {}), [id]: v }; save(); }, true);
